@@ -1,0 +1,17 @@
+{
+  "name": "luber-music-ai",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LUBER MUSIC AI — web-based commercial generative music service",
+  "packageManager": "pnpm@10.17.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @luber/web dev",
+    "build:web": "pnpm --filter @luber/web build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test"
+  }
+}

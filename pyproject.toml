@@ -1,0 +1,98 @@
+[project]
+name = "luber-music-ai"
+version = "0.1.0"
+description = "LUBER MUSIC AI monorepo — Python workspace root"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "services/generation-worker",
+    "services/audio-worker",
+    "packages/database",
+    "packages/schemas",
+    "packages/shared",
+    "packages/generation-client",
+    "packages/audio-utils",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "fakeredis>=2.26",
+    "aiosqlite>=0.20",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "apps/api/tests",
+    "services/generation-worker/tests",
+    "services/audio-worker/tests",
+    "packages/database/tests",
+    "packages/schemas/tests",
+    "packages/shared/tests",
+    "packages/generation-client/tests",
+    "packages/audio-utils/tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = [
+    "apps/api/src",
+    "services/generation-worker/src",
+    "services/audio-worker/src",
+    "packages/database/src",
+    "packages/schemas/src",
+    "packages/shared/src",
+    "packages/generation-client/src",
+    "packages/audio-utils/src",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors (includes E722: bare except is forbidden)
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "ASYNC",
+    "T20",  # no stray print()
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["T20"]
+"**/alembic/**" = ["I"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+# Strict typing applies to source; tests are exercised by pytest and
+# excluded from mypy to avoid annotation ceremony.
+exclude = '(^|/)tests/'
+mypy_path = [
+    "apps/api/src",
+    "services/generation-worker/src",
+    "services/audio-worker/src",
+    "packages/database/src",
+    "packages/schemas/src",
+    "packages/shared/src",
+    "packages/generation-client/src",
+    "packages/audio-utils/src",
+]
+
+[[tool.mypy.overrides]]
+module = ["arq.*", "fakeredis.*"]
+ignore_missing_imports = true

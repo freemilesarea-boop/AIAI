@@ -1,0 +1,27 @@
+[project]
+name = "luber-api"
+version = "0.1.0"
+description = "LUBER MUSIC AI — public FastAPI backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "redis>=5.2",
+    "luber-shared",
+    "luber-schemas",
+    "luber-database",
+    "luber-generation-client",
+]
+
+[tool.uv.sources]
+luber-shared = { workspace = true }
+luber-schemas = { workspace = true }
+luber-database = { workspace = true }
+luber-generation-client = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/luber_api"]

@@ -1,0 +1,11 @@
+"""Database layer for LUBER MUSIC AI.
+
+Schema changes go through version-controlled Alembic migrations only
+(``packages/database/alembic``). Destructive raw SQL against shared
+databases is forbidden.
+"""
+
+from luber_database.base import Base
+from luber_database.engine import create_async_engine_from_url, create_session_factory
+
+__all__ = ["Base", "create_async_engine_from_url", "create_session_factory"]

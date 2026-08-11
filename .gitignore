@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+.vercel/
+
+# Environment — never commit real secrets (.env.example only)
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+coverage/
+.coverage
+htmlcov/
+*.lcov
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local data
+*.local
+postgres-data/
+redis-data/
+
+# Model weights are never committed (see models/README.md)
+models/**/*.safetensors
+models/**/*.ckpt
+models/**/*.pt
+models/**/*.bin
+
+# Generated audio artifacts
+*.wav
+*.mp3
+!tests/fixtures/**/*.wav
+
+# TypeScript incremental build info
+*.tsbuildinfo
