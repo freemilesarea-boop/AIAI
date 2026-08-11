@@ -22,7 +22,7 @@ from luber_api.routes.health import router as health_router
 from luber_api.settings import get_settings
 from luber_audio_utils import LocalAudioStorage
 from luber_database import create_async_engine_from_url, create_session_factory
-from luber_generation_client import build_provider
+from luber_generation_client import provider_from_settings
 from luber_shared import configure_logging
 
 
@@ -37,10 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Test/dev only: executes the provider in-process.
         app.state.enqueuer = InlineGenerationRunner(
             app.state.session_factory,
-            build_provider(
-                settings.generation_provider,
-                mock_fixture_path=Path(settings.mock_fixture_path),
-            ),
+            provider_from_settings(settings),
             app.state.audio_storage,
         )
     else:

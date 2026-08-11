@@ -23,7 +23,7 @@ from luber_database import (
     create_async_engine_from_url,
     create_session_factory,
 )
-from luber_generation_client import GENERATION_QUEUE_NAME, GenerationService, build_provider
+from luber_generation_client import GENERATION_QUEUE_NAME, GenerationService, provider_from_settings
 from luber_shared import BaseServiceSettings, configure_logging
 
 logger = logging.getLogger(__name__)
@@ -51,10 +51,7 @@ async def generate(ctx: dict[str, Any], generation_id: str) -> str:
     async with session_factory() as session:
         service = GenerationService(
             GenerationRepository(session),
-            build_provider(
-                config.generation_provider,
-                mock_fixture_path=Path(config.mock_fixture_path),
-            ),
+            provider_from_settings(config),
             LocalAudioStorage(Path(config.audio_storage_dir)),
         )
         status = await service.execute(uuid.UUID(generation_id), worker_id=ctx.get("worker_id"))

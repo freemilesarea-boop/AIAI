@@ -5,8 +5,9 @@ Business logic must never import a concrete model integration
 :class:`MusicGenerationProvider` interface.
 """
 
+from luber_generation_client.ace_step import AceStepProvider
 from luber_generation_client.errors import GenerationProviderError
-from luber_generation_client.factory import build_provider
+from luber_generation_client.factory import build_provider, provider_from_settings
 from luber_generation_client.mock import MockGenerationProvider
 from luber_generation_client.provider import (
     GenerationRequest,
@@ -24,6 +25,7 @@ __all__ = [
     "AUDIO_QUEUE_NAME",
     "GENERATION_JOB_NAME",
     "GENERATION_QUEUE_NAME",
+    "AceStepProvider",
     "GenerationProviderError",
     "GenerationRequest",
     "GenerationResult",
@@ -31,4 +33,5 @@ __all__ = [
     "MockGenerationProvider",
     "MusicGenerationProvider",
     "build_provider",
+    "provider_from_settings",
 ]

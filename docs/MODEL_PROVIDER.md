@@ -14,9 +14,12 @@ class MusicGenerationProvider(ABC):
 2. Each engine gets its own provider implementation:
    - `MockGenerationProvider` — Phase 1; returns a real (tiny) fixture
      WAV; used by CI; never pretends to be a real model run.
-   - `AceStepProvider` — Phase 2; drives self-hosted ACE-Step 1.5 via
-     its documented interface (verified against upstream before
-     implementation — no invented API fields).
+   - `AceStepProvider` — implemented (Phase 2); drives a self-hosted
+     ACE-Step 1.5 API server via its documented async REST interface
+     (`release_task` → `query_result` poll → `/v1/audio` download),
+     verified against the pinned upstream — no invented API fields.
+     See `ACE_STEP_UPSTREAM_AUDIT.md` for the pin and protocol notes.
+     Select with `GENERATION_PROVIDER=ace_step` + `ACE_STEP_*` env vars.
    - Future: Stable Audio family, licensed models, custom foundation
      model.
 3. Providers return raw model output; post-processing/upload belong to

@@ -710,17 +710,21 @@ name = "luber-generation-client"
 version = "0.1.0"
 source = { editable = "packages/generation-client" }
 dependencies = [
+    { name = "httpx" },
     { name = "luber-audio-utils" },
     { name = "luber-database" },
     { name = "luber-schemas" },
+    { name = "luber-shared" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
     { name = "luber-audio-utils", editable = "packages/audio-utils" },
     { name = "luber-database", editable = "packages/database" },
     { name = "luber-schemas", editable = "packages/schemas" },
+    { name = "luber-shared", editable = "packages/shared" },
     { name = "pydantic", specifier = ">=2.10" },
 ]
 

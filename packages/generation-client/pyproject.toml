@@ -5,15 +5,18 @@ description = "Provider-agnostic music generation boundary (MusicGenerationProvi
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.10",
+    "httpx>=0.28",
     "luber-schemas",
     "luber-database",
     "luber-audio-utils",
+    "luber-shared",
 ]
 
 [tool.uv.sources]
 luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-audio-utils = { workspace = true }
+luber-shared = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
