@@ -8,10 +8,12 @@ queue boundary.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 
 from luber_api.dependencies import get_audio_storage, get_enqueuer, get_repository
@@ -25,13 +27,30 @@ from luber_api.schemas import (
 from luber_audio_utils import AudioStorage, AudioStorageError
 from luber_database import GenerationRepository
 from luber_generation_client import GENERATION_QUEUE_NAME
-from luber_schemas import ErrorCode, GenerationStatus
+from luber_schemas import AssetType, ErrorCode, GenerationStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/generations", tags=["generations"])
 
 IDEMPOTENCY_KEY_MAX_LENGTH = 200
+
+_FILENAME_STRIP = re.compile(r"[^a-z0-9]+")
+DOWNLOAD_FILENAME_MAX_LENGTH = 60
+
+
+def build_download_filename(title: str, generation_id: uuid.UUID) -> str:
+    """ASCII-safe ``.wav`` filename derived from a user-supplied title.
+
+    User input never reaches the filesystem — this only labels the
+    download. Non-ASCII titles (e.g. Korean) legitimately slug to
+    nothing, so a stable generation-derived name is used instead.
+    """
+    slug = _FILENAME_STRIP.sub("-", title.lower()).strip("-")[:DOWNLOAD_FILENAME_MAX_LENGTH]
+    slug = slug.strip("-")
+    if not slug:
+        slug = f"luber-track-{generation_id.hex[:8]}"
+    return f"{slug}.wav"
 
 
 @router.post(
@@ -122,6 +141,67 @@ async def get_generation(
     if generation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
     return GenerationResponse.model_validate(generation)
+
+
+@router.get("/{generation_id}/audio")
+async def get_generation_audio(
+    generation_id: uuid.UUID,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+    storage: Annotated[AudioStorage, Depends(get_audio_storage)],
+    download: Annotated[bool, Query()] = False,
+) -> FileResponse:
+    """Stream the MASTER WAV so a browser can play or download it.
+
+    Only the MASTER asset is served. The client addresses audio by
+    generation id — storage keys and filesystem paths are never part of
+    the contract, so no client-supplied value reaches path resolution.
+    """
+    generation = await repository.get_generation(generation_id)
+    if generation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    master = next(
+        (a for a in generation.audio_assets if a.asset_type == AssetType.MASTER.value),
+        None,
+    )
+    if master is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="master audio not available for this generation",
+        )
+
+    try:
+        path = storage.resolve_path(master.storage_key)
+    except AudioStorageError:
+        # A bad storage key is an operator problem; the client learns
+        # nothing about paths.
+        logger.exception(
+            "unsafe storage key for audio asset",
+            extra={"generation_id": str(generation_id), "asset_id": str(master.id)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="master audio not available for this generation",
+        ) from None
+
+    if not path.is_file():
+        logger.error(
+            "master audio missing from storage",
+            extra={"generation_id": str(generation_id), "asset_id": str(master.id)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="master audio not available for this generation",
+        )
+
+    # FileResponse streams from disk and sets Content-Length itself; the
+    # file is never read into memory in full.
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        filename=build_download_filename(generation.title, generation_id),
+        content_disposition_type="attachment" if download else "inline",
+    )
 
 
 @router.get("", response_model=GenerationListResponse)

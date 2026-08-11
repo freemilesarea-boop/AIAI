@@ -42,6 +42,9 @@ htmlcov/
 postgres-data/
 redis-data/
 
+# Local runtime logs (API / worker / web dev servers)
+logs-local/
+
 # Model weights are never committed (see models/README.md)
 models/**/*.safetensors
 models/**/*.ckpt

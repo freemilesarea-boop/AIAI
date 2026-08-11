@@ -60,7 +60,18 @@ class LocalAudioStorage(AudioStorage):
         return storage_key
 
     def resolve_path(self, storage_key: str) -> Path:
-        return self._base_dir / storage_key
+        """Resolve a storage key, refusing anything outside the base dir.
+
+        Storage keys are server-generated, but this boundary is the last
+        line of defence: a key containing ``..``, a leading ``/``, or a
+        symlink escape must never resolve to an arbitrary file. Callers
+        that serve bytes to clients rely on this.
+        """
+        base = self._base_dir.resolve()
+        candidate = (base / storage_key).resolve()
+        if candidate != base and base not in candidate.parents:
+            raise AudioStorageError(f"storage key escapes storage root: {storage_key!r}")
+        return candidate
 
     async def delete_generation_audio(self, generation_id: UUID) -> None:
         directory = self._base_dir / "audio" / str(generation_id)

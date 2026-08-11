@@ -1,0 +1,93 @@
+"use client";
+
+/**
+ * Live status for an in-flight generation.
+ *
+ * Shows only backend-derived state — no fabricated percentages. The
+ * spinner conveys activity; elapsed time is reported separately and
+ * factually. Updates are announced through an `aria-live` region.
+ */
+
+import type { GenerationStatus } from "@/lib/api";
+import {
+  ACTIVE_STATUS_SEQUENCE,
+  formatElapsed,
+  statusLabel,
+} from "@/lib/generationStatus";
+
+export interface GenerationStatusPanelProps {
+  status: GenerationStatus | null;
+  elapsedSeconds: number;
+  /** True before the API has confirmed a generation id. */
+  submitting?: boolean;
+}
+
+export function GenerationStatusPanel({
+  status,
+  elapsedSeconds,
+  submitting = false,
+}: GenerationStatusPanelProps) {
+  const label = submitting || !status ? "Submitting your request" : statusLabel(status);
+  const currentIndex = status ? ACTIVE_STATUS_SEQUENCE.indexOf(status) : -1;
+
+  return (
+    <section
+      aria-labelledby="generation-status-heading"
+      className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6"
+    >
+      <h2 id="generation-status-heading" className="sr-only">
+        Generation status
+      </h2>
+
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-violet-400"
+        />
+        {/* The visible headline is itself the live region, so screen
+            readers announce each state change exactly once. */}
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="text-lg font-medium text-zinc-100"
+        >
+          {label}
+        </p>
+      </div>
+
+      <p className="mt-2 text-sm text-zinc-400">
+        Elapsed <span className="font-mono tabular-nums">{formatElapsed(elapsedSeconds)}</span>
+      </p>
+
+      <ol className="mt-5 flex flex-col gap-2">
+        {ACTIVE_STATUS_SEQUENCE.map((step, index) => {
+          const done = currentIndex > index;
+          const active = currentIndex === index;
+          return (
+            <li
+              key={step}
+              className={`flex items-center gap-2.5 text-sm ${
+                active ? "text-zinc-100" : done ? "text-zinc-500" : "text-zinc-600"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`h-1.5 w-1.5 rounded-full ${
+                  active ? "bg-violet-400" : done ? "bg-zinc-600" : "bg-zinc-800"
+                }`}
+              />
+              {statusLabel(step)}
+              {done && <span className="sr-only">(completed)</span>}
+              {active && <span className="sr-only">(in progress)</span>}
+            </li>
+          );
+        })}
+      </ol>
+
+      <p className="mt-5 text-xs text-zinc-500">
+        You can leave this page open. Refreshing will reconnect to this generation.
+      </p>
+    </section>
+  );
+}
