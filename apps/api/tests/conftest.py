@@ -1,10 +1,15 @@
 """API test fixtures.
 
-Unit tests never require a live PostgreSQL/Redis: the lifespan is
-bypassed and app.state resources are replaced with fakes.
+Tests never require live PostgreSQL/Redis: the lifespan is bypassed and
+``app.state`` resources are replaced — SQLite (in-memory) for the DB,
+fakeredis for Redis, a temp-dir LocalAudioStorage, and the
+InlineGenerationRunner driving the real GenerationService +
+MockGenerationProvider with the committed fixture WAV.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 from fakeredis.aioredis import FakeRedis
@@ -12,7 +17,17 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from luber_api.jobs import InlineGenerationRunner
 from luber_api.main import create_app
+from luber_audio_utils import LocalAudioStorage
+from luber_database import Base, create_session_factory
+from luber_database.models.generation import AudioAsset, Generation, GenerationJob
+from luber_generation_client import MockGenerationProvider
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FIXTURE_WAV = REPO_ROOT / "tests" / "fixtures" / "mock_generation.wav"
+
+GENERATION_TABLES = [Generation.__table__, GenerationJob.__table__, AudioAsset.__table__]
 
 
 class _FailingRedis:
@@ -21,12 +36,29 @@ class _FailingRedis:
 
 
 @pytest.fixture
-def app() -> FastAPI:
+async def app(tmp_path) -> FastAPI:
     application = create_app()
-    # In-memory stand-ins: SQLite for engine connectivity, fakeredis for Redis.
-    application.state.db_engine = create_async_engine("sqlite+aiosqlite://")
+    # File-backed SQLite: each session gets its own connection, so
+    # concurrent requests exercise the real unique-constraint race.
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/api-test.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda sync_conn: Base.metadata.create_all(sync_conn, tables=GENERATION_TABLES)
+        )
+    session_factory = create_session_factory(engine)
+    storage = LocalAudioStorage(tmp_path / "audio-store")
+
+    application.state.db_engine = engine
+    application.state.session_factory = session_factory
     application.state.redis = FakeRedis()
-    return application
+    application.state.audio_storage = storage
+    application.state.enqueuer = InlineGenerationRunner(
+        session_factory,
+        MockGenerationProvider(FIXTURE_WAV),
+        storage,
+    )
+    yield application
+    await engine.dispose()
 
 
 @pytest.fixture

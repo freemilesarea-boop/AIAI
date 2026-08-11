@@ -7,10 +7,12 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "redis>=5.2",
+    "arq>=0.26",
     "luber-shared",
     "luber-schemas",
     "luber-database",
     "luber-generation-client",
+    "luber-audio-utils",
 ]
 
 [tool.uv.sources]
@@ -18,6 +20,7 @@ luber-shared = { workspace = true }
 luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-generation-client = { workspace = true }
+luber-audio-utils = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

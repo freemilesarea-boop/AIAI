@@ -55,3 +55,6 @@ models/**/*.bin
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Local audio storage output
+data/

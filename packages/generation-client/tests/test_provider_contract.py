@@ -35,7 +35,26 @@ def test_request_defaults():
     )
     assert req.duration_seconds == 180
     assert req.seed is None
+    assert req.instrumental is False
     assert "[Verse 1]" in req.lyrics  # section tags must be preserved
+
+
+def test_request_field_limits():
+    with pytest.raises(ValidationError):
+        GenerationRequest(title="x" * 201, prompt="p", vocal_gender=VocalGender.MALE)
+    with pytest.raises(ValidationError):
+        GenerationRequest(title="t", prompt="p" * 4001, vocal_gender=VocalGender.MALE)
+    with pytest.raises(ValidationError):
+        GenerationRequest(title="t", prompt="p", lyrics="l" * 20001, vocal_gender=VocalGender.MALE)
+    # Upper bounds are inclusive.
+    ok = GenerationRequest(
+        title="x" * 200,
+        prompt="p" * 4000,
+        lyrics="l" * 20000,
+        vocal_gender=VocalGender.MALE,
+        duration_seconds=360,
+    )
+    assert ok.duration_seconds == 360
 
 
 async def test_concrete_provider_satisfies_contract(tmp_path: Path):

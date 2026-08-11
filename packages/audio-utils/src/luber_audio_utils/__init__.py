@@ -6,6 +6,9 @@ pipeline). Post-processing must stay conservative — no aggressive
 limiting, normalization, EQ, or stereo widening in the MVP.
 """
 
+from luber_audio_utils.storage import AudioStorage, AudioStorageError, LocalAudioStorage
+from luber_audio_utils.wav import WavInfo, WavValidationError, inspect_wav, sha256_file
+
 MASTER_SAMPLE_RATE = 48_000
 MASTER_BIT_DEPTH = 24
 MASTER_CHANNELS = 2
@@ -18,4 +21,11 @@ __all__ = [
     "MASTER_FORMAT",
     "MASTER_SAMPLE_RATE",
     "PREVIEW_FORMAT",
+    "AudioStorage",
+    "AudioStorageError",
+    "LocalAudioStorage",
+    "WavInfo",
+    "WavValidationError",
+    "inspect_wav",
+    "sha256_file",
 ]

@@ -28,12 +28,13 @@ class GenerationRequest(BaseModel):
     """Provider-agnostic description of one music generation job."""
 
     title: str = Field(min_length=1, max_length=200)
-    prompt: str = Field(min_length=1, max_length=2000)
-    lyrics: str = Field(default="", max_length=10000)
+    prompt: str = Field(min_length=1, max_length=4000)
+    lyrics: str = Field(default="", max_length=20000)
     vocal_gender: VocalGender
     duration_seconds: int = Field(default=180, ge=10, le=360)
     seed: int | None = None
     language: str | None = Field(default=None, max_length=16)
+    instrumental: bool = False
 
 
 class GenerationResult(BaseModel):

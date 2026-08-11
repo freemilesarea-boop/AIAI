@@ -8,12 +8,16 @@ dependencies = [
     "luber-shared",
     "luber-schemas",
     "luber-generation-client",
+    "luber-database",
+    "luber-audio-utils",
 ]
 
 [tool.uv.sources]
 luber-shared = { workspace = true }
 luber-schemas = { workspace = true }
 luber-generation-client = { workspace = true }
+luber-database = { workspace = true }
+luber-audio-utils = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

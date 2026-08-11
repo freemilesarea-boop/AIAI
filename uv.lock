@@ -640,7 +640,9 @@ name = "luber-api"
 version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "arq" },
     { name = "fastapi" },
+    { name = "luber-audio-utils" },
     { name = "luber-database" },
     { name = "luber-generation-client" },
     { name = "luber-schemas" },
@@ -651,7 +653,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "arq", specifier = ">=0.26" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "luber-audio-utils", editable = "packages/audio-utils" },
     { name = "luber-database", editable = "packages/database" },
     { name = "luber-generation-client", editable = "packages/generation-client" },
     { name = "luber-schemas", editable = "packages/schemas" },
@@ -706,12 +710,16 @@ name = "luber-generation-client"
 version = "0.1.0"
 source = { editable = "packages/generation-client" }
 dependencies = [
+    { name = "luber-audio-utils" },
+    { name = "luber-database" },
     { name = "luber-schemas" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "luber-audio-utils", editable = "packages/audio-utils" },
+    { name = "luber-database", editable = "packages/database" },
     { name = "luber-schemas", editable = "packages/schemas" },
     { name = "pydantic", specifier = ">=2.10" },
 ]
@@ -722,6 +730,8 @@ version = "0.1.0"
 source = { editable = "services/generation-worker" }
 dependencies = [
     { name = "arq" },
+    { name = "luber-audio-utils" },
+    { name = "luber-database" },
     { name = "luber-generation-client" },
     { name = "luber-schemas" },
     { name = "luber-shared" },
@@ -730,6 +740,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "arq", specifier = ">=0.26" },
+    { name = "luber-audio-utils", editable = "packages/audio-utils" },
+    { name = "luber-database", editable = "packages/database" },
     { name = "luber-generation-client", editable = "packages/generation-client" },
     { name = "luber-schemas", editable = "packages/schemas" },
     { name = "luber-shared", editable = "packages/shared" },
