@@ -29,6 +29,7 @@ dev = [
     "mypy>=1.14",
     "fakeredis>=2.26",
     "aiosqlite>=0.20",
+    "numpy>=2.1",
 ]
 
 [tool.pytest.ini_options]
@@ -42,6 +43,7 @@ testpaths = [
     "packages/shared/tests",
     "packages/generation-client/tests",
     "packages/audio-utils/tests",
+    "benchmarks/music_quality/tests",
 ]
 
 [tool.ruff]
@@ -56,6 +58,7 @@ src = [
     "packages/shared/src",
     "packages/generation-client/src",
     "packages/audio-utils/src",
+    "benchmarks/music_quality/scripts",
 ]
 
 [tool.ruff.lint]
@@ -73,6 +76,10 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["T20"]
+# Developer CLI tools: stdout is their user interface.
+"scripts/**" = ["T20"]
+# Embedded HTML/JS template: wrapping would alter the rendered page.
+"benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]
 "**/alembic/**" = ["I"]
 
 [tool.mypy]
@@ -91,8 +98,17 @@ mypy_path = [
     "packages/shared/src",
     "packages/generation-client/src",
     "packages/audio-utils/src",
+    "benchmarks/music_quality/scripts",
 ]
 
 [[tool.mypy.overrides]]
 module = ["arq.*", "fakeredis.*", "boto3.*", "botocore.*"]
+ignore_missing_imports = true
+
+# numpy 2.5 ships stubs written in Python 3.12 syntax; this project still
+# targets 3.11, so skip following them rather than lowering the target.
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
 ignore_missing_imports = true

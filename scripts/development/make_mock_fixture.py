@@ -51,7 +51,7 @@ def main() -> None:
         wav.setsampwidth(SAMPLE_WIDTH_BYTES)
         wav.setframerate(SAMPLE_RATE)
         wav.writeframes(synthesize())
-    print(f"wrote {OUTPUT} ({OUTPUT.stat().st_size} bytes)")  # noqa: T201
+    print(f"wrote {OUTPUT} ({OUTPUT.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":

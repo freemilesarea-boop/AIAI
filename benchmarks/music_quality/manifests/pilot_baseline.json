@@ -1,0 +1,43 @@
+{
+  "run_id": "pilot_baseline_p5_v1",
+  "benchmark_version": "v1",
+  "description": "Phase 5 baseline pilot on the current production configuration. Exercises the real Phase 4 pipeline end to end. Composition satisfies the Phase 5 minimum: 8 Korean vocal, 4 English vocal, 4 instrumental, 4 long-form (>=180s), 6 seed-variance tracks.",
+  "configuration_id": "A_turbo_dit_only",
+  "model": "acestep-v15-turbo",
+  "lm_enabled": false,
+  "thinking_enabled": false,
+  "inference_steps": 8,
+  "runtime_backend": "mps-mlx",
+  "units": [
+    {"prompt_id": "KPOP-01", "duration": 30, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "BALLAD-01", "duration": 30, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "HIPHOP-01", "duration": 30, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "ACOUSTIC-01", "duration": 30, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "KPOP-02", "duration": 60, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "BALLAD-02", "duration": 60, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "RNB-01", "duration": 60, "seed": null, "group": "korean_vocal"},
+    {"prompt_id": "INDIE-01", "duration": 60, "seed": null, "group": "korean_vocal"},
+
+    {"prompt_id": "ROCK-04", "duration": 30, "seed": null, "group": "english_vocal"},
+    {"prompt_id": "RNB-04", "duration": 30, "seed": null, "group": "english_vocal"},
+    {"prompt_id": "BALLAD-05", "duration": 60, "seed": null, "group": "english_vocal"},
+    {"prompt_id": "EDM-01", "duration": 60, "seed": null, "group": "english_vocal"},
+
+    {"prompt_id": "JAZZ-01", "duration": 30, "seed": null, "group": "instrumental"},
+    {"prompt_id": "LOFI-01", "duration": 30, "seed": null, "group": "instrumental"},
+    {"prompt_id": "KPOP-06", "duration": 30, "seed": null, "group": "instrumental"},
+    {"prompt_id": "ROCK-06", "duration": 60, "seed": null, "group": "instrumental"},
+
+    {"prompt_id": "BALLAD-02", "duration": 180, "seed": null, "group": "long_form"},
+    {"prompt_id": "KPOP-02", "duration": 180, "seed": null, "group": "long_form"},
+    {"prompt_id": "RNB-01", "duration": 180, "seed": null, "group": "long_form"},
+    {"prompt_id": "ACOUSTIC-03", "duration": 180, "seed": null, "group": "long_form"},
+
+    {"prompt_id": "BALLAD-01", "duration": 30, "seed": 1001, "group": "seed_variance"},
+    {"prompt_id": "BALLAD-01", "duration": 30, "seed": 1002, "group": "seed_variance"},
+    {"prompt_id": "BALLAD-01", "duration": 30, "seed": 1003, "group": "seed_variance"},
+    {"prompt_id": "KPOP-01", "duration": 30, "seed": 1001, "group": "seed_variance"},
+    {"prompt_id": "KPOP-01", "duration": 30, "seed": 1002, "group": "seed_variance"},
+    {"prompt_id": "KPOP-01", "duration": 30, "seed": 1003, "group": "seed_variance"}
+  ]
+}

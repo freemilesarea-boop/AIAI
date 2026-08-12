@@ -1,0 +1,618 @@
+{
+  "benchmark_version": "v1",
+  "created": "2026-08-12",
+  "description": "LUBER music quality benchmark prompt dataset. Fixed and version-controlled: prompts are never edited to chase a better score. Any change requires a new benchmark_version, and only identical versions are compared directly.",
+  "lyrics_policy": "All lyrics are original text written for this benchmark. No commercial or copyrighted lyrics are used anywhere in this dataset.",
+  "genres": ["KPOP", "BALLAD", "RNB", "HIPHOP", "ROCK", "INDIE", "JAZZ", "LOFI", "EDM", "ACOUSTIC"],
+  "prompts": [
+    {
+      "prompt_id": "KPOP-01",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "bright K-pop with female vocal",
+      "lyrics": "[Verse]\n작은 방 안에 햇살이 들어와\n오늘은 조금 다른 기분이야\n\n[Chorus]\n달려가 볼래 지금 이 순간\n멈추지 않을 나의 하루"
+    },
+    {
+      "prompt_id": "KPOP-02",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Energetic K-pop dance track at 124 BPM with punchy four-on-the-floor drums, bright synth plucks, slap bass, layered female vocals with tight harmonies in the chorus, a half-time pre-chorus and a big anthemic final chorus",
+      "lyrics": "[Intro]\n밤이 열리고\n\n[Verse 1]\n조용한 거리에 불이 켜져\n낮보다 선명한 우리 얼굴\n\n[Pre-Chorus]\n숨을 고르고 하나 둘 셋\n\n[Chorus]\n이 밤을 켜줘 더 크게 켜줘\n우리가 만든 무대 위로\n\n[Verse 2]\n어제의 걱정은 접어둘래\n지금은 이 소리에 맡길래\n\n[Chorus]\n이 밤을 켜줘 더 크게 켜줘\n우리가 만든 무대 위로\n\n[Bridge]\n아무도 몰라도 괜찮아\n내 심장은 알고 있으니까\n\n[Final Chorus]\n이 밤을 켜줘 끝까지 켜줘\n아침이 와도 꺼지지 않게\n\n[Outro]\n켜져 있어"
+    },
+    {
+      "prompt_id": "KPOP-03",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Mid-tempo K-pop with male vocal, warm synth pads, crisp trap-influenced hi-hats, melodic pre-chorus lift and a catchy singable chorus hook",
+      "lyrics": "[Verse]\n너에게 가는 길을 외웠어\n눈 감아도 그릴 수 있어\n\n[Chorus]\n한 걸음만 더 가까이\n오늘은 말할 수 있을까"
+    },
+    {
+      "prompt_id": "KPOP-04",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Emotional K-pop ballad-pop hybrid, 90 BPM, piano-led verses opening into wide synth and live drums in the chorus, expressive female vocal with a soaring final chorus",
+      "lyrics": "[Intro]\n한 마디만\n\n[Verse 1]\n말하지 못한 얘기가 남아\n가방 속 편지처럼 접혀 있어\n\n[Pre-Chorus]\n오늘은 꺼내볼까\n\n[Chorus]\n네가 듣는다면 그걸로 됐어\n닿지 않아도 부를게\n\n[Verse 2]\n계절이 두 번 지나가는 동안\n나는 같은 자리에 서 있었어\n\n[Chorus]\n네가 듣는다면 그걸로 됐어\n닿지 않아도 부를게\n\n[Bridge]\n미안하다는 말보다\n고맙다는 말을 먼저\n\n[Final Chorus]\n네가 듣는다면 그걸로 충분해\n이 노래로 남을게\n\n[Outro]\n남을게"
+    },
+    {
+      "prompt_id": "KPOP-05",
+      "genre": "KPOP",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "upbeat K-pop with English lyrics and female vocal",
+      "lyrics": "[Verse]\nCity lights are waking up tonight\nI can feel it turning in my chest\n\n[Chorus]\nTurn it louder, don't slow down\nWe were made for this sound"
+    },
+    {
+      "prompt_id": "KPOP-06",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental K-pop backing track, 126 BPM, bright synth plucks, punchy kick and snare, slap bass groove, string stabs in the chorus section, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "BALLAD-01",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "warm Korean ballad with female vocal",
+      "lyrics": "[Verse]\n창밖에 비가 조용히 내려\n오늘은 너를 생각했어\n\n[Chorus]\n괜찮다고 말해줄 사람이\n지금은 네가 아니라서"
+    },
+    {
+      "prompt_id": "BALLAD-02",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Classic Korean ballad, 68 BPM, grand piano and strings, restrained male vocal in the verses building to a powerful belted final chorus, subtle acoustic guitar and brushed drums entering at the second verse",
+      "lyrics": "[Intro]\n어디쯤 왔을까\n\n[Verse 1]\n너를 보낸 계절이 다시 와\n같은 자리에 같은 바람이 불어\n\n[Pre-Chorus]\n이제는 익숙해질 때도 됐는데\n\n[Chorus]\n아직도 네 이름을 부르면\n목소리가 먼저 흔들려\n\n[Verse 2]\n사진 속 우리는 여전히 웃어\n나만 혼자 나이를 먹는 것 같아\n\n[Chorus]\n아직도 네 이름을 부르면\n목소리가 먼저 흔들려\n\n[Bridge]\n잘 지내라는 말 한마디\n끝내 하지 못했던 그 말\n\n[Final Chorus]\n이제는 네 이름을 부를게\n울지 않고 부를 수 있게\n\n[Outro]\n잘 지내"
+    },
+    {
+      "prompt_id": "BALLAD-03",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Slow Korean ballad at 62 BPM with warm electric piano, soft brushed drums, gentle string pad and an emotional breathy female lead vocal with intimate close-mic character",
+      "lyrics": "[Verse]\n밤이 길어지는 계절이 오면\n네가 두고 간 말이 떠올라\n\n[Chorus]\n조금만 더 있어달라고\n그때 말할 걸 그랬어"
+    },
+    {
+      "prompt_id": "BALLAD-04",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "sad Korean ballad with male vocal and piano",
+      "lyrics": "[Verse]\n혼자 걷는 길이 낯설지 않아\n이제는 익숙해진 것 같아\n\n[Chorus]\n그래도 가끔은 네가 보고 싶어\n아주 가끔은"
+    },
+    {
+      "prompt_id": "BALLAD-05",
+      "genre": "BALLAD",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "English piano ballad at 66 BPM, intimate female vocal, warm upright piano, subtle cello counter-melody, sparse verses and a full-band final chorus with restrained dynamics",
+      "lyrics": "[Intro]\nStill here\n\n[Verse 1]\nThe kettle sings the way it always did\nI set two cups down out of habit\n\n[Pre-Chorus]\nSome things take longer than they should\n\n[Chorus]\nI'm not waiting, I'm just slow\nLearning how to let you go\n\n[Verse 2]\nYour coat still hangs behind the kitchen door\nI tell myself I'll move it in the morning\n\n[Chorus]\nI'm not waiting, I'm just slow\nLearning how to let you go\n\n[Bridge]\nAnd maybe that's alright\nMaybe grief just takes its time\n\n[Final Chorus]\nI'm not waiting anymore\nI can hear the closing door\n\n[Outro]\nSlow, so slow"
+    },
+    {
+      "prompt_id": "BALLAD-06",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental Korean ballad backing, 64 BPM, grand piano lead with lush strings, soft brushed drums entering halfway, emotional and cinematic, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "RNB-01",
+      "genre": "RNB",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Korean alternative R&B at 88 BPM, deep sub bass, sparse punchy drums, lush Rhodes chords, muted electric guitar, airy pads, intimate breathy female vocal with soulful runs and layered harmonies",
+      "lyrics": "[Intro]\n늦은 밤\n\n[Verse 1]\n불 꺼진 방에 화면만 밝아\n네 이름이 아직 위에 있어\n\n[Pre-Chorus]\n보낼까 말까 열두 번\n\n[Chorus]\n오늘도 저장만 하고 잠들어\n내일은 다를 거라 믿으면서\n\n[Verse 2]\n습관처럼 네 소식을 찾아\n아무렇지 않은 척 넘겨\n\n[Chorus]\n오늘도 저장만 하고 잠들어\n내일은 다를 거라 믿으면서\n\n[Bridge]\n용기라는 건 어디서 사는 걸까\n\n[Final Chorus]\n오늘은 보낼게 늦었더라도\n읽지 않아도 괜찮으니까\n\n[Outro]\n괜찮으니까"
+    },
+    {
+      "prompt_id": "RNB-02",
+      "genre": "RNB",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "smooth Korean R&B with male vocal",
+      "lyrics": "[Verse]\n천천히 걸어도 괜찮아\n오늘 밤은 길게 남았으니까\n\n[Chorus]\n네 옆이면 어디든 좋아\n서두르지 않을게"
+    },
+    {
+      "prompt_id": "RNB-03",
+      "genre": "RNB",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "chill Korean R&B with female vocal and Rhodes piano",
+      "lyrics": "[Verse]\n창문 열면 여름 냄새가 나\n네가 좋아하던 그 계절이야\n\n[Chorus]\n조금 더 천천히 가줘\n이 밤이 아까우니까"
+    },
+    {
+      "prompt_id": "RNB-04",
+      "genre": "RNB",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Neo-soul R&B at 82 BPM with warm Rhodes, fretless bass, brushed drums, jazzy extended chords and a smooth male vocal with falsetto flourishes",
+      "lyrics": "[Verse]\nSlow morning, coffee going cold\nYou're humming something I don't know\n\n[Chorus]\nStay a little longer\nThe day can wait for us"
+    },
+    {
+      "prompt_id": "RNB-05",
+      "genre": "RNB",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "moody R&B with female vocal",
+      "lyrics": "[Verse]\nRain on the window, engine running low\nI drove around till I forgot the road\n\n[Chorus]\nI don't need an answer\nJust need somewhere to go"
+    },
+    {
+      "prompt_id": "RNB-06",
+      "genre": "RNB",
+      "language": "ko",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental Korean R&B backing track, 86 BPM, deep sub bass, lush Rhodes chords, sparse rim-click drums, airy background pads, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "HIPHOP-01",
+      "genre": "HIPHOP",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Korean hip-hop at 90 BPM with boom-bap drums, dusty vinyl piano loop, warm upright bass and a confident male rap delivery with a sung hook",
+      "lyrics": "[Verse]\n작은 방에서 시작한 얘기\n녹음 버튼 하나로 버틴 시간\n누가 알아주지 않아도 좋아\n어차피 내 속도로 갈 거니까\n\n[Chorus]\n천천히 그러나 멈추지 않고\n오늘도 한 줄 더 써 내려가"
+    },
+    {
+      "prompt_id": "HIPHOP-02",
+      "genre": "HIPHOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "Korean hip-hop with female rap and trap drums",
+      "lyrics": "[Verse]\n숨 고르고 다시 마이크를 잡아\n내 이름 석 자면 충분한 소개\n\n[Chorus]\n밀리지 않아 나는 나니까\n뒤돌아보지 않아"
+    },
+    {
+      "prompt_id": "HIPHOP-03",
+      "genre": "HIPHOP",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Korean trap at 140 BPM with rolling 808 bass, crisp hi-hat triplets, dark minor piano melody, aggressive male rap verses and an anthemic melodic hook",
+      "lyrics": "[Intro]\n들어봐\n\n[Verse 1]\n새벽 세 시 여전히 불이 켜져\n남들 자는 시간에 나는 쌓아\n\n[Pre-Chorus]\n조금만 더 조금만 더\n\n[Chorus]\n올라가 계속 올라가\n바닥은 이미 봤으니까\n\n[Verse 2]\n말보다 결과가 먼저 도착해\n증명할 필요도 없어졌어\n\n[Chorus]\n올라가 계속 올라가\n바닥은 이미 봤으니까\n\n[Bridge]\n숨이 차도 멈추지 않아\n\n[Final Chorus]\n올라가 끝까지 올라가\n여기서 멈출 생각 없으니까\n\n[Outro]\n없으니까"
+    },
+    {
+      "prompt_id": "HIPHOP-04",
+      "genre": "HIPHOP",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "boom bap hip hop with male rap vocal",
+      "lyrics": "[Verse]\nSame block, same bus, different year\nI kept the notebook, that's the only proof\n\n[Chorus]\nStill writing, still here\nStill counting every step"
+    },
+    {
+      "prompt_id": "HIPHOP-05",
+      "genre": "HIPHOP",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Modern hip-hop at 96 BPM with hard-hitting drums, dark synth bass, sparse arrangement and a rhythmically intricate female rap with a melodic sung chorus",
+      "lyrics": "[Verse]\nI don't do the small talk, I do the long walk\nEvery door I knocked on taught me how to build one\n\n[Chorus]\nWatch me set it down\nWatch me build it up"
+    },
+    {
+      "prompt_id": "HIPHOP-06",
+      "genre": "HIPHOP",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental boom-bap hip-hop beat at 92 BPM, dusty sampled piano chords, vinyl crackle, punchy drums, warm upright bass, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "ROCK-01",
+      "genre": "ROCK",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Korean modern rock band at 148 BPM, driving distorted guitars, energetic live drums, melodic bass, powerful male vocal with a big singalong chorus and a dynamic quiet bridge",
+      "lyrics": "[Intro]\n하나 둘 셋 넷\n\n[Verse 1]\n낡은 연습실 문을 열면\n먼지 사이로 소리가 남아\n\n[Pre-Chorus]\n아직 끝난 게 아니야\n\n[Chorus]\n소리쳐 우리가 여기 있다고\n아무도 듣지 않아도\n\n[Verse 2]\n계획은 진작에 틀어졌고\n남은 건 이 네 명뿐이지만\n\n[Chorus]\n소리쳐 우리가 여기 있다고\n아무도 듣지 않아도\n\n[Bridge]\n조용히 기타 한 대만\n그걸로 충분했던 밤\n\n[Final Chorus]\n소리쳐 끝까지 여기 있다고\n목이 쉬어도 좋으니까\n\n[Outro]\n여기 있어"
+    },
+    {
+      "prompt_id": "ROCK-02",
+      "genre": "ROCK",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "Korean rock band with female vocal and electric guitar",
+      "lyrics": "[Verse]\n망설이는 사이 계절이 갔어\n이번엔 먼저 문을 열래\n\n[Chorus]\n부딪혀도 괜찮아\n부서지진 않을 테니까"
+    },
+    {
+      "prompt_id": "ROCK-03",
+      "genre": "ROCK",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "Korean indie rock with male vocal",
+      "lyrics": "[Verse]\n버스 창에 기대 잠든 사이\n익숙한 정류장을 지나쳤어\n\n[Chorus]\n돌아가지 않을래\n오늘은 끝까지 가볼래"
+    },
+    {
+      "prompt_id": "ROCK-04",
+      "genre": "ROCK",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Alternative rock at 138 BPM with crunchy overdriven guitars, punchy live drums, driving bass and a raw male vocal with a wide anthemic chorus",
+      "lyrics": "[Verse]\nWe were loud before we were any good\nThe neighbours knew our set list by heart\n\n[Chorus]\nTurn it up, let it break\nWe never learned to play it safe"
+    },
+    {
+      "prompt_id": "ROCK-05",
+      "genre": "ROCK",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "energetic rock song with female vocal",
+      "lyrics": "[Verse]\nI packed the car before I made a plan\nThe map can wait until the second tank\n\n[Chorus]\nDrive it out, drive it far\nI'll figure out who I am"
+    },
+    {
+      "prompt_id": "ROCK-06",
+      "genre": "ROCK",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental rock track, 146 BPM, twin distorted guitars trading melodic lines, driving live drums, melodic bass, building to a full-band climax, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "INDIE-01",
+      "genre": "INDIE",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Korean indie pop at 104 BPM with jangly clean electric guitar, warm electric piano, soft live drums, melodic bass and a gentle unaffected female vocal, nostalgic and slightly lo-fi",
+      "lyrics": "[Intro]\n음\n\n[Verse 1]\n자전거를 끌고 언덕을 올라\n숨이 차는 게 오히려 좋아\n\n[Pre-Chorus]\n여기서 보면 다 작아 보여\n\n[Chorus]\n조금 늦어도 괜찮은 하루\n오늘은 그런 날로 할래\n\n[Verse 2]\n편의점 앞에 앉아 캔을 따고\n지나가는 사람들을 세어봐\n\n[Chorus]\n조금 늦어도 괜찮은 하루\n오늘은 그런 날로 할래\n\n[Bridge]\n서두르라는 말은 잠깐 꺼둘게\n\n[Final Chorus]\n많이 늦어도 괜찮은 하루\n계속 그런 날이었으면\n\n[Outro]\n그런 날"
+    },
+    {
+      "prompt_id": "INDIE-02",
+      "genre": "INDIE",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "Korean indie song with male vocal and acoustic guitar",
+      "lyrics": "[Verse]\n오래된 노래를 다시 틀어\n가사를 아직 기억하고 있어\n\n[Chorus]\n변한 게 많다고 해도\n이건 그대로였으면"
+    },
+    {
+      "prompt_id": "INDIE-03",
+      "genre": "INDIE",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "dreamy Korean indie with female vocal",
+      "lyrics": "[Verse]\n버스는 늦고 하늘은 흐려\n그래도 오늘은 기분이 좋아\n\n[Chorus]\n특별한 일 없어도\n이런 날이 좋아"
+    },
+    {
+      "prompt_id": "INDIE-04",
+      "genre": "INDIE",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Korean bedroom indie pop, 96 BPM, warm tape-saturated drums, soft synth bass, layered clean guitars, intimate double-tracked female vocal with a hazy nostalgic mood",
+      "lyrics": "[Verse]\n방 불을 끄고 창문만 열어둬\n바깥 소리가 이불처럼 덮여\n\n[Chorus]\n오늘 하루도 잘 버텼어\n그거면 충분한 밤"
+    },
+    {
+      "prompt_id": "INDIE-05",
+      "genre": "INDIE",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "indie folk pop with male vocal",
+      "lyrics": "[Verse]\nWe drove past the town we grew up in\nNeither of us asked to stop\n\n[Chorus]\nSome doors you leave closed\nAnd that's how you get home"
+    },
+    {
+      "prompt_id": "INDIE-06",
+      "genre": "INDIE",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental indie pop, 100 BPM, jangly clean guitars, warm electric piano, soft live drums, melodic bass, bright and nostalgic, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "JAZZ-01",
+      "genre": "JAZZ",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental jazz trio at 120 BPM, acoustic piano with rich extended voicings, walking upright bass, brushed drums, swinging feel with an improvised piano solo, no vocals",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "JAZZ-02",
+      "genre": "JAZZ",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Slow jazz ballad at 72 BPM with warm upright bass, brushed drums, mellow piano comping, muted trumpet fills and a smoky expressive female jazz vocal",
+      "lyrics": "[Verse]\nThe last set finished hours ago\nThe barman leaves the lamp on when I sing\n\n[Chorus]\nNobody's listening\nAnd that's the best part"
+    },
+    {
+      "prompt_id": "JAZZ-03",
+      "genre": "JAZZ",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "smooth jazz song with male vocal",
+      "lyrics": "[Verse]\nA quiet table by the window pane\nThe city hums a chord I recognize\n\n[Chorus]\nSlow it down, let it swing\nWe've got nowhere else to be"
+    },
+    {
+      "prompt_id": "JAZZ-04",
+      "genre": "JAZZ",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "simple",
+      "structure": "none",
+      "prompt": "instrumental jazz quartet with saxophone",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "JAZZ-05",
+      "genre": "JAZZ",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Korean jazz vocal ballad at 76 BPM with acoustic piano, upright bass, brushed drums and a warm expressive female vocal with natural phrasing",
+      "lyrics": "[Verse]\n오래된 카페 구석 자리에\n아직 같은 노래가 흘러\n\n[Chorus]\n시간이 느리게 가는 곳\n여기서 조금만 쉬어갈게"
+    },
+    {
+      "prompt_id": "JAZZ-06",
+      "genre": "JAZZ",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental bossa nova at 132 BPM, nylon-string guitar comping, soft shaker and rim clicks, upright bass, warm flute melody, relaxed and sunny, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "LOFI-01",
+      "genre": "LOFI",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental lo-fi hip-hop at 78 BPM, dusty sampled piano chords, vinyl crackle, soft swung drums, warm sub bass, mellow and studious, no vocals",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "LOFI-02",
+      "genre": "LOFI",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "simple",
+      "structure": "none",
+      "prompt": "lo-fi chill beat to study to",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "LOFI-03",
+      "genre": "LOFI",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Korean lo-fi pop at 80 BPM with tape-saturated drums, warm Rhodes, soft vinyl noise and a gentle close-mic female vocal, sleepy late-night mood",
+      "lyrics": "[Verse]\n알람을 미루고 조금만 더\n오늘은 천천히 시작할래\n\n[Chorus]\n서두르지 않아도 돼\n하루는 아직 기니까"
+    },
+    {
+      "prompt_id": "LOFI-04",
+      "genre": "LOFI",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental lo-fi jazz-hop at 74 BPM, muted trumpet melody, dusty drums, upright bass, tape wobble and room noise, rainy afternoon mood, no vocals",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "LOFI-05",
+      "genre": "LOFI",
+      "language": "ko",
+      "vocal_gender": "instrumental",
+      "prompt_style": "simple",
+      "structure": "none",
+      "prompt": "Korean lo-fi instrumental with soft piano",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "LOFI-06",
+      "genre": "LOFI",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "lo-fi bedroom pop with soft male vocal",
+      "lyrics": "[Verse]\nHalf awake and the kettle's on\nThe morning takes its time with me\n\n[Chorus]\nNo rush, no plan\nJust let it be slow"
+    },
+
+    {
+      "prompt_id": "EDM-01",
+      "genre": "EDM",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Melodic future bass at 150 BPM with supersaw chords, sidechained pads, punchy drums, a big emotional drop and an airy processed female vocal",
+      "lyrics": "[Intro]\nHere we go\n\n[Verse 1]\nCounting down the seconds on the floor\nEverybody waiting for the lift\n\n[Pre-Chorus]\nHold your breath now\n\n[Chorus]\nLet it go, let it break the night\nWe were never coming down\n\n[Verse 2]\nHands up higher than the ceiling light\nNobody's checking on the time\n\n[Chorus]\nLet it go, let it break the night\nWe were never coming down\n\n[Bridge]\nQuiet for a moment\nThen everything at once\n\n[Final Chorus]\nLet it go, let it burn so bright\nWe were never coming down\n\n[Outro]\nNever coming down"
+    },
+    {
+      "prompt_id": "EDM-02",
+      "genre": "EDM",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental progressive house at 126 BPM, rolling bassline, filtered plucks, long builds and a euphoric melodic drop, no vocals",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "EDM-03",
+      "genre": "EDM",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Korean dance pop EDM at 128 BPM with bright supersaw chords, four-on-the-floor kick, sidechained synths and an energetic female vocal hook",
+      "lyrics": "[Verse]\n불빛이 켜지면 시작이야\n오늘 밤은 길게 갈 거야\n\n[Chorus]\n손 들어 다 같이\n이 순간을 놓치지 마"
+    },
+    {
+      "prompt_id": "EDM-04",
+      "genre": "EDM",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "electronic dance track with male vocal",
+      "lyrics": "[Verse]\nStrobe light cutting through the smoke\nI lost my friends around the second song\n\n[Chorus]\nFind me on the floor\nI'm not leaving anymore"
+    },
+    {
+      "prompt_id": "EDM-05",
+      "genre": "EDM",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "simple",
+      "structure": "none",
+      "prompt": "instrumental techno track",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "EDM-06",
+      "genre": "EDM",
+      "language": "ko",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental Korean festival EDM, 130 BPM, huge supersaw lead, punchy kick, white-noise risers and a high-energy drop, no vocals",
+      "lyrics": ""
+    },
+
+    {
+      "prompt_id": "ACOUSTIC-01",
+      "genre": "ACOUSTIC",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "simple",
+      "prompt": "Korean acoustic song at 84 BPM with fingerpicked steel-string guitar, light shaker, warm upright bass and a soft natural female vocal recorded close and dry",
+      "lyrics": "[Verse]\n햇빛이 마루에 길게 누워\n고양이가 그 위에 잠들었어\n\n[Chorus]\n이런 오후가 계속됐으면\n아무 일도 없었으면"
+    },
+    {
+      "prompt_id": "ACOUSTIC-02",
+      "genre": "ACOUSTIC",
+      "language": "ko",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "Korean acoustic guitar song with male vocal",
+      "lyrics": "[Verse]\n오래 걸었더니 발이 아파\n그래도 조금만 더 가볼까\n\n[Chorus]\n끝이 안 보여도\n길은 계속 있으니까"
+    },
+    {
+      "prompt_id": "ACOUSTIC-03",
+      "genre": "ACOUSTIC",
+      "language": "en",
+      "vocal_gender": "female",
+      "prompt_style": "detailed",
+      "structure": "complex",
+      "prompt": "Acoustic folk at 88 BPM with fingerpicked guitar, upright bass, light brushed drums, subtle fiddle and a warm honest female vocal with close harmonies in the final chorus",
+      "lyrics": "[Intro]\nOh\n\n[Verse 1]\nI learned this song from someone's older brother\nHe only ever played the first two chords\n\n[Pre-Chorus]\nIt was enough back then\n\n[Chorus]\nSing it simple, sing it true\nThat's all the song has to do\n\n[Verse 2]\nWe played it out behind the grocery store\nUntil the streetlight told us we should go\n\n[Chorus]\nSing it simple, sing it true\nThat's all the song has to do\n\n[Bridge]\nI still don't know the third chord\nAnd I don't think I need it\n\n[Final Chorus]\nSing it simple, sing it true\nThat's all it ever had to do\n\n[Outro]\nThat's all"
+    },
+    {
+      "prompt_id": "ACOUSTIC-04",
+      "genre": "ACOUSTIC",
+      "language": "en",
+      "vocal_gender": "male",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "acoustic singer songwriter with male vocal",
+      "lyrics": "[Verse]\nI wrote this on a train I nearly missed\nThe window did the rest of it for me\n\n[Chorus]\nGoing somewhere slowly\nIs still going somewhere"
+    },
+    {
+      "prompt_id": "ACOUSTIC-05",
+      "genre": "ACOUSTIC",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "prompt_style": "detailed",
+      "structure": "none",
+      "prompt": "Instrumental acoustic guitar piece, 86 BPM, fingerpicked steel-string with warm room tone, subtle upright bass and light percussion, gentle and reflective, no vocals",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "ACOUSTIC-06",
+      "genre": "ACOUSTIC",
+      "language": "ko",
+      "vocal_gender": "female",
+      "prompt_style": "simple",
+      "structure": "simple",
+      "prompt": "quiet Korean acoustic song with female vocal",
+      "lyrics": "[Verse]\n새벽에 깨서 물을 마시고\n다시 눕기 전에 창을 봤어\n\n[Chorus]\n아무도 없는 시간이\n가끔은 필요해"
+    }
+  ]
+}
