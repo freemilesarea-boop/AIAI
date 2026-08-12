@@ -62,9 +62,21 @@ class DatasetManifest:
         return digest.hexdigest()
 
     def style_distribution(self) -> dict[str, int]:
+        """Vocal-style counts.
+
+        A track with no vocal annotation is reported as *unannotated*,
+        not as instrumental. Conflating the two would silently claim a
+        vocal characteristic nobody established, which is exactly the
+        kind of invented label the pilot must avoid.
+        """
         counts: dict[str, int] = {}
         for track in self.tracks:
-            key = str(track.vocal.vocal_style) if track.vocal else "instrumental"
+            if track.vocal is not None:
+                key = str(track.vocal.vocal_style)
+            elif track.vocal_gender == "instrumental":
+                key = "instrumental"
+            else:
+                key = "unannotated"
             counts[key] = counts.get(key, 0) + 1
         return dict(sorted(counts.items()))
 

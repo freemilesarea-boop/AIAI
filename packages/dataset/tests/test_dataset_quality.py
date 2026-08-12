@@ -451,3 +451,20 @@ def test_timbre_defaults_to_neutral_and_serializes():
     track = _track("t")
     assert track.vocal.timbre == VocalTimbre.NEUTRAL
     assert track.to_dict()["vocal"]["timbre"] == "neutral"
+
+
+def test_unannotated_vocal_is_not_reported_as_instrumental():
+    """An unlabelled track must not silently claim to be instrumental."""
+    manifest = build_manifest(
+        "T",
+        [
+            _track("vocal_unlabelled", vocal=None, vocal_gender="unknown"),
+            _track(
+                "really_instrumental",
+                vocal=None,
+                vocal_gender="instrumental",
+                lyrics_available=False,
+            ),
+        ],
+    )
+    assert manifest.style_distribution() == {"instrumental": 1, "unannotated": 1}
