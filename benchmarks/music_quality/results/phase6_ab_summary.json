@@ -1,0 +1,67 @@
+{
+  "experiment_id": "phase6_no_training_ab",
+  "baseline_variant": "V1_legacy_compiler",
+  "n_prompts": 6,
+  "variants": {
+    "V2_dedup_compiler": {
+      "spectral_centroid_hz": {
+        "median_delta": -8.55,
+        "improved": 3,
+        "n": 6,
+        "better": "lower"
+      },
+      "level_drift_db": {
+        "median_delta": 0.245,
+        "improved": 3,
+        "n": 6,
+        "better": "higher"
+      },
+      "max_repetition": {
+        "median_delta": -0.001,
+        "improved": 4,
+        "n": 6,
+        "better": "lower"
+      }
+    },
+    "V3_dedup_metadata": {
+      "spectral_centroid_hz": {
+        "median_delta": -141.25,
+        "improved": 4,
+        "n": 6,
+        "better": "lower"
+      },
+      "level_drift_db": {
+        "median_delta": 1.31,
+        "improved": 5,
+        "n": 6,
+        "better": "higher"
+      },
+      "max_repetition": {
+        "median_delta": 0.007,
+        "improved": 2,
+        "n": 6,
+        "better": "lower"
+      }
+    },
+    "V4_dedup_sde": {
+      "spectral_centroid_hz": {
+        "median_delta": -260.25,
+        "improved": 4,
+        "n": 6,
+        "better": "lower"
+      },
+      "level_drift_db": {
+        "median_delta": -6.46,
+        "improved": 1,
+        "n": 6,
+        "better": "higher"
+      },
+      "max_repetition": {
+        "median_delta": 0.005,
+        "improved": 2,
+        "n": 6,
+        "better": "lower"
+      }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "experiment_id": "phase6_no_training_ab",
+  "benchmark_version": "v1",
+  "description": "Phase 6 controlled no-training A/B. Six representative prompts, fixed seed per prompt, one variable changed per variant. Duration is 60 s because Phase 5 established 30 s as the structurally weakest tier; 30 s is retained only as a regression cell elsewhere.",
+  "duration": 60,
+  "model": "acestep-v15-turbo",
+  "inference_steps": 8,
+  "variants": [
+    {
+      "variant_id": "V1_legacy_compiler",
+      "description": "Phase 5 baseline behaviour: compiler appends conditioning unconditionally (duplicated).",
+      "dedup_prompt": false,
+      "send_metadata": false,
+      "extra": {}
+    },
+    {
+      "variant_id": "V2_dedup_compiler",
+      "description": "Phase 6 de-duplicated compiler. Only variable vs V1 is the prompt text.",
+      "dedup_prompt": true,
+      "send_metadata": false,
+      "extra": {}
+    },
+    {
+      "variant_id": "V3_dedup_metadata",
+      "description": "Dedup compiler plus bpm / key_scale / time_signature conditioning, which LUBER has never sent.",
+      "dedup_prompt": true,
+      "send_metadata": true,
+      "extra": {}
+    },
+    {
+      "variant_id": "V4_dedup_sde",
+      "description": "Dedup compiler with infer_method=sde instead of the default ode sampler.",
+      "dedup_prompt": true,
+      "send_metadata": false,
+      "extra": { "infer_method": "sde" }
+    }
+  ],
+  "prompts": [
+    {
+      "prompt_id": "KPOP-01",
+      "seed": 20260812,
+      "metadata": { "bpm": 124, "key_scale": "C major", "time_signature": "4" }
+    },
+    {
+      "prompt_id": "KPOP-02",
+      "seed": 20260813,
+      "metadata": { "bpm": 124, "key_scale": "A minor", "time_signature": "4" }
+    },
+    {
+      "prompt_id": "BALLAD-01",
+      "seed": 20260814,
+      "metadata": { "bpm": 66, "key_scale": "D major", "time_signature": "4" }
+    },
+    {
+      "prompt_id": "RNB-01",
+      "seed": 20260815,
+      "metadata": { "bpm": 88, "key_scale": "F# minor", "time_signature": "4" }
+    },
+    {
+      "prompt_id": "ROCK-04",
+      "seed": 20260816,
+      "metadata": { "bpm": 138, "key_scale": "E minor", "time_signature": "4" }
+    },
+    {
+      "prompt_id": "JAZZ-01",
+      "seed": 20260817,
+      "metadata": { "bpm": 120, "key_scale": "B♭ major", "time_signature": "4" }
+    }
+  ],
+  "composition_note": "2 Korean K-pop vocal (KPOP-01 simple, KPOP-02 detailed/complex), 1 Korean ballad, 1 Korean R&B, 1 English vocal (ROCK-04), 1 instrumental (JAZZ-01)."
+}

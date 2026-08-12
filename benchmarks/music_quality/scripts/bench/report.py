@@ -127,6 +127,45 @@ def _table(rows: list[tuple[str, str]], headers: tuple[str, str]) -> str:
     return "\n".join(out) + "\n"
 
 
+def render_verdict_section(verdict: dict[str, Any]) -> str:
+    """Render the human verdict. This leads the report when present.
+
+    A global verdict outranks every objective measurement below it: the
+    machine can only report that audio decoded correctly, while this is
+    a person saying whether the music is worth anything.
+    """
+    lines: list[str] = []
+    add = lines.append
+    score = verdict.get("overall_score")
+    usable = verdict.get("commercially_usable")
+    reviewed = verdict.get("tracks_reviewed", 0)
+    rejected = verdict.get("tracks_rejected", 0)
+
+    add("## HUMAN LISTENING VERDICT\n")
+    add(f"**HUMAN LISTENING BASELINE: {score} / 10**\n")
+    add(f"**COMMERCIAL RELEASE READINESS: {'PASS' if usable else 'FAIL'}**\n")
+    add(f"**{rejected} / {reviewed} REJECTED**\n")
+    add("**SUNO 4.5 PARITY: NOT ACHIEVED**\n")
+    add(f"- Evaluator: {verdict.get('evaluator')}")
+    add(f"- Recorded: {verdict.get('recorded_at')}")
+    add(f"- Reason detailed scoring was skipped: _{verdict.get('reason')}_")
+    add("")
+    findings = verdict.get("findings") or []
+    if findings:
+        add("### Findings\n")
+        for finding in findings:
+            add(f"- `{finding}`")
+        add("")
+    if verdict.get("notes"):
+        add(f"> {verdict['notes']}\n")
+    add(
+        "_No per-track scores were fabricated to fill this section. The "
+        "evaluator rejected the set before per-dimension scoring became "
+        "informative, and the record reflects exactly that._\n"
+    )
+    return "\n".join(lines)
+
+
 def render_report(
     *,
     records: list[dict[str, Any]],
@@ -137,6 +176,7 @@ def render_report(
     ace_step_commit: str,
     hardware: str,
     notes: str = "",
+    verdict: dict[str, Any] | None = None,
 ) -> str:
     summary = summarize(records)
     completed = [r for r in records if r.get("status") == "COMPLETED"]
@@ -167,7 +207,17 @@ def render_report(
         "changes were made in response to these results.\n"
     )
 
+    if verdict is not None:
+        add(render_verdict_section(verdict))
+        add("---\n")
+
     add("## Executive Summary\n")
+    if verdict is not None:
+        add(
+            f"- **Human listening baseline: {verdict.get('overall_score')}/10 — "
+            f"{verdict.get('tracks_rejected')}/{verdict.get('tracks_reviewed')} tracks "
+            "rejected, not commercially usable.**"
+        )
     add(f"- Generations attempted: **{summary.total}**")
     add(f"- Completed: **{summary.completed}** ({summary.success_rate:.0%})")
     add(
@@ -280,11 +330,11 @@ def render_report(
     rows = []
     for dimension, target in QUALITY_TARGETS.items():
         measured = averages.get(dimension)
-        verdict = "PASS" if targets.get(dimension) else "MISS"
+        outcome = "PASS" if targets.get(dimension) else "MISS"
         rows.append(
             (
                 dimension,
-                f"{measured if measured is not None else 'n/a'} / {target} → **{verdict}**",
+                f"{measured if measured is not None else 'n/a'} / {target} → **{outcome}**",
             )
         )
     add(_table(rows, ("Dimension", "Measured / Target")))

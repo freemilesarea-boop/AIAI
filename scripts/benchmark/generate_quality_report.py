@@ -13,6 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "benchmarks" / "music_quality" / "scripts"))
 
 from bench.report import render_report  # noqa: E402
 from bench.store import ResultStore, ScoreStore  # noqa: E402
+from bench.verdict import VerdictStore  # noqa: E402
 
 BENCH_ROOT = REPO_ROOT / "benchmarks" / "music_quality"
 
@@ -48,6 +49,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ace-step-version", default="1.5.0")
     parser.add_argument("--ace-step-commit", default="6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0")
     parser.add_argument("--notes-file", type=Path, default=None)
+    parser.add_argument(
+        "--appendix-file",
+        type=Path,
+        default=BENCH_ROOT / "reports" / "_baseline_appendix.md",
+        help="Analysis sections appended verbatim after the generated body",
+    )
+    parser.add_argument(
+        "--verdicts", type=Path, default=BENCH_ROOT / "listening" / "verdicts.jsonl"
+    )
     return parser.parse_args(argv)
 
 
@@ -56,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     records = ResultStore(args.results).load()
     scores = ScoreStore(args.scores).load()
     notes = args.notes_file.read_text(encoding="utf-8") if args.notes_file else ""
+    verdict = VerdictStore(args.verdicts).latest_for(args.baseline_id)
 
     report = render_report(
         records=records,
@@ -66,10 +77,16 @@ def main(argv: list[str] | None = None) -> int:
         ace_step_commit=args.ace_step_commit,
         hardware=_hardware(),
         notes=notes,
+        verdict=verdict,
     )
+    if args.appendix_file and args.appendix_file.is_file():
+        report += "\n" + args.appendix_file.read_text(encoding="utf-8")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(report, encoding="utf-8")
-    print(f"wrote {args.output} ({len(records)} records, {len(scores)} scores)")
+    print(
+        f"wrote {args.output} ({len(records)} records, {len(scores)} scores, "
+        f"verdict={'yes' if verdict else 'no'})"
+    )
     return 0
 
 

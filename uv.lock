@@ -13,6 +13,7 @@ members = [
     "luber-audio-utils",
     "luber-audio-worker",
     "luber-database",
+    "luber-dataset",
     "luber-generation-client",
     "luber-generation-worker",
     "luber-music-ai",
@@ -748,6 +749,11 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
 ]
+
+[[package]]
+name = "luber-dataset"
+version = "0.1.0"
+source = { editable = "packages/dataset" }
 
 [[package]]
 name = "luber-generation-client"
