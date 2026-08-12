@@ -9,10 +9,12 @@ import pytest
 
 from luber_dataset import (
     Delivery,
+    OriginType,
     PronunciationStyle,
     QualityGrade,
+    RightsBasis,
     RightsRecord,
-    RightsStatus,
+    TrainingRightsStatus,
     TrainingRunManifest,
     TrainingTrack,
     VibratoAmount,
@@ -74,7 +76,9 @@ def _wav(
 
 def _rights(**overrides) -> RightsRecord:
     base = {
-        "status": RightsStatus.ORIGINAL_WORK,
+        "origin_type": OriginType.HUMAN_RECORDED,
+        "training_rights_status": TrainingRightsStatus.CONFIRMED,
+        "basis": RightsBasis.ORIGINAL_WORK,
         "source": "commissioned session",
         "rights_holder": "LUBER",
         "document_reference": "contract-1",
@@ -238,7 +242,11 @@ def test_manifest_accepts_cleared_quality_tracks():
 
 def test_manifest_excludes_unverified_rights_with_a_reason():
     manifest = build_manifest(
-        "T", [_track("ok"), _track("bad", rights=_rights(status=RightsStatus.UNVERIFIED))]
+        "T",
+        [
+            _track("ok"),
+            _track("bad", rights=_rights(training_rights_status=TrainingRightsStatus.UNVERIFIED)),
+        ],
     )
     assert [t.track_id for t in manifest.tracks] == ["ok"]
     assert manifest.exclusions[0].track_id == "bad"
@@ -283,7 +291,7 @@ def test_rights_are_checked_before_quality():
         [
             _track(
                 "x",
-                rights=_rights(status=RightsStatus.UNVERIFIED),
+                rights=_rights(training_rights_status=TrainingRightsStatus.UNVERIFIED),
                 audio_quality_flags=[CLIPPING],
             )
         ],
@@ -325,7 +333,7 @@ def test_manifest_reports_distributions_and_serializes(tmp_path):
 
 def test_training_allowed_is_derived_not_declared():
     """A manifest cannot assert rights the record does not support."""
-    track = _track("x", rights=_rights(status=RightsStatus.UNVERIFIED))
+    track = _track("x", rights=_rights(training_rights_status=TrainingRightsStatus.UNVERIFIED))
     assert track.training_allowed is False
     assert track.to_dict()["training_allowed"] is False
 

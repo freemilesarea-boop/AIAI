@@ -1,20 +1,26 @@
 """Rights validation for training data.
 
-The gate, not a warning. A track whose rights are not affirmatively
-confirmed is **excluded from the dataset in code** — there is no
-override flag, no "review later" state, and no way for an unconfirmed
-track to reach preprocessing.
+Two facts about a track are independent and must not be conflated:
 
-The rule this enforces: public accessibility is not a training licence.
-Neither is "we found it online", "it has no visible copyright notice",
-or "it is only a pilot". Upstream's own LoRA tutorial says the same
-thing — it demonstrates on a commercial album while instructing readers
-to "use your own original works".
+* **where the audio came from** (`origin_type`) — a human recording, a
+  generative model, or a hybrid;
+* **whether we may train on it** (`training_rights_status`).
 
-Prohibited outright, regardless of any metadata a caller supplies:
-scraped output from other generative music services, scraped commercial
-catalogues, and any copyrighted material without an explicit training
-grant.
+An earlier revision rejected every AI-generated file outright. That was
+too coarse: AI-generated audio the operator owns and has cleared is
+legitimate training material, while a human recording with no licence
+is not. Origin does not decide eligibility; rights do.
+
+Two things remain absolute:
+
+1. **Self-model output is never trainable.** Audio this project's own
+   ACE-Step pipeline produced is refused regardless of rights, because
+   training a model on its own output teaches it back its own
+   artifacts — and the Phase 5 human verdict rated that output 2/10.
+2. **A file path is not a licence.** Nothing derived from a folder
+   name, a filename, or the mere fact that a file exists on disk may
+   set `CONFIRMED`. Only an operator decision backed by a documented
+   rights record can do that.
 """
 
 from __future__ import annotations
@@ -24,56 +30,68 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
-class RightsStatus(StrEnum):
-    """How the right to train on a track was established."""
+class OriginType(StrEnum):
+    """How the audio was produced."""
 
-    #: Written by or for LUBER; we hold everything.
-    ORIGINAL_WORK = "ORIGINAL_WORK"
-    #: Explicit written licence covering ML training.
-    LICENSED_FOR_TRAINING = "LICENSED_FOR_TRAINING"
-    #: Public domain, verified — not merely assumed.
-    PUBLIC_DOMAIN = "PUBLIC_DOMAIN"
-    #: Creative Commons licence whose terms permit training and the
-    #: intended commercial use.
-    CC_TRAINING_PERMITTED = "CC_TRAINING_PERMITTED"
-    #: Rights holder gave documented permission.
-    RIGHTS_HOLDER_PERMISSION = "RIGHTS_HOLDER_PERMISSION"
-    #: Not established. Always excluded.
-    UNVERIFIED = "UNVERIFIED"
-    #: Actively known to be unusable.
-    PROHIBITED = "PROHIBITED"
-    #: Output of a generative model — including our own. Always
-    #: excluded: training on generated audio teaches the model its own
-    #: artifacts back, and this repository contains 100+ such files from
-    #: benchmarking that must never be mistaken for training material.
+    HUMAN_RECORDED = "HUMAN_RECORDED"
     AI_GENERATED = "AI_GENERATED"
+    HYBRID = "HYBRID"
+    #: Produced by this project's own ACE-Step pipeline. Never trainable.
+    SELF_MODEL_OUTPUT = "SELF_MODEL_OUTPUT"
+    UNKNOWN = "UNKNOWN"
 
 
-#: The only statuses that may enter a training set.
-ACCEPTABLE_STATUSES: frozenset[RightsStatus] = frozenset(
+class TrainingRightsStatus(StrEnum):
+    """Whether we may train on this track."""
+
+    CONFIRMED = "CONFIRMED"
+    UNVERIFIED = "UNVERIFIED"
+    DENIED = "DENIED"
+
+
+class RightsBasis(StrEnum):
+    """How the right to train was established, when it was."""
+
+    ORIGINAL_WORK = "ORIGINAL_WORK"
+    LICENSED_FOR_TRAINING = "LICENSED_FOR_TRAINING"
+    PUBLIC_DOMAIN = "PUBLIC_DOMAIN"
+    CC_TRAINING_PERMITTED = "CC_TRAINING_PERMITTED"
+    RIGHTS_HOLDER_PERMISSION = "RIGHTS_HOLDER_PERMISSION"
+    #: Output of a generative service whose terms grant the operator
+    #: commercial rights, where the operator has confirmed this.
+    AI_SERVICE_OUTPUT_OWNED = "AI_SERVICE_OUTPUT_OWNED"
+    NONE = "NONE"
+
+
+class SourceClass(StrEnum):
+    """Reporting classification of a discovered candidate."""
+
+    AI_GENERATED_RIGHTS_CLEARED = "AI_GENERATED_RIGHTS_CLEARED"
+    AI_GENERATED_RIGHTS_UNVERIFIED = "AI_GENERATED_RIGHTS_UNVERIFIED"
+    SELF_MODEL_GENERATED = "SELF_MODEL_GENERATED"
+    HUMAN_PRODUCED_RIGHTS_CLEARED = "HUMAN_PRODUCED_RIGHTS_CLEARED"
+    COMMERCIAL_REFERENCE_UNVERIFIED = "COMMERCIAL_REFERENCE_UNVERIFIED"
+    UNKNOWN = "UNKNOWN"
+
+
+#: Classes usable as listening/reference targets but never placed in a
+#: training manifest.
+REFERENCE_ONLY_CLASSES: frozenset[SourceClass] = frozenset(
+    {SourceClass.COMMERCIAL_REFERENCE_UNVERIFIED}
+)
+
+#: Classes that may enter a training manifest once rights are confirmed.
+TRAINABLE_CLASSES: frozenset[SourceClass] = frozenset(
     {
-        RightsStatus.ORIGINAL_WORK,
-        RightsStatus.LICENSED_FOR_TRAINING,
-        RightsStatus.PUBLIC_DOMAIN,
-        RightsStatus.CC_TRAINING_PERMITTED,
-        RightsStatus.RIGHTS_HOLDER_PERMISSION,
+        SourceClass.AI_GENERATED_RIGHTS_CLEARED,
+        SourceClass.HUMAN_PRODUCED_RIGHTS_CLEARED,
     }
 )
 
-#: Provenance descriptions that are refused no matter what status is
-#: claimed alongside them.
-PROHIBITED_SOURCE_MARKERS: tuple[str, ...] = (
-    "suno",
-    "udio",
-    # Our own engine output. Phase 5 rated it 2/10; training on it would
-    # entrench exactly the failures the training set exists to fix.
-    "acestep",
-    "ace-step",
-    "generated",
-    "ai-generated",
-    "synthetic",
-    "fixture",
-    "mock",
+#: Provenance describing unlawful acquisition. Refused regardless of any
+#: rights claim: this is about how audio was obtained, not about whether
+#: a model made it.
+UNLAWFUL_ACQUISITION_MARKERS: tuple[str, ...] = (
     "scrape",
     "scraped",
     "crawler",
@@ -81,9 +99,17 @@ PROHIBITED_SOURCE_MARKERS: tuple[str, ...] = (
     "torrent",
     "youtube-dl",
     "yt-dlp",
-    "spotify-rip",
     "ripped",
     "leaked",
+    "pirated",
+)
+
+#: Markers indicating this project's own engine produced the audio.
+SELF_MODEL_MARKERS: tuple[str, ...] = (
+    "acestep",
+    "ace-step",
+    "luber-generated",
+    "self-model",
 )
 
 
@@ -93,22 +119,19 @@ class RightsError(Exception):
 
 @dataclass(frozen=True)
 class RightsRecord:
-    """Documented basis for training on one track.
+    """Documented basis for training on one track."""
 
-    Every field is required. A rights claim without a holder, a
-    document reference, and a date is not a rights claim.
-    """
-
-    status: RightsStatus
+    origin_type: OriginType
+    training_rights_status: TrainingRightsStatus
+    basis: RightsBasis
     #: Where the audio came from, in plain words.
     source: str
-    #: Who holds the rights.
     rights_holder: str
-    #: Contract, licence id, release URL, or file reference.
+    #: Contract, licence id, service account, or file reference.
     document_reference: str
     #: ISO date the rights were confirmed.
     confirmed_on: str
-    #: Confirmed separately — a track licence does not imply these.
+    #: Confirmed separately — one licence does not imply the others.
     audio_use_confirmed: bool
     lyrics_rights_confirmed: bool
     performer_rights_confirmed: bool
@@ -116,29 +139,51 @@ class RightsRecord:
     notes: str = ""
 
 
+def _matches(haystack: str, markers: tuple[str, ...]) -> str | None:
+    """Word-boundary match so "LUBER studio" never trips "udio"."""
+    for marker in markers:
+        if re.search(rf"(?<!\w){re.escape(marker)}(?!\w)", haystack):
+            return marker
+    return None
+
+
 def validate_rights(record: RightsRecord, *, has_lyrics: bool, has_vocals: bool) -> None:
     """Raise unless this track may be used for commercial ML training.
 
-    ``has_lyrics`` and ``has_vocals`` decide which sub-rights are
-    actually required, so an instrumental is not blocked for lacking
-    lyric clearance it does not need.
+    ``has_lyrics`` and ``has_vocals`` decide which sub-rights apply, so
+    an instrumental is not blocked for lacking lyric clearance it does
+    not need.
     """
-    if record.status not in ACCEPTABLE_STATUSES:
+    # 1. Self-model output: refused before anything else is considered.
+    if record.origin_type is OriginType.SELF_MODEL_OUTPUT:
         raise RightsError(
-            f"rights status {record.status} is not acceptable for training "
-            "(unverified and prohibited material is always excluded)"
+            "origin is this project's own model output; training ACE-Step on "
+            "ACE-Step output is never permitted"
         )
 
     haystack = f"{record.source} {record.document_reference} {record.notes}".lower()
-    for marker in PROHIBITED_SOURCE_MARKERS:
-        # Word-boundary matched so "LUBER studio" does not trip the
-        # "udio" marker. Hyphens are *not* boundaries-in-reverse:
-        # "suno-export" must still be caught.
-        if re.search(rf"(?<!\w){re.escape(marker)}(?!\w)", haystack):
-            raise RightsError(
-                f"source describes prohibited provenance ({marker!r}); "
-                "scraped or generated-service audio is never trainable here"
-            )
+    if (marker := _matches(haystack, SELF_MODEL_MARKERS)) is not None:
+        raise RightsError(
+            f"source describes this project's own model output ({marker!r}); "
+            "self-model audio is never trainable"
+        )
+
+    # 2. Unlawful acquisition disqualifies whatever the claim says.
+    if (marker := _matches(haystack, UNLAWFUL_ACQUISITION_MARKERS)) is not None:
+        raise RightsError(
+            f"source describes unlawful acquisition ({marker!r}); "
+            "no rights claim can cure how the audio was obtained"
+        )
+
+    # 3. Rights must be affirmatively confirmed. AI origin is not a
+    #    reason to refuse; unconfirmed rights are.
+    if record.training_rights_status is not TrainingRightsStatus.CONFIRMED:
+        raise RightsError(
+            f"training_rights_status is {record.training_rights_status}; "
+            "training requires CONFIRMED"
+        )
+    if record.basis is RightsBasis.NONE:
+        raise RightsError("rights are marked CONFIRMED but no basis is recorded")
 
     for field_name in ("source", "rights_holder", "document_reference", "confirmed_on"):
         if not str(getattr(record, field_name)).strip():
@@ -161,3 +206,32 @@ def is_trainable(record: RightsRecord, *, has_lyrics: bool, has_vocals: bool) ->
     except RightsError:
         return False
     return True
+
+
+def classify(
+    *,
+    origin_type: OriginType,
+    training_rights_status: TrainingRightsStatus,
+    commercial_reference: bool = False,
+) -> SourceClass:
+    """Map origin and rights onto a reporting class.
+
+    Pure classification for inventory reporting. It confers nothing:
+    :func:`validate_rights` remains the only thing that decides
+    eligibility.
+    """
+    if origin_type is OriginType.SELF_MODEL_OUTPUT:
+        return SourceClass.SELF_MODEL_GENERATED
+    if commercial_reference and training_rights_status is not TrainingRightsStatus.CONFIRMED:
+        return SourceClass.COMMERCIAL_REFERENCE_UNVERIFIED
+    if origin_type is OriginType.AI_GENERATED:
+        return (
+            SourceClass.AI_GENERATED_RIGHTS_CLEARED
+            if training_rights_status is TrainingRightsStatus.CONFIRMED
+            else SourceClass.AI_GENERATED_RIGHTS_UNVERIFIED
+        )
+    if origin_type in (OriginType.HUMAN_RECORDED, OriginType.HYBRID):
+        if training_rights_status is TrainingRightsStatus.CONFIRMED:
+            return SourceClass.HUMAN_PRODUCED_RIGHTS_CLEARED
+        return SourceClass.UNKNOWN
+    return SourceClass.UNKNOWN

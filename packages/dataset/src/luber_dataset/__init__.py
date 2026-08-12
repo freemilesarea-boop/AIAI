@@ -6,6 +6,14 @@ acquires audio — data is supplied by the operator with documented
 rights, and this package decides whether it may be used.
 """
 
+from luber_dataset.discovery import (
+    AUDIO_EXTENSIONS,
+    DiscoveredFile,
+    hypothesize_origin,
+    sanitize,
+    scan,
+    summarize,
+)
 from luber_dataset.manifest import (
     DatasetManifest,
     Exclusion,
@@ -21,10 +29,15 @@ from luber_dataset.quality import (
     inspect_training_audio,
 )
 from luber_dataset.rights import (
-    ACCEPTABLE_STATUSES,
+    REFERENCE_ONLY_CLASSES,
+    TRAINABLE_CLASSES,
+    OriginType,
+    RightsBasis,
     RightsError,
     RightsRecord,
-    RightsStatus,
+    SourceClass,
+    TrainingRightsStatus,
+    classify,
     is_trainable,
     validate_rights,
 )
@@ -44,18 +57,24 @@ from luber_dataset.schema import (
 
 __all__ = [
     "ACCEPTABLE_GRADES",
-    "ACCEPTABLE_STATUSES",
+    "AUDIO_EXTENSIONS",
     "DISCOURAGED_STYLES",
+    "REFERENCE_ONLY_CLASSES",
+    "TRAINABLE_CLASSES",
     "AudioQuality",
     "DatasetManifest",
     "Delivery",
+    "DiscoveredFile",
     "Exclusion",
     "LyricsQuality",
+    "OriginType",
     "PronunciationStyle",
     "QualityGrade",
+    "RightsBasis",
     "RightsError",
     "RightsRecord",
-    "RightsStatus",
+    "SourceClass",
+    "TrainingRightsStatus",
     "TrainingRunManifest",
     "TrainingTrack",
     "VibratoAmount",
@@ -64,9 +83,14 @@ __all__ = [
     "VocalStyle",
     "VocalTimbre",
     "build_manifest",
+    "classify",
+    "hypothesize_origin",
     "inspect_lyrics",
     "inspect_training_audio",
     "is_trainable",
+    "sanitize",
+    "scan",
+    "summarize",
     "summarize_quality_grade",
     "validate_rights",
     "validate_run_manifest",

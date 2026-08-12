@@ -32,7 +32,9 @@ Expected drop layout (basename-matched, mirroring upstream's trainer):
         "genre_vocal_identity": "contemporary korean r&b"
       },
       "rights": {
-        "status": "ORIGINAL_WORK",
+        "origin_type": "HUMAN_RECORDED",
+        "training_rights_status": "CONFIRMED",
+        "basis": "ORIGINAL_WORK",
         "source": "commissioned session, LUBER studio",
         "rights_holder": "…", "document_reference": "contract-…",
         "confirmed_on": "2026-08-12",
@@ -62,10 +64,12 @@ sys.path.insert(0, str(REPO_ROOT / "packages" / "dataset" / "src"))
 
 from luber_dataset import (  # noqa: E402
     Delivery,
+    OriginType,
     PronunciationStyle,
+    RightsBasis,
     RightsError,
     RightsRecord,
-    RightsStatus,
+    TrainingRightsStatus,
     TrainingTrack,
     VibratoAmount,
     VibratoCharacter,
@@ -91,7 +95,11 @@ def sha256_file(path: Path) -> str:
 def _rights_from(meta: dict[str, Any]) -> RightsRecord:
     raw = meta.get("rights") or {}
     return RightsRecord(
-        status=RightsStatus(raw.get("status", "UNVERIFIED")),
+        origin_type=OriginType(raw.get("origin_type", "UNKNOWN")),
+        training_rights_status=TrainingRightsStatus(
+            raw.get("training_rights_status", "UNVERIFIED")
+        ),
+        basis=RightsBasis(raw.get("basis", "NONE")),
         source=str(raw.get("source", "")),
         rights_holder=str(raw.get("rights_holder", "")),
         document_reference=str(raw.get("document_reference", "")),
@@ -168,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         # material usable.
         try:
             validate_rights(rights, has_lyrics=bool(lyrics_text.strip()), has_vocals=has_vocals)
-            print(f"   rights   : OK ({rights.status})")
+            print(f"   rights   : OK ({rights.origin_type} / {rights.basis})")
         except RightsError as exc:
             print(f"   EXCLUDED: rights — {exc}\n")
             hard_failures += 1
