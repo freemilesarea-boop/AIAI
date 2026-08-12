@@ -1,31 +1,80 @@
-"""Audio constants shared by workers and validators.
+"""Audio delivery utilities: format contract, transcoding, storage.
 
-Phase 0 pins the master-format contract only; decoding, validation and
-encoding pipelines are implemented in Phase 4 (production audio
-pipeline). Post-processing must stay conservative — no aggressive
-limiting, normalization, EQ, or stereo widening in the MVP.
+Phase 4 scope is *delivery*, not mastering — see
+:mod:`luber_audio_utils.transcode` for exactly what is and is not done
+to the audio.
 """
 
-from luber_audio_utils.storage import AudioStorage, AudioStorageError, LocalAudioStorage
+from luber_audio_utils.constants import (
+    ASSET_FORMAT_CONTRACT,
+    MASTER_BIT_DEPTH,
+    MASTER_CHANNELS,
+    MASTER_FILE_EXTENSION,
+    MASTER_FORMAT,
+    MASTER_MIME_TYPE,
+    MASTER_SAMPLE_RATE,
+    PREVIEW_BITRATE_BPS,
+    PREVIEW_CHANNELS,
+    PREVIEW_FILE_EXTENSION,
+    PREVIEW_FORMAT,
+    PREVIEW_MIME_TYPE,
+    PREVIEW_SAMPLE_RATE,
+)
+from luber_audio_utils.factory import storage_from_settings
+from luber_audio_utils.s3 import S3AudioStorage, S3StorageConfig
+from luber_audio_utils.storage import (
+    AudioStorage,
+    AudioStorageError,
+    DownloadTarget,
+    LocalAudioStorage,
+    generation_prefix,
+    master_storage_key,
+    preview_storage_key,
+)
+from luber_audio_utils.transcode import (
+    AudioProbe,
+    AudioProcessingError,
+    encode_preview_mp3,
+    encode_preview_mp3_async,
+    probe_audio,
+    transcode_master_wav,
+    transcode_master_wav_async,
+)
 from luber_audio_utils.wav import WavInfo, WavValidationError, inspect_wav, sha256_file
 
-MASTER_SAMPLE_RATE = 48_000
-MASTER_BIT_DEPTH = 24
-MASTER_CHANNELS = 2
-MASTER_FORMAT = "wav"
-PREVIEW_FORMAT = "mp3"
-
 __all__ = [
+    "ASSET_FORMAT_CONTRACT",
     "MASTER_BIT_DEPTH",
     "MASTER_CHANNELS",
+    "MASTER_FILE_EXTENSION",
     "MASTER_FORMAT",
+    "MASTER_MIME_TYPE",
     "MASTER_SAMPLE_RATE",
+    "PREVIEW_BITRATE_BPS",
+    "PREVIEW_CHANNELS",
+    "PREVIEW_FILE_EXTENSION",
     "PREVIEW_FORMAT",
+    "PREVIEW_MIME_TYPE",
+    "PREVIEW_SAMPLE_RATE",
+    "AudioProbe",
+    "AudioProcessingError",
     "AudioStorage",
     "AudioStorageError",
+    "DownloadTarget",
     "LocalAudioStorage",
+    "S3AudioStorage",
+    "S3StorageConfig",
     "WavInfo",
     "WavValidationError",
+    "encode_preview_mp3",
+    "encode_preview_mp3_async",
+    "generation_prefix",
     "inspect_wav",
+    "master_storage_key",
+    "preview_storage_key",
+    "probe_audio",
     "sha256_file",
+    "storage_from_settings",
+    "transcode_master_wav",
+    "transcode_master_wav_async",
 ]

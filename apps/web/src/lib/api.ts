@@ -60,8 +60,11 @@ export interface AudioAsset {
   id: string;
   asset_type: AssetType;
   format: string;
+  mime_type: string;
+  file_extension: string;
   sample_rate: number;
   bit_depth: number | null;
+  bitrate: number | null;
   channels: number;
   duration: number;
   storage_key: string;
@@ -211,17 +214,31 @@ export async function listGenerations(
   return (await res.json()) as GenerationListResponse;
 }
 
+/** Which delivery asset to fetch. */
+export type AudioAssetKind = "master" | "preview";
+
 /**
- * URL the browser uses to stream the MASTER WAV.
+ * URL the browser uses to fetch one delivery asset.
  *
- * Audio is addressed by generation id only; the client never handles a
- * storage key or filesystem path.
+ * Audio is addressed by generation id and asset role; the client never
+ * handles a storage key, bucket name, or filesystem path. In production
+ * the backend may answer with a redirect to a short-lived signed URL,
+ * which the browser follows transparently.
  */
-export function getMasterAudioUrl(generationId: string, download = false): string {
-  const base = `${API_BASE_URL}/v1/generations/${encodeURIComponent(generationId)}/audio`;
-  return download ? `${base}?download=true` : base;
+export function getAudioAssetUrl(
+  generationId: string,
+  asset: AudioAssetKind = "master",
+  download = false,
+): string {
+  const params = new URLSearchParams({ asset });
+  if (download) params.set("download", "true");
+  return `${API_BASE_URL}/v1/generations/${encodeURIComponent(generationId)}/audio?${params}`;
 }
 
 export function findMasterAsset(generation: Generation): AudioAsset | null {
   return generation.audio_assets.find((a) => a.asset_type === "MASTER") ?? null;
+}
+
+export function findPreviewAsset(generation: Generation): AudioAsset | null {
+  return generation.audio_assets.find((a) => a.asset_type === "PREVIEW") ?? null;
 }

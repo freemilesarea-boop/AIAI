@@ -56,11 +56,10 @@ async def test_generation_service_completes_with_ace_step_provider(repository, t
     assert fetched.provider == "ace_step"
     assert fetched.model_name == "acestep-v15-turbo"
     assert fetched.duration_actual and fetched.duration_actual > 0
-    assets = await repository.get_audio_assets(gen.id)
-    assert len(assets) == 1
-    assert assets[0].asset_type == AssetType.MASTER.value
-    stored = tmp_path / "store" / assets[0].storage_key
-    assert stored.is_file()
+    assets = {a.asset_type: a for a in await repository.get_audio_assets(gen.id)}
+    assert set(assets) == {AssetType.MASTER.value, AssetType.PREVIEW.value}
+    for asset in assets.values():
+        assert (tmp_path / "store" / asset.storage_key).is_file()
     # No mock values anywhere.
     assert fetched.provider != "mock"
     assert fetched.model_name != "mock-generation-provider"

@@ -20,6 +20,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -92,6 +93,10 @@ class GenerationJob(Base):
 
 class AudioAsset(Base):
     __tablename__ = "audio_assets"
+    # One asset per role per generation. This is the DB-level guarantee
+    # that re-running post-processing (a retry) updates a generation's
+    # master/preview instead of accumulating duplicates.
+    __table_args__ = (UniqueConstraint("generation_id", "asset_type"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     generation_id: Mapped[uuid.UUID] = mapped_column(
@@ -99,8 +104,14 @@ class AudioAsset(Base):
     )
     asset_type: Mapped[str] = mapped_column(String(20), nullable=False)
     format: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Delivery metadata: what the client is told this object is. Serving
+    # code uses these instead of guessing from the storage key.
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_extension: Mapped[str] = mapped_column(String(10), nullable=False)
     sample_rate: Mapped[int] = mapped_column(Integer, nullable=False)
     bit_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Bits per second for compressed formats; NULL for PCM.
+    bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     channels: Mapped[int] = mapped_column(Integer, nullable=False)
     duration: Mapped[float] = mapped_column(Float, nullable=False)
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)

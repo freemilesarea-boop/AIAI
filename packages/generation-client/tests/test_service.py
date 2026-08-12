@@ -91,14 +91,27 @@ async def test_service_success_walks_full_lifecycle(repository, tmp_path):
     assert fetched.duration_actual and fetched.duration_actual > 0
     assert fetched.started_at is not None and fetched.completed_at is not None
 
-    assets = await repository.get_audio_assets(gen.id)
-    assert len(assets) == 1
-    master = assets[0]
-    assert master.asset_type == AssetType.MASTER.value
+    # Post-processing produces both delivery assets.
+    assets = {a.asset_type: a for a in await repository.get_audio_assets(gen.id)}
+    assert set(assets) == {AssetType.MASTER.value, AssetType.PREVIEW.value}
+
+    master = assets[AssetType.MASTER.value]
     assert master.format == "wav"
+    assert master.mime_type == "audio/wav"
+    assert master.file_extension == "wav"
     assert master.sample_rate == 48000
     assert master.channels == 2
+    assert master.bit_depth == 24
     assert len(master.sha256) == 64
+
+    preview = assets[AssetType.PREVIEW.value]
+    assert preview.format == "mp3"
+    assert preview.mime_type == "audio/mpeg"
+    assert preview.sample_rate == 48000
+    assert preview.channels == 2
+    assert preview.bitrate == 320000
+    assert len(preview.sha256) == 64
+    assert (tmp_path / preview.storage_key).is_file()
     # The stored file is a real copy of the WAV, not a fake path.
     stored = tmp_path / master.storage_key
     assert stored.is_file()

@@ -3,7 +3,8 @@ import {
   createGeneration,
   findMasterAsset,
   getGeneration,
-  getMasterAudioUrl,
+  findPreviewAsset,
+  getAudioAssetUrl,
   isTerminalStatus,
   newIdempotencyKey,
   type Generation,
@@ -91,29 +92,61 @@ describe("getGeneration", () => {
   });
 });
 
-describe("getMasterAudioUrl", () => {
-  it("addresses audio by generation id only", () => {
-    const url = getMasterAudioUrl("gen-1");
+describe("getAudioAssetUrl", () => {
+  it("addresses audio by generation id and asset role only", () => {
+    const url = getAudioAssetUrl("gen-1");
     expect(url).toContain("/v1/generations/gen-1/audio");
-    // No storage key, no filesystem path ever reaches the browser.
+    expect(url).toContain("asset=master");
+    // No storage key, bucket, or filesystem path reaches the browser.
     expect(url).not.toContain("storage");
+    expect(url).not.toContain("bucket");
     expect(url).not.toContain("/Users/");
     expect(url).not.toContain("..");
   });
 
+  it("requests the preview asset when asked", () => {
+    expect(getAudioAssetUrl("gen-1", "preview")).toContain("asset=preview");
+  });
+
   it("adds the download flag when requested", () => {
-    expect(getMasterAudioUrl("gen-1", true)).toContain("download=true");
+    const wav = getAudioAssetUrl("gen-1", "master", true);
+    const mp3 = getAudioAssetUrl("gen-1", "preview", true);
+    expect(wav).toContain("download=true");
+    expect(wav).toContain("asset=master");
+    expect(mp3).toContain("download=true");
+    expect(mp3).toContain("asset=preview");
   });
 
   it("never points at the ACE-Step runtime", () => {
-    const url = getMasterAudioUrl("gen-1");
-    expect(url).not.toContain("8001");
-    expect(url).not.toContain("acestep");
-    expect(url).not.toContain("release_task");
+    for (const url of [getAudioAssetUrl("gen-1"), getAudioAssetUrl("gen-1", "preview")]) {
+      expect(url).not.toContain("8001");
+      expect(url).not.toContain("acestep");
+      expect(url).not.toContain("release_task");
+    }
   });
 
   it("encodes ids so they cannot alter the path", () => {
-    expect(getMasterAudioUrl("../../etc/passwd")).not.toContain("../");
+    expect(getAudioAssetUrl("../../etc/passwd")).not.toContain("../");
+  });
+});
+
+describe("findPreviewAsset", () => {
+  it("selects the PREVIEW asset and ignores the master", () => {
+    const generation = {
+      audio_assets: [
+        { asset_type: "MASTER", id: "m" },
+        { asset_type: "PREVIEW", id: "p" },
+      ],
+    } as unknown as Generation;
+    expect(findPreviewAsset(generation)?.id).toBe("p");
+    expect(findMasterAsset(generation)?.id).toBe("m");
+  });
+
+  it("returns null when no preview exists", () => {
+    const generation = {
+      audio_assets: [{ asset_type: "MASTER", id: "m" }],
+    } as unknown as Generation;
+    expect(findPreviewAsset(generation)).toBeNull();
   });
 });
 

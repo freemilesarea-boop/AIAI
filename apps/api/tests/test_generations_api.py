@@ -151,19 +151,29 @@ async def test_full_generation_flow_produces_master_wav(client, tmp_path):
     assert detail["completed_at"] is not None
     assert detail["error_code"] is None
 
-    # Exactly one MASTER WAV asset with verifiable bytes on disk.
-    assert len(detail["audio_assets"]) == 1
-    master = detail["audio_assets"][0]
-    assert master["asset_type"] == "MASTER"
+    # Both delivery assets exist, each with verifiable bytes on disk.
+    assets = {a["asset_type"]: a for a in detail["audio_assets"]}
+    assert set(assets) == {"MASTER", "PREVIEW"}
+
+    master = assets["MASTER"]
     assert master["format"] == "wav"
+    assert master["mime_type"] == "audio/wav"
     assert master["sample_rate"] == 48000
     assert master["channels"] == 2
-    assert master["bit_depth"] == 16
+    # Post-processing normalizes to the 24-bit production master format.
+    assert master["bit_depth"] == 24
     assert master["duration"] > 0
     assert master["storage_key"] == f"audio/{generation_id}/master.wav"
 
-    stored = tmp_path / "audio-store" / master["storage_key"]
-    assert stored.is_file()
-    assert stored.stat().st_size == master["file_size"] > 0
-    # Stored SHA256 matches the actual stored bytes.
-    assert hashlib.sha256(stored.read_bytes()).hexdigest() == master["sha256"]
+    preview = assets["PREVIEW"]
+    assert preview["format"] == "mp3"
+    assert preview["mime_type"] == "audio/mpeg"
+    assert preview["bitrate"] == 320000
+    assert preview["storage_key"] == f"audio/{generation_id}/preview.mp3"
+
+    for asset in (master, preview):
+        stored = tmp_path / "audio-store" / asset["storage_key"]
+        assert stored.is_file()
+        assert stored.stat().st_size == asset["file_size"] > 0
+        # Stored SHA256 matches the actual stored bytes.
+        assert hashlib.sha256(stored.read_bytes()).hexdigest() == asset["sha256"]

@@ -1,9 +1,10 @@
 [project]
 name = "luber-audio-utils"
 version = "0.1.0"
-description = "Audio constants and validation helpers (post-processing arrives in Phase 4)"
+description = "Audio delivery format contract, ffmpeg post-processing, and object storage"
 requires-python = ">=3.11"
-dependencies = []
+# ffmpeg/ffprobe are external binaries, not Python packages.
+dependencies = ["boto3>=1.35"]
 
 [build-system]
 requires = ["hatchling"]

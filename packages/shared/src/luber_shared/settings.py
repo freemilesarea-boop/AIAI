@@ -45,10 +45,26 @@ class BaseServiceSettings(BaseSettings):
     ace_step_output_dir: str = "data/raw-model-output"
     ace_step_inference_steps: int = 8
     ace_step_thinking: bool = False
-    # Local audio storage root; storage keys are "audio/{generation_id}/…",
-    # so files land under {audio_storage_dir}/audio/. (S3-compatible
-    # adapters arrive in Phase 4.)
+    # Audio storage backend: "local" (development) or "s3" (production,
+    # any S3-compatible provider).
+    storage_provider: str = "local"
+
+    # Local adapter: storage keys are "audio/{generation_id}/…", so files
+    # land under {audio_storage_dir}/audio/.
     audio_storage_dir: str = "data"
+
+    # S3-compatible adapter (used when storage_provider="s3"). Credentials
+    # come from the environment only and are never committed. Leave
+    # endpoint empty for AWS S3; set it for R2/MinIO/Supabase/etc.
+    storage_bucket: str = ""
+    storage_region: str | None = None
+    storage_endpoint: str | None = None
+    storage_access_key_id: str | None = None
+    storage_secret_access_key: str | None = None
+    #: Required by MinIO and some self-hosted S3 gateways.
+    storage_force_path_style: bool = False
+    #: Optional key prefix so one bucket can serve several environments.
+    storage_key_prefix: str = ""
 
     @property
     def is_production(self) -> bool:

@@ -45,14 +45,33 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
             id: "a3203cdb-a4dd-40b3-829b-ceaf3b6e8fe4",
             asset_type: "MASTER",
             format: "wav",
+            mime_type: "audio/wav",
+            file_extension: "wav",
             sample_rate: 48000,
-            bit_depth: 16,
+            bit_depth: 24,
+            bitrate: null,
             channels: 2,
             duration: 30,
             storage_key: `audio/${GEN_ID}/master.wav`,
             sha256: "504aa20655af7f4756c604c071b5e6bdafb087d61c78b21d6b12a939ca653a31",
-            file_size: 5760078,
+            file_size: 8640102,
             created_at: "2026-08-11T12:00:40Z",
+          },
+          {
+            id: "b1119a02-6f2a-4f0f-9a4c-2b8b0b7a1d55",
+            asset_type: "PREVIEW",
+            format: "mp3",
+            mime_type: "audio/mpeg",
+            file_extension: "mp3",
+            sample_rate: 48000,
+            bit_depth: null,
+            bitrate: 320000,
+            channels: 2,
+            duration: 30,
+            storage_key: `audio/${GEN_ID}/preview.mp3`,
+            sha256: "2856229138ab61096e6cd1c6b6befcd67fbb020a83702373b2bbc0517789ebae",
+            file_size: 1200480,
+            created_at: "2026-08-11T12:00:41Z",
           },
         ]
       : [],
@@ -263,13 +282,34 @@ describe("completed result", () => {
     expect(await screen.findByText("Track ready")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Midnight Window" })).toBeInTheDocument();
 
-    const player = screen.getByLabelText("Audio player for Midnight Window");
+    // Playback uses the compressed preview; the master stays downloadable.
+    const player = screen.getByLabelText("Preview player for Midnight Window");
     expect(player).toHaveAttribute("src", expect.stringContaining(`/v1/generations/${GEN_ID}/audio`));
+    expect(player).toHaveAttribute("src", expect.stringContaining("asset=preview"));
     expect(player).toHaveAttribute("controls");
 
-    const download = screen.getByRole("link", { name: "Download WAV" });
-    expect(download).toHaveAttribute("href", expect.stringContaining("download=true"));
-    expect(download).toHaveAttribute("download");
+    const wav = screen.getByRole("link", { name: "Download WAV" });
+    expect(wav).toHaveAttribute("href", expect.stringContaining("asset=master"));
+    expect(wav).toHaveAttribute("href", expect.stringContaining("download=true"));
+    expect(wav).toHaveAttribute("download");
+
+    const mp3 = screen.getByRole("link", { name: "Download MP3" });
+    expect(mp3).toHaveAttribute("href", expect.stringContaining("asset=preview"));
+    expect(mp3).toHaveAttribute("href", expect.stringContaining("download=true"));
+    expect(mp3).toHaveAttribute("download");
+  });
+
+  it("shows the production master and preview formats", async () => {
+    const user = userEvent.setup();
+    stubServer([{ status: "COMPLETED", withMaster: true }]);
+    render(<CreatePage />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await screen.findByText("Track ready");
+
+    expect(screen.getByText(/WAV · 48 kHz · 24-bit · Stereo/)).toBeInTheDocument();
+    expect(screen.getByText(/MP3 · 320 kbps/)).toBeInTheDocument();
   });
 
   it("never exposes storage keys, absolute paths, or the model runtime", async () => {
@@ -284,6 +324,8 @@ describe("completed result", () => {
     const html = container.innerHTML;
     expect(html).not.toContain("/Users/");
     expect(html).not.toContain("master.wav");
+    expect(html).not.toContain("preview.mp3");
+    expect(html).not.toContain("bucket");
     expect(html).not.toContain("8001");
     expect(html).not.toContain("acestep-api");
     expect(html).not.toContain("postgresql");
@@ -397,7 +439,7 @@ describe("refresh recovery", () => {
 
     expect(await screen.findByText("Track ready")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Audio player for Midnight Window"),
+      screen.getByLabelText("Preview player for Midnight Window"),
     ).toBeInTheDocument();
   });
 

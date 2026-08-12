@@ -42,10 +42,15 @@ class AudioAssetResponse(BaseModel):
     id: uuid.UUID
     asset_type: str
     format: str
+    mime_type: str
+    file_extension: str
     sample_rate: int
     bit_depth: int | None
+    bitrate: int | None
     channels: int
     duration: float
+    #: Relative, UUID-scoped object key — never a filesystem path, bucket
+    #: name, or URL. Clients address audio by generation id, not by key.
     storage_key: str
     sha256: str
     file_size: int

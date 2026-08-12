@@ -81,9 +81,10 @@ async def test_generate_task_completes_generation(engine, tmp_path):
         fetched = await repo.get_generation(gen.id)
         assert fetched.status == GenerationStatus.COMPLETED.value
         assets = await repo.get_audio_assets(gen.id)
-        assert len(assets) == 1
-        stored = tmp_path / "worker-audio" / assets[0].storage_key
-        assert stored.is_file()
+        assert {a.asset_type for a in assets} == {"MASTER", "PREVIEW"}
+        for asset in assets:
+            stored = tmp_path / "worker-audio" / asset.storage_key
+            assert stored.is_file()
         job = await repo.get_latest_job(gen.id)
         assert job.worker_id == "test-worker-1"
         assert job.status == GenerationStatus.COMPLETED.value

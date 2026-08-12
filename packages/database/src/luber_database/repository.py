@@ -254,27 +254,47 @@ class GenerationRepository:
         *,
         asset_type: str,
         format: str,
+        mime_type: str,
+        file_extension: str,
         sample_rate: int,
         bit_depth: int | None,
+        bitrate: int | None,
         channels: int,
         duration: float,
         storage_key: str,
         sha256: str,
         file_size: int,
     ) -> AudioAsset:
-        asset = AudioAsset(
-            generation_id=generation_id,
-            asset_type=asset_type,
-            format=format,
-            sample_rate=sample_rate,
-            bit_depth=bit_depth,
-            channels=channels,
-            duration=duration,
-            storage_key=storage_key,
-            sha256=sha256,
-            file_size=file_size,
+        """Record an audio asset, replacing any existing one of that type.
+
+        A generation has at most one asset per role, so a retry updates
+        the existing row in place rather than inserting a duplicate.
+        This mirrors the storage layer, where the deterministic key means
+        a retry overwrites the same object.
+        """
+        existing = await self._session.execute(
+            select(AudioAsset).where(
+                AudioAsset.generation_id == generation_id,
+                AudioAsset.asset_type == asset_type,
+            )
         )
-        self._session.add(asset)
+        asset = existing.scalar_one_or_none()
+        if asset is None:
+            asset = AudioAsset(generation_id=generation_id, asset_type=asset_type)
+            self._session.add(asset)
+
+        asset.format = format
+        asset.mime_type = mime_type
+        asset.file_extension = file_extension
+        asset.sample_rate = sample_rate
+        asset.bit_depth = bit_depth
+        asset.bitrate = bitrate
+        asset.channels = channels
+        asset.duration = duration
+        asset.storage_key = storage_key
+        asset.sha256 = sha256
+        asset.file_size = file_size
+
         await self._session.commit()
         await self._session.refresh(asset)
         return asset

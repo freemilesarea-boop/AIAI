@@ -18,12 +18,19 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from luber_audio_utils import AudioStorage, AudioStorageError, WavValidationError, inspect_wav
+from luber_audio_utils import (
+    AudioProcessingError,
+    AudioStorage,
+    AudioStorageError,
+    WavValidationError,
+    inspect_wav,
+)
 from luber_database import GenerationRepository
 from luber_database.models.generation import Generation
 from luber_generation_client.errors import GenerationProviderError
+from luber_generation_client.postprocess import produce_delivery_assets
 from luber_generation_client.provider import GenerationRequest, MusicGenerationProvider
-from luber_schemas import AssetType, ErrorCode, GenerationStatus, VocalGender
+from luber_schemas import ErrorCode, GenerationStatus, VocalGender
 
 logger = logging.getLogger(__name__)
 
@@ -73,28 +80,42 @@ class GenerationService:
             await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
             result = await self._provider.generate(request)
 
+            # POST_PROCESSING and UPLOADING both happen inside
+            # produce_delivery_assets; the status is advanced around it
+            # so a stuck run is attributable to the right stage.
             await repo.update_status(generation_id, GenerationStatus.POST_PROCESSING.value)
-            wav_info = inspect_wav(result.audio_path)
+            # Structural check of the raw model output before spending
+            # time transcoding it.
+            inspect_wav(result.audio_path)
 
             await repo.update_status(generation_id, GenerationStatus.UPLOADING.value)
-            storage_key = await self._storage.store_master_wav(generation_id, result.audio_path)
-
-            await repo.create_audio_asset(
-                generation_id,
-                asset_type=AssetType.MASTER.value,
-                format="wav",
-                sample_rate=wav_info.sample_rate,
-                bit_depth=wav_info.bit_depth,
-                channels=wav_info.channels,
-                duration=wav_info.duration_seconds,
-                storage_key=storage_key,
-                sha256=wav_info.sha256,
-                file_size=wav_info.file_size,
+            produced = await produce_delivery_assets(
+                generation_id, result.audio_path, self._storage
             )
+
+            for asset in produced.assets:
+                await repo.create_audio_asset(
+                    generation_id,
+                    asset_type=asset.asset_type.value,
+                    format=asset.format,
+                    mime_type=asset.mime_type,
+                    file_extension=asset.file_extension,
+                    sample_rate=asset.sample_rate,
+                    bit_depth=asset.bit_depth,
+                    bitrate=asset.bitrate,
+                    channels=asset.channels,
+                    duration=asset.duration,
+                    storage_key=asset.storage_key,
+                    sha256=asset.sha256,
+                    file_size=asset.file_size,
+                )
+            # COMPLETED only after every required asset is stored and
+            # recorded — a post-processing or upload failure raises above
+            # and lands in the FAILED branch instead.
             await repo.mark_completed(
                 generation_id,
                 status=GenerationStatus.COMPLETED.value,
-                duration_actual=wav_info.duration_seconds,
+                duration_actual=produced.master.duration,
                 provider=result.provider,
                 model_name=result.model_name,
                 model_version=result.model_version,
@@ -142,6 +163,8 @@ class GenerationService:
             return exc.error_code
         if isinstance(exc, WavValidationError):
             return ErrorCode.INVALID_AUDIO
+        if isinstance(exc, AudioProcessingError):
+            return ErrorCode.ENCODING_FAILED
         if isinstance(exc, AudioStorageError):
             return ErrorCode.UPLOAD_FAILED
         return ErrorCode.UNKNOWN_GENERATION_ERROR

@@ -12,12 +12,11 @@ from __future__ import annotations
 
 import logging
 import uuid
-from pathlib import Path
 from typing import Any, ClassVar
 
 from arq.connections import RedisSettings
 
-from luber_audio_utils import LocalAudioStorage
+from luber_audio_utils import storage_from_settings
 from luber_database import (
     GenerationRepository,
     create_async_engine_from_url,
@@ -52,7 +51,7 @@ async def generate(ctx: dict[str, Any], generation_id: str) -> str:
         service = GenerationService(
             GenerationRepository(session),
             provider_from_settings(config),
-            LocalAudioStorage(Path(config.audio_storage_dir)),
+            storage_from_settings(config),
         )
         status = await service.execute(uuid.UUID(generation_id), worker_id=ctx.get("worker_id"))
     return status.value

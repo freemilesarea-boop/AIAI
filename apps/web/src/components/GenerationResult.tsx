@@ -12,7 +12,8 @@
 
 import {
   findMasterAsset,
-  getMasterAudioUrl,
+  findPreviewAsset,
+  getAudioAssetUrl,
   type Generation,
 } from "@/lib/api";
 import { formatDuration } from "@/lib/generationStatus";
@@ -30,8 +31,13 @@ export function GenerationResult({
   showTechnicalDetails = false,
 }: GenerationResultProps) {
   const master = findMasterAsset(generation);
-  const audioUrl = getMasterAudioUrl(generation.id);
-  const downloadUrl = getMasterAudioUrl(generation.id, true);
+  const preview = findPreviewAsset(generation);
+  // Play the compressed preview: far smaller than a 24-bit master, so
+  // playback starts quickly. The master stays the download deliverable.
+  const playbackAsset = preview ? "preview" : "master";
+  const audioUrl = getAudioAssetUrl(generation.id, playbackAsset);
+  const wavDownloadUrl = getAudioAssetUrl(generation.id, "master", true);
+  const mp3DownloadUrl = getAudioAssetUrl(generation.id, "preview", true);
 
   return (
     <section
@@ -55,9 +61,19 @@ export function GenerationResult({
         </div>
         {master && (
           <div className="flex gap-1.5">
-            <dt>Audio</dt>
+            <dt>Master</dt>
             <dd className="text-zinc-300">
-              {master.sample_rate / 1000} kHz · {master.channels === 2 ? "Stereo" : "Mono"}
+              WAV · {master.sample_rate / 1000} kHz ·{" "}
+              {master.bit_depth ? `${master.bit_depth}-bit · ` : ""}
+              {master.channels === 2 ? "Stereo" : "Mono"}
+            </dd>
+          </div>
+        )}
+        {preview && (
+          <div className="flex gap-1.5">
+            <dt>Preview</dt>
+            <dd className="text-zinc-300">
+              MP3{preview.bitrate ? ` · ${Math.round(preview.bitrate / 1000)} kbps` : ""}
             </dd>
           </div>
         )}
@@ -70,7 +86,7 @@ export function GenerationResult({
             controls
             preload="metadata"
             src={audioUrl}
-            aria-label={`Audio player for ${generation.title}`}
+            aria-label={`${preview ? "Preview" : "Audio"} player for ${generation.title}`}
             className="mt-5 w-full"
           >
             Your browser does not support audio playback.
@@ -78,7 +94,7 @@ export function GenerationResult({
 
           <div className="mt-5 flex flex-wrap gap-3">
             <a
-              href={downloadUrl}
+              href={wavDownloadUrl}
               download
               className="rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white
                 transition-colors hover:bg-violet-500 focus-visible:outline-none
@@ -87,6 +103,18 @@ export function GenerationResult({
             >
               Download WAV
             </a>
+            {preview && (
+              <a
+                href={mp3DownloadUrl}
+                download
+                className="rounded-lg bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-100
+                  transition-colors hover:bg-zinc-700 focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2
+                  focus-visible:ring-offset-zinc-950"
+              >
+                Download MP3
+              </a>
+            )}
             {onCreateAnother && (
               <button
                 type="button"
