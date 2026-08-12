@@ -1,0 +1,191 @@
+W0812 19:51:01.142000 23960 .venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+2026-08-12 19:51:01 [WARNING] torchao.kernel.intmm: Warning: Detected no triton, on systems without Triton certain kernels will not work
+2026-08-12 19:51:01.918 | WARNING  | acestep.training.trainer:<module>:40 - bitsandbytes not installed. Using standard AdamW.
+usage: train.py [-h] [--plain] [--yes] {vanilla,fixed,estimate} ...
+
+ACE-Step Training V2 -- corrected LoRA fine-tuning CLI
+
+positional arguments:
+  {vanilla,fixed,estimate}
+    vanilla  Reproduce existing (bugged) training for backward
+                            compatibility
+    fixed  Corrected training: continuous timesteps + CFG
+                            dropout
+    estimate  Gradient sensitivity analysis (no training)
+
+options:
+  -h, --help                show this help message and exit
+  --plain                   Disable Rich output; use plain text (also set
+                            automatically when stdout is not a TTY)
+  --yes, -y                 Skip the confirmation prompt and start training
+                            immediately
+
+
+########## train.py fixed --help ##########
+
+W0812 19:51:04.033000 23965 .venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+2026-08-12 19:51:04 [WARNING] torchao.kernel.intmm: Warning: Detected no triton, on systems without Triton certain kernels will not work
+2026-08-12 19:51:04.667 | WARNING  | acestep.training.trainer:<module>:40 - bitsandbytes not installed. Using standard AdamW.
+usage: train.py fixed [-h] --checkpoint-dir CHECKPOINT_DIR
+                      [--model-variant MODEL_VARIANT]
+                      [--base-model {turbo,base,sft,xl_turbo,xl_base,xl_sft}]
+                      [--device DEVICE] [--precision {auto,bf16,fp16,fp32}]
+                      [--num-devices NUM_DEVICES] [--strategy {auto,ddp}]
+                      --dataset-dir DATASET_DIR [--num-workers NUM_WORKERS]
+                      [--pin-memory | --no-pin-memory]
+                      [--prefetch-factor PREFETCH_FACTOR]
+                      [--persistent-workers | --no-persistent-workers]
+                      [--lr LEARNING_RATE] [--batch-size BATCH_SIZE]
+                      [--gradient-accumulation GRADIENT_ACCUMULATION]
+                      [--epochs EPOCHS] [--warmup-steps WARMUP_STEPS]
+                      [--weight-decay WEIGHT_DECAY]
+                      [--max-grad-norm MAX_GRAD_NORM] [--seed SEED]
+                      [--shift SHIFT]
+                      [--num-inference-steps NUM_INFERENCE_STEPS]
+                      [--optimizer-type {adamw,adamw8bit,adafactor,prodigy}]
+                      [--scheduler-type 
+{cosine,cosine_restarts,linear,constant,constant_with_warmup}]
+                      [--gradient-checkpointing | --no-gradient-checkpointing]
+                      [--offload-encoder | --no-offload-encoder]
+                      [--adapter-type {lora,lokr}] [--rank RANK] [--alpha ALPHA]
+                      [--dropout DROPOUT]
+                      [--target-modules TARGET_MODULES [TARGET_MODULES ...]]
+                      [--bias {none,all,lora_only}]
+                      [--attention-type {self,cross,both}]
+                      [--lokr-linear-dim LOKR_LINEAR_DIM]
+                      [--lokr-linear-alpha LOKR_LINEAR_ALPHA]
+                      [--lokr-factor LOKR_FACTOR] [--lokr-decompose-both]
+                      [--lokr-use-tucker] [--lokr-use-scalar]
+                      [--lokr-weight-decompose] --output-dir OUTPUT_DIR
+                      [--save-every SAVE_EVERY] [--resume-from RESUME_FROM]
+                      [--log-dir LOG_DIR] [--log-every LOG_EVERY]
+                      [--log-heavy-every LOG_HEAVY_EVERY]
+                      [--sample-every-n-epochs SAMPLE_EVERY_N_EPOCHS]
+                      [--preprocess] [--audio-dir AUDIO_DIR]
+                      [--dataset-json DATASET_JSON]
+                      [--tensor-output TENSOR_OUTPUT]
+                      [--max-duration MAX_DURATION] [--cfg-ratio CFG_RATIO]
+
+options:
+  -h, --help                  show this help message and exit
+
+Model / paths:
+  --checkpoint-dir CHECKPOINT_DIR
+                              Path to checkpoints root directory
+  --model-variant MODEL_VARIANT
+                              Model variant or subfolder name (default: turbo).
+                              Official: turbo, base, sft (2B) or xl_turbo,
+                              xl_base, xl_sft (XL/4B). For fine-tunes: use the
+                              exact folder name under checkpoint-dir.
+  --base-model {turbo,base,sft,xl_turbo,xl_base,xl_sft}
+                              Base model a fine-tune was trained from
+                              (turbo/base/sft, or xl_turbo/xl_base/xl_sft for
+                              XL). Used to condition timestep sampling. Auto-
+                              detected for official models.
+
+Device / platform:
+  --device DEVICE             Device: auto, cuda, cuda:0, mps, xpu, cpu
+                              (default: auto)
+  --precision {auto,bf16,fp16,fp32}
+                              Precision: auto, bf16, fp16, fp32 (default: auto)
+  --num-devices NUM_DEVICES   Number of GPUs for DDP training (default: 1)
+  --strategy {auto,ddp}       Distributed strategy: auto or ddp (default: auto)
+
+Data:
+  --dataset-dir DATASET_DIR   Directory containing preprocessed .pt files
+  --num-workers NUM_WORKERS   DataLoader workers (default: 4; 0 on Windows)
+  --pin-memory, --no-pin-memory
+                              Pin memory for GPU transfer (default: True)
+  --prefetch-factor PREFETCH_FACTOR
+                              DataLoader prefetch factor (default: 2; 0 on
+                              Windows)
+  --persistent-workers, --no-persistent-workers
+                              Keep workers alive between epochs (default: True;
+                              False on Windows)
+
+Training:
+  --lr LEARNING_RATE, --learning-rate LEARNING_RATE
+                              Initial learning rate (default: 1e-4)
+  --batch-size BATCH_SIZE     Training batch size (default: 1)
+  --gradient-accumulation GRADIENT_ACCUMULATION
+                              Gradient accumulation steps (default: 4)
+  --epochs EPOCHS             Maximum training epochs (default: 100)
+  --warmup-steps WARMUP_STEPS
+                              LR warmup steps (default: 100)
+  --weight-decay WEIGHT_DECAY
+                              AdamW weight decay (default: 0.01)
+  --max-grad-norm MAX_GRAD_NORM
+                              Gradient clipping norm (default: 1.0)
+  --seed SEED                 Random seed (default: 42)
+  --shift SHIFT               Noise schedule shift (turbo=3.0, base/sft=1.0)
+  --num-inference-steps NUM_INFERENCE_STEPS
+                              Inference steps for timestep schedule (turbo=8,
+                              base/sft=50)
+  --optimizer-type {adamw,adamw8bit,adafactor,prodigy}
+                              Optimizer (default: adamw)
+  --scheduler-type {cosine,cosine_restarts,linear,constant,constant_with_warmup}
+                              LR scheduler (default: cosine)
+  --gradient-checkpointing, --no-gradient-checkpointing
+                              Recompute activations to save VRAM (~40-60% less,
+                              ~10-30% slower). On by default; use --no-gradient-
+                              checkpointing to disable
+  --offload-encoder, --no-offload-encoder
+                              Move encoder/VAE to CPU after setup (saves ~2-4GB
+                              VRAM)
+
+Adapter:
+  --adapter-type {lora,lokr}  Adapter type: lora (PEFT) or lokr (LyCORIS)
+                              (default: lora)
+
+LoRA (used when --adapter-type=lora):
+  --rank RANK, -r RANK        LoRA rank (default: 64)
+  --alpha ALPHA               LoRA alpha (default: 128)
+  --dropout DROPOUT           LoRA dropout (default: 0.1)
+  --target-modules TARGET_MODULES [TARGET_MODULES ...]
+                              Modules to apply adapter to
+  --bias {none,all,lora_only}
+                              Bias training mode (default: none)
+  --attention-type {self,cross,both}
+                              Attention layers to target (default: both)
+
+LoKR (used when --adapter-type=lokr):
+  --lokr-linear-dim LOKR_LINEAR_DIM
+                              LoKR linear dimension (default: 64)
+  --lokr-linear-alpha LOKR_LINEAR_ALPHA
+                              LoKR linear alpha (default: 128)
+  --lokr-factor LOKR_FACTOR   LoKR factor; -1 for auto (default: -1)
+  --lokr-decompose-both       Decompose both Kronecker factors
+  --lokr-use-tucker           Use Tucker decomposition
+  --lokr-use-scalar           Use scalar scaling
+  --lokr-weight-decompose     Enable DoRA-style weight decomposition
+
+Checkpointing:
+  --output-dir OUTPUT_DIR     Output directory for LoRA weights
+  --save-every SAVE_EVERY     Save checkpoint every N epochs (default: 10)
+  --resume-from RESUME_FROM   Path to checkpoint dir to resume from
+
+Logging / TensorBoard:
+  --log-dir LOG_DIR           TensorBoard log directory (default: {output-
+                              dir}/runs)
+  --log-every LOG_EVERY       Log basic metrics every N steps (default: 10)
+  --log-heavy-every LOG_HEAVY_EVERY
+                              Log per-layer gradient norms every N steps
+                              (default: 50)
+  --sample-every-n-epochs SAMPLE_EVERY_N_EPOCHS
+                              Generate audio sample every N epochs; 0=disabled
+                              (default: 0)
+
+Preprocessing:
+  --preprocess                Run preprocessing before training
+  --audio-dir AUDIO_DIR       Source audio directory (preprocessing)
+  --dataset-json DATASET_JSON
+                              Labeled dataset JSON file (preprocessing)
+  --tensor-output TENSOR_OUTPUT
+                              Output directory for .pt tensor files
+                              (preprocessing)
+  --max-duration MAX_DURATION
+                              Max audio duration in seconds (default: 240)
+
+Corrected training:
+  --cfg-ratio CFG_RATIO       CFG dropout probability (default: 0.15)
+

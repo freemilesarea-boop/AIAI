@@ -169,7 +169,10 @@ def main(argv: list[str] | None = None) -> int:
 
         rights = _rights_from(meta)
         lyrics_text = lyrics_path.read_text(encoding="utf-8") if lyrics_path.is_file() else ""
-        vocal_gender = str(meta.get("vocal_gender", "instrumental"))
+        # Absent metadata means unknown. Defaulting to "instrumental"
+        # would assert a musical fact nobody established and would
+        # silently waive the performer-rights check.
+        vocal_gender = str(meta.get("vocal_gender", "unknown"))
         has_vocals = vocal_gender != "instrumental"
 
         # Rights first: no amount of audio quality makes unlicensed

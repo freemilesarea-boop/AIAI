@@ -103,6 +103,23 @@ class PronunciationStyle(StrEnum):
     TRADITIONAL = "traditional"
 
 
+class VocalPresence(StrEnum):
+    """Whether a track has vocals, and whose.
+
+    ``UNKNOWN`` is a first-class state, not a placeholder. A track
+    nobody has listened to or annotated is unknown — inferring
+    ``INSTRUMENTAL`` from the absence of a label would put a musical
+    claim into the manifest that no evidence supports, and an
+    instrumental label changes which rights are required and which
+    rubric dimensions apply.
+    """
+
+    FEMALE = "female"
+    MALE = "male"
+    INSTRUMENTAL = "instrumental"
+    UNKNOWN = "unknown"
+
+
 class QualityGrade(StrEnum):
     """Overall suitability as training material."""
 
@@ -169,8 +186,34 @@ class TrainingTrack:
     notes: str = ""
 
     @property
+    def vocal_presence(self) -> VocalPresence:
+        """Parsed vocal state; anything unrecognised reads as UNKNOWN."""
+        try:
+            return VocalPresence(self.vocal_gender)
+        except ValueError:
+            return VocalPresence.UNKNOWN
+
+    @property
     def has_vocals(self) -> bool:
-        return self.vocal_gender != "instrumental"
+        """Conservative: unknown counts as *may have vocals*.
+
+        Treating unknown as vocal-free would waive the performer-rights
+        check on tracks that could well contain a voice.
+        """
+        return self.vocal_presence is not VocalPresence.INSTRUMENTAL
+
+    @property
+    def vocals_confirmed_absent(self) -> bool:
+        """True only when a track was positively annotated instrumental."""
+        return self.vocal_presence is VocalPresence.INSTRUMENTAL
+
+    @property
+    def vocal_annotation_status(self) -> str:
+        if self.vocal is not None:
+            return "ANNOTATED"
+        if self.vocal_presence is VocalPresence.INSTRUMENTAL:
+            return "INSTRUMENTAL_DECLARED"
+        return "UNANNOTATED"
 
     @property
     def training_allowed(self) -> bool:
@@ -199,7 +242,8 @@ class TrainingTrack:
             "language": self.language,
             "genre": self.genre,
             "subgenre": self.subgenre,
-            "vocal_gender": self.vocal_gender,
+            "vocal_gender": str(self.vocal_presence),
+            "vocal_annotation_status": self.vocal_annotation_status,
             "lyrics_available": self.lyrics_available,
             "bpm": self.bpm,
             "key_scale": self.key_scale,

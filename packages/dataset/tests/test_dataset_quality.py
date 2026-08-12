@@ -384,10 +384,16 @@ def test_run_manifest_requires_reproducibility_fields(field):
         validate_run_manifest(_run(**{field: ""}))
 
 
-def test_run_manifest_rejects_zero_val_split():
-    """Without validation, overtraining cannot be detected (Step 16)."""
-    with pytest.raises(ValueError, match="overtraining cannot be detected"):
+def test_run_manifest_rejects_no_validation_and_no_holdout():
+    """Overtraining must be detectable one way or the other."""
+    with pytest.raises(ValueError, match="overtraining"):
         validate_run_manifest(_run(val_split=0.0))
+
+
+def test_zero_val_split_is_allowed_when_a_holdout_is_recorded():
+    """Upstream's CLI exposes no --val-split, so a physical holdout is
+    the only option a CLI-driven run has."""
+    validate_run_manifest(_run(val_split=0.0, holdout_track_ids=["h1", "h2"]))
 
 
 def test_run_manifest_rejects_nonsense_hyperparameters():
@@ -468,3 +474,50 @@ def test_unannotated_vocal_is_not_reported_as_instrumental():
         ],
     )
     assert manifest.style_distribution() == {"instrumental": 1, "unannotated": 1}
+
+
+# ── unknown vocal state is explicit, never inferred ───────────────────
+
+
+def test_missing_annotation_is_unknown_not_instrumental():
+    from luber_dataset import VocalPresence
+
+    track = _track("t", vocal=None, vocal_gender="unknown")
+    assert track.vocal_presence is VocalPresence.UNKNOWN
+    assert track.vocal_annotation_status == "UNANNOTATED"
+    assert track.vocals_confirmed_absent is False
+    assert track.to_dict()["vocal_gender"] == "unknown"
+    assert track.to_dict()["vocal_annotation_status"] == "UNANNOTATED"
+
+
+def test_unknown_vocal_state_keeps_performer_rights_required():
+    """Unknown must not waive the performer check the way instrumental does."""
+    track = _track("t", vocal=None, vocal_gender="unknown")
+    assert track.has_vocals is True
+
+
+def test_declared_instrumental_is_distinguishable_from_unannotated():
+    from luber_dataset import VocalPresence
+
+    declared = _track("i", vocal=None, vocal_gender="instrumental", lyrics_available=False)
+    assert declared.vocal_presence is VocalPresence.INSTRUMENTAL
+    assert declared.vocals_confirmed_absent is True
+    assert declared.vocal_annotation_status == "INSTRUMENTAL_DECLARED"
+    assert declared.has_vocals is False
+
+
+def test_unrecognised_vocal_value_degrades_to_unknown_not_instrumental():
+    from luber_dataset import VocalPresence
+
+    track = _track("t", vocal=None, vocal_gender="???")
+    assert track.vocal_presence is VocalPresence.UNKNOWN
+    assert track.has_vocals is True
+
+
+def test_ingest_pilot_does_not_default_to_instrumental():
+    """Regression: the ingester used to assume instrumental on missing metadata."""
+    source = (
+        Path(__file__).resolve().parents[3] / "scripts" / "dataset" / "ingest_pilot.py"
+    ).read_text()
+    assert 'meta.get("vocal_gender", "instrumental")' not in source
+    assert 'meta.get("vocal_gender", "unknown")' in source

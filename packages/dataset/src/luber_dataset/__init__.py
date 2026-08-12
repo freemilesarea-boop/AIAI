@@ -51,6 +51,7 @@ from luber_dataset.schema import (
     VibratoAmount,
     VibratoCharacter,
     VocalAnnotation,
+    VocalPresence,
     VocalStyle,
     VocalTimbre,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "VibratoAmount",
     "VibratoCharacter",
     "VocalAnnotation",
+    "VocalPresence",
     "VocalStyle",
     "VocalTimbre",
     "build_manifest",

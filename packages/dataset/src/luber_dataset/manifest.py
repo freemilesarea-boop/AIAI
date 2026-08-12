@@ -73,7 +73,7 @@ class DatasetManifest:
         for track in self.tracks:
             if track.vocal is not None:
                 key = str(track.vocal.vocal_style)
-            elif track.vocal_gender == "instrumental":
+            elif track.vocals_confirmed_absent:
                 key = "instrumental"
             else:
                 key = "unannotated"
@@ -200,6 +200,10 @@ class TrainingRunManifest:
     seed: int
     gpu: str
     cuda_version: str
+    #: Tracks deliberately excluded from training when the CLI offers no
+    #: validation split, so checkpoints can still be judged against
+    #: material the model never saw.
+    holdout_track_ids: list[str] = field(default_factory=list)
     started_at: str = ""
     finished_at: str = ""
     training_seconds: float | None = None
@@ -240,10 +244,16 @@ def validate_run_manifest(manifest: TrainingRunManifest) -> None:
         raise ValueError("learning rate must be positive")
     if not 0.0 <= manifest.val_split < 1.0:
         raise ValueError("val_split must be in [0, 1)")
-    # Step 16: without validation there is no way to detect overtraining.
-    if manifest.val_split == 0.0:
+    # Overtraining must be detectable somehow. Upstream's CLI at the
+    # pinned commit exposes no --val-split (val_split lives in
+    # configs.py but is never wired up), so a CLI-driven run legitimately
+    # has none. In that case a physical holdout must be recorded
+    # instead — what is forbidden is having neither.
+    if manifest.val_split == 0.0 and not manifest.holdout_track_ids:
         raise ValueError(
-            "val_split is 0: overtraining cannot be detected without a validation split"
+            "val_split is 0 and no holdout tracks are recorded: overtraining "
+            "would be undetectable. Set val_split, or list the tracks held out "
+            "of the training set."
         )
 
 
