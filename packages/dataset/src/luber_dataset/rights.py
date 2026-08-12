@@ -42,6 +42,11 @@ class RightsStatus(StrEnum):
     UNVERIFIED = "UNVERIFIED"
     #: Actively known to be unusable.
     PROHIBITED = "PROHIBITED"
+    #: Output of a generative model — including our own. Always
+    #: excluded: training on generated audio teaches the model its own
+    #: artifacts back, and this repository contains 100+ such files from
+    #: benchmarking that must never be mistaken for training material.
+    AI_GENERATED = "AI_GENERATED"
 
 
 #: The only statuses that may enter a training set.
@@ -60,6 +65,15 @@ ACCEPTABLE_STATUSES: frozenset[RightsStatus] = frozenset(
 PROHIBITED_SOURCE_MARKERS: tuple[str, ...] = (
     "suno",
     "udio",
+    # Our own engine output. Phase 5 rated it 2/10; training on it would
+    # entrench exactly the failures the training set exists to fix.
+    "acestep",
+    "ace-step",
+    "generated",
+    "ai-generated",
+    "synthetic",
+    "fixture",
+    "mock",
     "scrape",
     "scraped",
     "crawler",

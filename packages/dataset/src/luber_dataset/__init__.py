@@ -39,6 +39,7 @@ from luber_dataset.schema import (
     VibratoCharacter,
     VocalAnnotation,
     VocalStyle,
+    VocalTimbre,
 )
 
 __all__ = [
@@ -61,6 +62,7 @@ __all__ = [
     "VibratoCharacter",
     "VocalAnnotation",
     "VocalStyle",
+    "VocalTimbre",
     "build_manifest",
     "inspect_lyrics",
     "inspect_training_audio",

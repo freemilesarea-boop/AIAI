@@ -25,33 +25,60 @@ from luber_dataset.rights import RightsRecord
 
 
 class VocalStyle(StrEnum):
-    """Controlled vocal-identity descriptors for the target domains."""
+    """Controlled vocal-identity descriptors for the target domains.
 
-    MODERN_KPOP_FEMALE = "modern_kpop_female"
-    MODERN_KPOP_MALE = "modern_kpop_male"
-    K_RNB_SOFT = "k_rnb_soft"
-    INDIE_BREATHY = "indie_breathy"
+    Gender is a separate field on the track, so it is deliberately not
+    repeated here — a style is an idiom, not a voice type.
+    """
+
+    CONTEMPORARY_KPOP = "contemporary_kpop"
+    CONTEMPORARY_KRNB = "contemporary_krnb"
     MODERN_BALLAD_CLEAN = "modern_ballad_clean"
+    INDIE_BREATHY = "indie_breathy"
     BAND_POP_CLEAN = "band_pop_clean"
     #: Present so unwanted styles can be labelled and excluded, not so
-    #: they can be trained on.
+    #: they can be trained on. These two are the Phase 5 failure modes.
     TRADITIONAL_TROT = "traditional_trot"
+    BALLAD_LEGACY = "ballad_legacy"
     OTHER = "other"
     INSTRUMENTAL = "instrumental"
 
 
-#: Styles the Phase 6 pilot deliberately avoids over-representing. The
-#: baseline already leans this way; more of it would entrench the bias.
-DISCOURAGED_STYLES: frozenset[VocalStyle] = frozenset({VocalStyle.TRADITIONAL_TROT})
+#: Styles the pilot deliberately avoids over-representing. The baseline
+#: already leans this way — the human verdict named trot-like delivery
+#: and dated vocal style explicitly — so more of it would entrench the
+#: exact bias the training set exists to correct.
+DISCOURAGED_STYLES: frozenset[VocalStyle] = frozenset(
+    {VocalStyle.TRADITIONAL_TROT, VocalStyle.BALLAD_LEGACY}
+)
 
 
 class Delivery(StrEnum):
     SMOOTH = "smooth"
     BREATHY = "breathy"
+    CLEAN = "clean"
     POWERFUL = "powerful"
+    INTIMATE = "intimate"
+    RESTRAINED = "restrained"
     CONVERSATIONAL = "conversational"
     RHYTHMIC = "rhythmic"
     EMOTIVE = "emotive"
+
+
+class VocalTimbre(StrEnum):
+    """Timbre, tracked separately from delivery.
+
+    The Phase 5 evaluator described the baseline vocal as trot-like and
+    dated; nasality and airiness are the two timbral axes that most
+    distinguish that from a contemporary K-pop vocal, so they are
+    labelled rather than folded into a single style tag.
+    """
+
+    AIRY = "airy"
+    NASAL = "nasal"
+    WARM = "warm"
+    BRIGHT = "bright"
+    NEUTRAL = "neutral"
 
 
 class VibratoAmount(StrEnum):
@@ -100,6 +127,7 @@ class VocalAnnotation:
     vibrato_character: VibratoCharacter
     pronunciation_style: PronunciationStyle
     genre_vocal_identity: str
+    timbre: VocalTimbre = VocalTimbre.NEUTRAL
 
     def to_dict(self) -> dict[str, Any]:
         return {k: str(v) for k, v in asdict(self).items()}

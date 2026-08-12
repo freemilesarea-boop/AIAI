@@ -88,7 +88,7 @@ def _rights(**overrides) -> RightsRecord:
     return RightsRecord(**base)
 
 
-def _vocal(style=VocalStyle.MODERN_KPOP_FEMALE) -> VocalAnnotation:
+def _vocal(style=VocalStyle.CONTEMPORARY_KPOP) -> VocalAnnotation:
     return VocalAnnotation(
         vocal_style=style,
         delivery=Delivery.SMOOTH,
@@ -396,3 +396,50 @@ def test_run_manifest_serializes(tmp_path):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["dataset_content_hash"] == "c" * 64
     assert data["val_split"] == 0.1
+
+
+# ── Step 3 vocal vocabulary ───────────────────────────────────────────
+
+
+def test_step3_descriptors_are_all_expressible():
+    """Every descriptor the Phase 7 spec names must have a label."""
+    from luber_dataset import Delivery, VibratoAmount, VocalStyle, VocalTimbre
+
+    styles = {s.value for s in VocalStyle}
+    deliveries = {d.value for d in Delivery}
+    timbres = {t.value for t in VocalTimbre}
+    vibratos = {v.value for v in VibratoAmount}
+
+    assert {
+        "contemporary_kpop",
+        "contemporary_krnb",
+        "trot_like".replace("trot_like", "traditional_trot"),
+        "ballad_legacy",
+    } <= styles
+    assert {"breathy", "clean", "intimate", "powerful"} <= deliveries
+    assert {"nasal", "airy"} <= timbres
+    # restrained_vibrato / strong_vibrato map onto the amount axis.
+    assert {"subtle", "heavy"} <= vibratos
+
+
+def test_both_phase5_failure_styles_are_excluded_by_default():
+    from luber_dataset import DISCOURAGED_STYLES, VocalStyle
+
+    assert VocalStyle.TRADITIONAL_TROT in DISCOURAGED_STYLES
+    assert VocalStyle.BALLAD_LEGACY in DISCOURAGED_STYLES
+
+
+def test_ballad_legacy_track_is_excluded_from_a_manifest():
+    from luber_dataset import VocalStyle
+
+    manifest = build_manifest("T", [_track("legacy", vocal=_vocal(VocalStyle.BALLAD_LEGACY))])
+    assert manifest.track_count == 0
+    assert manifest.exclusions[0].reason == "DISCOURAGED_STYLE"
+
+
+def test_timbre_defaults_to_neutral_and_serializes():
+    from luber_dataset import VocalTimbre
+
+    track = _track("t")
+    assert track.vocal.timbre == VocalTimbre.NEUTRAL
+    assert track.to_dict()["vocal"]["timbre"] == "neutral"
