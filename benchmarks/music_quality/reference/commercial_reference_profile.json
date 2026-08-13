@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "purpose": "Aggregate technical target band from commercially released recordings. Reference analysis only: not training data, not used to train anything, and not a musical or spectral target to copy.",
+  "source_hint": "User-supplied local FLAC library: a single Billboard Hot 100 chart snapshot (100 unique tracks). A second on-disk folder held byte-identical copies and was deduplicated. Paths not recorded.",
+  "limitations": [
+    "n=100 from one chart snapshot: contemporary international chart pop.",
+    "Not a Korean-specific reference set, which matters for a Korean-first product.",
+    "Mastered commercial releases: the band describes finished masters, and LUBER output is deliberately unmastered."
+  ],
+  "analysis": {
+    "spectral_excerpt_seconds": 60,
+    "analysis_rate_hz": 48000,
+    "loudness_method": "ffmpeg ebur128 (whole file)",
+    "level_method": "ffmpeg astats (whole file)"
+  },
+  "aggregate": {
+    "cohort": "billboard_hot100_2026_03_28",
+    "track_count": 100,
+    "descriptors": {
+      "source_sample_rate": {
+        "n": 100,
+        "p10": 44100.0,
+        "p25": 44100.0,
+        "p50": 44100.0,
+        "p75": 44100.0,
+        "p90": 44100.0,
+        "mean": 44100.0,
+        "min": 44100.0,
+        "max": 44100.0
+      },
+      "channels": {
+        "n": 100,
+        "p10": 2.0,
+        "p25": 2.0,
+        "p50": 2.0,
+        "p75": 2.0,
+        "p90": 2.0,
+        "mean": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "duration_seconds": {
+        "n": 100,
+        "p10": 144.130612,
+        "p25": 169.763265,
+        "p50": 196.937143,
+        "p75": 226.168163,
+        "p90": 249.375347,
+        "mean": 199.183058,
+        "min": 95.869388,
+        "max": 346.122449
+      },
+      "peak_dbfs": {
+        "n": 100,
+        "p10": -0.107254,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "p90": 0.0,
+        "mean": -0.042384,
+        "min": -0.730479,
+        "max": 0.0
+      },
+      "rms_dbfs": {
+        "n": 100,
+        "p10": -12.489328,
+        "p25": -11.056303,
+        "p50": -10.300728,
+        "p75": -9.23595,
+        "p90": -8.446746,
+        "mean": -10.314783,
+        "min": -15.976663,
+        "max": -3.639238
+      },
+      "crest_factor_db": {
+        "n": 100,
+        "p10": 8.446746,
+        "p25": 9.23595,
+        "p50": 10.137836,
+        "p75": 11.037165,
+        "p90": 12.399455,
+        "mean": 10.272399,
+        "min": 3.639238,
+        "max": 15.946735
+      },
+      "integrated_lufs": {
+        "n": 100,
+        "p10": -10.11,
+        "p25": -9.025,
+        "p50": -8.15,
+        "p75": -7.4,
+        "p90": -6.8,
+        "mean": -8.298,
+        "min": -13.0,
+        "max": -4.1
+      },
+      "loudness_range_lu": {
+        "n": 100,
+        "p10": 2.99,
+        "p25": 3.975,
+        "p50": 5.55,
+        "p75": 7.55,
+        "p90": 10.11,
+        "mean": 6.073,
+        "min": 1.0,
+        "max": 12.9
+      },
+      "spectral_centroid_hz": {
+        "n": 100,
+        "p10": 2464.568659,
+        "p25": 2709.306246,
+        "p50": 3138.475847,
+        "p75": 3574.684283,
+        "p90": 3907.743155,
+        "mean": 3171.324344,
+        "min": 1670.107494,
+        "max": 4939.284915
+      },
+      "spectral_rolloff85_hz": {
+        "n": 100,
+        "p10": 5330.859375,
+        "p25": 6310.546875,
+        "p50": 7529.296875,
+        "p75": 8414.0625,
+        "p90": 9473.4375,
+        "mean": 7473.28125,
+        "min": 3902.34375,
+        "max": 10921.875
+      },
+      "energy_above_8k": {
+        "n": 100,
+        "p10": 0.08834,
+        "p25": 0.110203,
+        "p50": 0.136584,
+        "p75": 0.165435,
+        "p90": 0.202516,
+        "mean": 0.141258,
+        "min": 0.0527,
+        "max": 0.283547
+      },
+      "energy_above_10k": {
+        "n": 100,
+        "p10": 0.05244,
+        "p25": 0.067567,
+        "p50": 0.084093,
+        "p75": 0.107764,
+        "p90": 0.135718,
+        "mean": 0.089807,
+        "min": 0.026041,
+        "max": 0.190741
+      },
+      "band_low": {
+        "n": 100,
+        "p10": 0.162073,
+        "p25": 0.183954,
+        "p50": 0.218752,
+        "p75": 0.249163,
+        "p90": 0.314031,
+        "mean": 0.227078,
+        "min": 0.125374,
+        "max": 0.460297
+      },
+      "band_mid": {
+        "n": 100,
+        "p10": 0.402544,
+        "p25": 0.437435,
+        "p50": 0.49283,
+        "p75": 0.53118,
+        "p90": 0.573769,
+        "mean": 0.488626,
+        "min": 0.284511,
+        "max": 0.685078
+      },
+      "band_high": {
+        "n": 100,
+        "p10": 0.201265,
+        "p25": 0.236122,
+        "p50": 0.283657,
+        "p75": 0.321386,
+        "p90": 0.376553,
+        "mean": 0.281822,
+        "min": 0.146844,
+        "max": 0.461121
+      },
+      "stereo_correlation": {
+        "n": 100,
+        "p10": 0.643543,
+        "p25": 0.72998,
+        "p50": 0.814625,
+        "p75": 0.896022,
+        "p90": 0.94119,
+        "mean": 0.800284,
+        "min": 0.411468,
+        "max": 0.991446
+      },
+      "silence_ratio": {
+        "n": 100,
+        "p10": 0.002415,
+        "p25": 0.002791,
+        "p50": 0.003383,
+        "p75": 0.004542,
+        "p90": 0.005525,
+        "mean": 0.003809,
+        "min": 0.001062,
+        "max": 0.010141
+      },
+      "dynamic_range_proxy_db": {
+        "n": 100,
+        "p10": 2.237587,
+        "p25": 2.956707,
+        "p50": 4.009943,
+        "p75": 6.088666,
+        "p90": 7.563945,
+        "mean": 4.705887,
+        "min": 0.892365,
+        "max": 12.406885
+      }
+    },
+    "notes": [
+      "Aggregate statistics only. No per-track values, filenames, paths, or fingerprints are recorded.",
+      "Spectral descriptors measured over the middle 60s of each track at 48000 Hz; loudness and level from ffmpeg ebur128/astats over the whole file.",
+      "This is an audio target band, not a musical or spectral target. It is not training data and was not used to train anything.",
+      "0 duplicate file(s) skipped by content hash; 0 file(s) could not be decoded."
+    ]
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "kind": "RAW_MODEL_OUTPUT",
+  "runs": [
+    {
+      "case": "ko_pop_female__steps8",
+      "config": {
+        "inference_steps": 8
+      },
+      "status": "COMPLETED",
+      "wall_seconds": 66.6,
+      "bytes": 11520078,
+      "sha256": "90135f440cbbf70bff646578ee2aafa9460456718045bef670df8340c457f008",
+      "payload": {
+        "prompt": "Contemporary Korean pop, warm electric piano, soft drums, female lead vocal",
+        "lyrics": "[Verse]\n\ucc3d\ubc16\uc5d0 \ube44\uac00 \ub0b4\ub824\uc640\n\ub108\uc758 \uc774\ub984\uc744 \ubd88\ub7ec\ubd10\n[Chorus]\n\ub2e4\uc2dc \ub9cc\ub0a0 \uadf8\ub0a0\uae4c\uc9c0\n\ub098\ub294 \uc5ec\uae30 \uc788\uc744\uac8c\n",
+        "vocal_language": "ko",
+        "audio_duration": 60.0,
+        "audio_format": "wav",
+        "model": "acestep-v15-turbo",
+        "batch_size": 1,
+        "thinking": false,
+        "use_cot_caption": false,
+        "use_cot_language": false,
+        "use_random_seed": false,
+        "seed": 30100001,
+        "bpm": 92,
+        "key_scale": "C major",
+        "time_signature": "4",
+        "inference_steps": 8
+      },
+      "raw_filename": "ko_pop_female__steps8.wav"
+    },
+    {
+      "case": "ko_pop_female__steps16",
+      "config": {
+        "inference_steps": 16
+      },
+      "status": "COMPLETED",
+      "wall_seconds": 36.2,
+      "bytes": 11520078,
+      "sha256": "90135f440cbbf70bff646578ee2aafa9460456718045bef670df8340c457f008",
+      "payload": {
+        "prompt": "Contemporary Korean pop, warm electric piano, soft drums, female lead vocal",
+        "lyrics": "[Verse]\n\ucc3d\ubc16\uc5d0 \ube44\uac00 \ub0b4\ub824\uc640\n\ub108\uc758 \uc774\ub984\uc744 \ubd88\ub7ec\ubd10\n[Chorus]\n\ub2e4\uc2dc \ub9cc\ub0a0 \uadf8\ub0a0\uae4c\uc9c0\n\ub098\ub294 \uc5ec\uae30 \uc788\uc744\uac8c\n",
+        "vocal_language": "ko",
+        "audio_duration": 60.0,
+        "audio_format": "wav",
+        "model": "acestep-v15-turbo",
+        "batch_size": 1,
+        "thinking": false,
+        "use_cot_caption": false,
+        "use_cot_language": false,
+        "use_random_seed": false,
+        "seed": 30100001,
+        "bpm": 92,
+        "key_scale": "C major",
+        "time_signature": "4",
+        "inference_steps": 16
+      },
+      "raw_filename": "ko_pop_female__steps16.wav"
+    },
+    {
+      "case": "ko_pop_female__steps32",
+      "config": {
+        "inference_steps": 32
+      },
+      "status": "COMPLETED",
+      "wall_seconds": 37.2,
+      "bytes": 11520078,
+      "sha256": "90135f440cbbf70bff646578ee2aafa9460456718045bef670df8340c457f008",
+      "payload": {
+        "prompt": "Contemporary Korean pop, warm electric piano, soft drums, female lead vocal",
+        "lyrics": "[Verse]\n\ucc3d\ubc16\uc5d0 \ube44\uac00 \ub0b4\ub824\uc640\n\ub108\uc758 \uc774\ub984\uc744 \ubd88\ub7ec\ubd10\n[Chorus]\n\ub2e4\uc2dc \ub9cc\ub0a0 \uadf8\ub0a0\uae4c\uc9c0\n\ub098\ub294 \uc5ec\uae30 \uc788\uc744\uac8c\n",
+        "vocal_language": "ko",
+        "audio_duration": 60.0,
+        "audio_format": "wav",
+        "model": "acestep-v15-turbo",
+        "batch_size": 1,
+        "thinking": false,
+        "use_cot_caption": false,
+        "use_cot_language": false,
+        "use_random_seed": false,
+        "seed": 30100001,
+        "bpm": 92,
+        "key_scale": "C major",
+        "time_signature": "4",
+        "inference_steps": 32
+      },
+      "raw_filename": "ko_pop_female__steps32.wav"
+    },
+    {
+      "case": "instrumental__steps8",
+      "config": {
+        "inference_steps": 8
+      },
+      "status": "COMPLETED",
+      "wall_seconds": 43.2,
+      "bytes": 11520078,
+      "sha256": "bad13c83ecc24817e2aaa6181b11693cf58e4a9de42231bd456b7ba7055dcaf3",
+      "payload": {
+        "prompt": "Warm lo-fi instrumental with electric piano, soft drums and bass",
+        "lyrics": "",
+        "vocal_language": "en",
+        "audio_duration": 60.0,
+        "audio_format": "wav",
+        "model": "acestep-v15-turbo",
+        "batch_size": 1,
+        "thinking": false,
+        "use_cot_caption": false,
+        "use_cot_language": false,
+        "use_random_seed": false,
+        "seed": 30100002,
+        "bpm": 92,
+        "key_scale": "C major",
+        "time_signature": "4",
+        "inference_steps": 8
+      },
+      "raw_filename": "instrumental__steps8.wav"
+    },
+    {
+      "case": "instrumental__steps16",
+      "config": {
+        "inference_steps": 16
+      },
+      "status": "COMPLETED",
+      "wall_seconds": 43.4,
+      "bytes": 11520078,
+      "sha256": "bad13c83ecc24817e2aaa6181b11693cf58e4a9de42231bd456b7ba7055dcaf3",
+      "payload": {
+        "prompt": "Warm lo-fi instrumental with electric piano, soft drums and bass",
+        "lyrics": "",
+        "vocal_language": "en",
+        "audio_duration": 60.0,
+        "audio_format": "wav",
+        "model": "acestep-v15-turbo",
+        "batch_size": 1,
+        "thinking": false,
+        "use_cot_caption": false,
+        "use_cot_language": false,
+        "use_random_seed": false,
+        "seed": 30100002,
+        "bpm": 92,
+        "key_scale": "C major",
+        "time_signature": "4",
+        "inference_steps": 16
+      },
+      "raw_filename": "instrumental__steps16.wav"
+    },
+    {
+      "case": "instrumental__steps32",
+      "config": {
+        "inference_steps": 32
+      },
+      "status": "COMPLETED",
+      "wall_seconds": 39.4,
+      "bytes": 11520078,
+      "sha256": "bad13c83ecc24817e2aaa6181b11693cf58e4a9de42231bd456b7ba7055dcaf3",
+      "payload": {
+        "prompt": "Warm lo-fi instrumental with electric piano, soft drums and bass",
+        "lyrics": "",
+        "vocal_language": "en",
+        "audio_duration": 60.0,
+        "audio_format": "wav",
+        "model": "acestep-v15-turbo",
+        "batch_size": 1,
+        "thinking": false,
+        "use_cot_caption": false,
+        "use_cot_language": false,
+        "use_random_seed": false,
+        "seed": 30100002,
+        "bpm": 92,
+        "key_scale": "C major",
+        "time_signature": "4",
+        "inference_steps": 32
+      },
+      "raw_filename": "instrumental__steps32.wav"
+    }
+  ],
+  "note": "RAW_MODEL_OUTPUT provenance. Audio itself is not committed; sha256 identifies each run. inference_steps 16 and 32 produced byte-identical audio to 8 on both prompts."
+}
