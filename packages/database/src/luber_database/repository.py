@@ -20,6 +20,7 @@ from luber_database.models.generation import (
     GenerationJob,
     GenerationQA,
     LyricLineQA,
+    Project,
 )
 
 
@@ -417,3 +418,78 @@ class GenerationRepository:
 
         await self._session.commit()
         return await self.get_lyric_line_qa(generation_id)
+
+    # ── Projects (Phase 11) ───────────────────────────────────────────
+
+    async def create_project(self, *, name: str, user_id: UUID | None = None) -> Project:
+        project = Project(name=name, user_id=user_id)
+        self._session.add(project)
+        await self._session.commit()
+        await self._session.refresh(project)
+        return project
+
+    async def get_project(self, project_id: UUID) -> Project | None:
+        return await self._session.get(Project, project_id)
+
+    async def list_projects(self) -> list[Project]:
+        result = await self._session.execute(select(Project).order_by(Project.created_at.desc()))
+        return list(result.scalars().all())
+
+    async def rename_project(self, project_id: UUID, *, name: str) -> Project:
+        project = await self.get_project(project_id)
+        if project is None:
+            raise LookupError(f"project not found: {project_id}")
+        project.name = name
+        project.updated_at = _utcnow()
+        await self._session.commit()
+        await self._session.refresh(project)
+        return project
+
+    async def delete_project(self, project_id: UUID) -> None:
+        """Delete a project. Its generations survive, unfiled.
+
+        The FK is ``ON DELETE SET NULL`` precisely so that removing a
+        folder never removes the music inside it.
+        """
+        project = await self.get_project(project_id)
+        if project is None:
+            raise LookupError(f"project not found: {project_id}")
+        await self._session.delete(project)
+        await self._session.commit()
+
+    async def count_project_generations(self, project_id: UUID) -> int:
+        result = await self._session.execute(
+            select(func.count(Generation.id)).where(Generation.project_id == project_id)
+        )
+        return int(result.scalar_one())
+
+    async def set_generation_project(
+        self, generation_id: UUID, project_id: UUID | None
+    ) -> Generation:
+        """File a generation under a project, or unfile it with ``None``."""
+        generation = await self._session.get(Generation, generation_id)
+        if generation is None:
+            raise LookupError(f"generation not found: {generation_id}")
+        generation.project_id = project_id
+        await self._session.commit()
+        await self._session.refresh(generation)
+        return generation
+
+    async def list_generations_for_project(self, project_id: UUID) -> list[Generation]:
+        result = await self._session.execute(
+            select(Generation)
+            .options(selectinload(Generation.audio_assets))
+            .where(Generation.project_id == project_id)
+            .order_by(Generation.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def list_children(self, generation_id: UUID) -> list[Generation]:
+        """Generations created from *generation_id* (lineage, Phase 8)."""
+        result = await self._session.execute(
+            select(Generation)
+            .options(selectinload(Generation.audio_assets))
+            .where(Generation.parent_generation_id == generation_id)
+            .order_by(Generation.created_at.asc())
+        )
+        return list(result.scalars().all())

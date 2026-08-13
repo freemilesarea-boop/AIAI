@@ -8,7 +8,8 @@
  * `@/lib/api` — the browser never contacts the model runtime.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { GenerationFailure } from "@/components/GenerationFailure";
 import {
@@ -55,14 +56,23 @@ function draftFrom(generation: Generation): BasedOnDraft {
       bpm: generation.bpm === null ? "" : String(generation.bpm),
       keyScale: generation.key_scale ?? "",
       timeSignature: generation.time_signature ?? "",
+      // A draft carrying advanced settings opens in Custom, so the
+      // values the user is inheriting are visible rather than hidden.
+      mode:
+        generation.bpm !== null ||
+        generation.key_scale !== null ||
+        generation.time_signature !== null
+          ? "custom"
+          : "simple",
     },
   };
 }
 
-export default function CreatePage() {
+function CreateWorkspace() {
   const job = useGenerationJob();
   const [recent, setRecent] = useState<Generation[]>([]);
   const [basedOn, setBasedOn] = useState<BasedOnDraft | null>(null);
+  const searchParams = useSearchParams();
   const lastInputRef = useRef<CreateGenerationInput | null>(null);
 
   const handleSubmit = useCallback(
@@ -83,6 +93,21 @@ export default function CreatePage() {
     },
     [job],
   );
+
+  // Arriving from a song page with ?from=<id> seeds the draft from
+  // that track, so "Generate again" works from anywhere in the app.
+  const fromId = searchParams?.get("from") ?? null;
+  useEffect(() => {
+    if (!fromId) return;
+    let cancelled = false;
+    void (async () => {
+      const source = await getGeneration(fromId).catch(() => null);
+      if (source && !cancelled) setBasedOn(draftFrom(source));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromId]);
 
   const handleRetry = useCallback(() => {
     // A new Idempotency-Key is minted inside submit(), so this is a new job.
@@ -231,5 +256,17 @@ export default function CreatePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * `useSearchParams` requires a Suspense boundary under the App Router;
+ * without one the whole route opts out of static rendering.
+ */
+export default function CreatePage() {
+  return (
+    <Suspense fallback={null}>
+      <CreateWorkspace />
+    </Suspense>
   );
 }

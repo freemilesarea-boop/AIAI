@@ -18,6 +18,7 @@ from luber_database.models.generation import (
     GenerationJob,
     GenerationQA,
     LyricLineQA,
+    Project,
 )
 
 GENERATION_TABLES = [
@@ -26,6 +27,7 @@ GENERATION_TABLES = [
     AudioAsset.__table__,
     GenerationQA.__table__,
     LyricLineQA.__table__,
+    Project.__table__,
 ]
 
 

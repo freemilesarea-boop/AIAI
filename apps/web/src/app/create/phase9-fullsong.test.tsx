@@ -67,6 +67,18 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Music description"), "Korean pop ballad");
 }
 
+/**
+ * Advanced controls live behind the Custom tab from Phase 11 onward.
+ * Simple mode is the default landing experience, so every test that
+ * touches BPM, key, duration, language or presets must switch first —
+ * the same click a real user makes.
+ */
+async function switchToCustom() {
+  const user = userEvent.setup();
+  const tab = screen.queryByRole("tab", { name: "Custom" });
+  if (tab && tab.getAttribute("aria-selected") !== "true") await user.click(tab);
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   window.scrollTo = vi.fn();
@@ -80,18 +92,20 @@ afterEach(() => {
 // ── Full-song durations ───────────────────────────────────────────────
 
 describe("full-song durations", () => {
-  it("offers exactly the validated set", () => {
+  it("offers exactly the validated set", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     const values = within(screen.getByLabelText("Duration"))
       .getAllByRole("option")
       .map((o) => (o as HTMLOptionElement).value);
     expect(values).toEqual(["30", "60", "120", "180", "240"]);
   });
 
-  it("does not offer durations the engine accepts but we have not validated", () => {
+  it("does not offer durations the engine accepts but we have not validated", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     const values = within(screen.getByLabelText("Duration"))
       .getAllByRole("option")
       .map((o) => (o as HTMLOptionElement).value);
@@ -103,6 +117,7 @@ describe("full-song durations", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await fillRequired(user);
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("가사");
@@ -114,6 +129,7 @@ describe("full-song durations", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await fillRequired(user);
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("가사");
@@ -122,9 +138,10 @@ describe("full-song durations", () => {
     expect((await submittedBody(fetchMock)).duration).toBe(240);
   });
 
-  it("labels minute-length durations readably", () => {
+  it("labels minute-length durations readably", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     const labels = within(screen.getByLabelText("Duration"))
       .getAllByRole("option")
       .map((o) => o.textContent);
@@ -141,9 +158,10 @@ describe("full-song durations", () => {
 // ── Presets ───────────────────────────────────────────────────────────
 
 describe("song presets", () => {
-  it("are offered and marked optional", () => {
+  it("are offered and marked optional", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     expect(screen.getByText(/Song presets/)).toBeInTheDocument();
     expect(presetGroup().getByRole("button", { name: /Full Pop Song/ })).toBeInTheDocument();
     expect(presetGroup().getByRole("button", { name: /^Ballad/ })).toBeInTheDocument();
@@ -154,6 +172,7 @@ describe("song presets", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
 
@@ -167,6 +186,7 @@ describe("song presets", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
 
@@ -181,6 +201,7 @@ describe("song presets", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /^Instrumental/ }));
 
@@ -192,6 +213,7 @@ describe("song presets", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /^Ballad/ }));
     await fillRequired(user);
@@ -206,9 +228,10 @@ describe("song presets", () => {
 // ── Structure templates ───────────────────────────────────────────────
 
 describe("structure templates", () => {
-  it("are offered separately from presets", () => {
+  it("are offered separately from presets", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     const group = screen.getByRole("group", { name: "Structure templates" });
     expect(within(group).getByRole("button", { name: /Pop/ })).toBeInTheDocument();
     expect(within(group).getByRole("button", { name: /R&B/ })).toBeInTheDocument();
@@ -218,6 +241,7 @@ describe("structure templates", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     const group = screen.getByRole("group", { name: "Structure templates" });
     await user.click(within(group).getByRole("button", { name: /R&B/ }));
@@ -232,6 +256,7 @@ describe("structure templates", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     const group = screen.getByRole("group", { name: "Structure templates" });
     await user.click(within(group).getByRole("button", { name: /^Pop/ }));
@@ -261,6 +286,7 @@ describe("applying structure to existing lyrics", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await writeLyrics(user);
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
@@ -274,6 +300,7 @@ describe("applying structure to existing lyrics", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await writeLyrics(user);
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
@@ -288,6 +315,7 @@ describe("applying structure to existing lyrics", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await writeLyrics(user);
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
@@ -302,6 +330,7 @@ describe("applying structure to existing lyrics", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await writeLyrics(user);
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
@@ -315,6 +344,7 @@ describe("applying structure to existing lyrics", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("[Verse]\n[Chorus]");
 
@@ -331,6 +361,7 @@ describe("applying structure to existing lyrics", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
     await writeLyrics(user);
 
     await user.click(presetGroup().getByRole("button", { name: /^Ballad/ }));

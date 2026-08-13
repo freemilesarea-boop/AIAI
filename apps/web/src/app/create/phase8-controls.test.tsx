@@ -152,6 +152,18 @@ async function submittedBody(fetchMock: ReturnType<typeof vi.fn>) {
   return jsonBodyOf(call[1] as RequestInit);
 }
 
+/**
+ * Advanced controls live behind the Custom tab from Phase 11 onward.
+ * Simple mode is the default landing experience, so every test that
+ * touches BPM, key, duration, language or presets must switch first —
+ * the same click a real user makes.
+ */
+async function switchToCustom() {
+  const user = userEvent.setup();
+  const tab = screen.queryByRole("tab", { name: "Custom" });
+  if (tab && tab.getAttribute("aria-selected") !== "true") await user.click(tab);
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   // jsdom has no layout engine; the page scrolls after "Generate again".
@@ -169,6 +181,7 @@ describe("advanced controls", () => {
   it("are present and clearly optional", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     expect(screen.getByText(/Advanced controls/)).toBeInTheDocument();
     expect(screen.getByLabelText("BPM")).toBeInTheDocument();
@@ -179,9 +192,10 @@ describe("advanced controls", () => {
     ).toBeInTheDocument();
   });
 
-  it("default to unset", () => {
+  it("default to unset", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     expect(screen.getByLabelText("BPM")).toHaveValue(null);
     expect(screen.getByLabelText("Key / Scale")).toHaveValue("");
@@ -192,6 +206,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: "Generate" }));
@@ -217,6 +232,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "128");
@@ -229,6 +245,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.selectOptions(screen.getByLabelText("Key / Scale"), "F# minor");
@@ -241,6 +258,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.selectOptions(screen.getByLabelText("Time Signature"), "3");
@@ -253,6 +271,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "92");
@@ -266,9 +285,10 @@ describe("advanced controls", () => {
     expect(body.time_signature).toBe("6");
   });
 
-  it("only offers key/scale values the engine accepts", () => {
+  it("only offers key/scale values the engine accepts", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     const select = screen.getByLabelText("Key / Scale");
     const values = within(select)
@@ -281,9 +301,10 @@ describe("advanced controls", () => {
     expect(values.some((v) => v.includes("♯"))).toBe(false);
   });
 
-  it("only offers time signatures the engine accepts", () => {
+  it("only offers time signatures the engine accepts", async () => {
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     const values = within(screen.getByLabelText("Time Signature"))
       .getAllByRole("option")
@@ -295,6 +316,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "900");
@@ -308,6 +330,7 @@ describe("advanced controls", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.type(screen.getByLabelText("BPM"), "128");
     await user.click(screen.getByRole("button", { name: "Clear advanced controls" }));
@@ -323,6 +346,7 @@ describe("song structure editor", () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     expect(screen.getByRole("button", { name: "[Chorus]" })).toBeInTheDocument();
 
@@ -340,6 +364,7 @@ describe("song structure editor", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(screen.getByRole("button", { name: "[Verse 1]" }));
 
@@ -361,6 +386,7 @@ describe("song structure editor", () => {
       },
     });
     render(<CreatePage />);
+    await switchToCustom();
 
     const messy = "[Drop]\n  spaced out  \n\n\n[chorus]\nhook";
     await user.type(screen.getByLabelText("Title"), "Messy");
@@ -404,6 +430,7 @@ describe("song structure editor", () => {
       },
     });
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("[Verse 1]\na\nb\n[Drop]\nc");
@@ -422,6 +449,7 @@ describe("pre-flight advisories", () => {
     const user = userEvent.setup();
     const { preflightCalls } = stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste(LYRICS_TEXT);
@@ -450,6 +478,7 @@ describe("pre-flight advisories", () => {
       },
     });
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("가".repeat(300));
@@ -479,6 +508,7 @@ describe("pre-flight advisories", () => {
       },
     });
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     expect(await screen.findByText(/is dense/)).toBeInTheDocument();
@@ -502,6 +532,7 @@ describe("pre-flight advisories", () => {
       }),
     );
     render(<CreatePage />);
+    await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste(LYRICS_TEXT);
@@ -523,6 +554,7 @@ describe("generate again", () => {
   ) {
     const stub = stubServer({ generation });
     render(<CreatePage />);
+    await switchToCustom();
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: "Generate" }));
     await screen.findByText("Track ready");
@@ -620,6 +652,7 @@ describe("completed track details", () => {
     const user = userEvent.setup();
     stubServer({ generation: { bpm: 128, key_scale: "F# minor", time_signature: "3" } });
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: "Generate" }));
@@ -636,6 +669,7 @@ describe("completed track details", () => {
     const user = userEvent.setup();
     stubServer();
     render(<CreatePage />);
+    await switchToCustom();
 
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: "Generate" }));

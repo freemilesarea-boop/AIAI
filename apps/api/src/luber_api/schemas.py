@@ -314,3 +314,46 @@ class LongFormQAResponse(BaseModel):
     real_time_factor: float | None
     status: str
     is_full_song: bool
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("name")
+    @classmethod
+    def _trim(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("project name cannot be blank")
+        return trimmed
+
+
+class ProjectResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    generation_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectListResponse(BaseModel):
+    items: list[ProjectResponse] = Field(default_factory=list)
+
+
+class AssignProjectRequest(BaseModel):
+    """Move a generation into a project, or out of one with ``null``."""
+
+    project_id: uuid.UUID | None = None
+
+
+class LineageResponse(BaseModel):
+    """A generation's place in its family tree.
+
+    Named lineage rather than "variations" on purpose: the provider does
+    not perform audio-to-audio mutation on this path, so these are
+    re-generations that record where they came from.
+    """
+
+    generation_id: uuid.UUID
+    parent: GenerationResponse | None = None
+    children: list[GenerationResponse] = Field(default_factory=list)

@@ -22,8 +22,10 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { AdvancedControls } from "@/components/AdvancedControls";
 import { AdvisoryList } from "@/components/AdvisoryList";
+import { PromptChips } from "@/components/PromptChips";
 import { SongPresets } from "@/components/SongPresets";
 import { StructureOutline } from "@/components/StructureOutline";
+import { Tabs } from "@/components/ui";
 import { usePreflight } from "@/hooks/usePreflight";
 import type { CreateGenerationInput, VocalGender } from "@/lib/api";
 import {
@@ -73,6 +75,8 @@ export interface GenerationFormInitialValues {
   bpm: string;
   keyScale: string;
   timeSignature: string;
+  /** Opens straight into Custom when a draft carries advanced settings. */
+  mode: "simple" | "custom";
 }
 
 export interface GenerationFormProps {
@@ -121,6 +125,12 @@ export function GenerationForm({
   const [keyScale, setKeyScale] = useState(initialValues?.keyScale ?? "");
   const [timeSignature, setTimeSignature] = useState(initialValues?.timeSignature ?? "");
   const [errors, setErrors] = useState<FieldErrors>({});
+  // Simple is the default: a first-time user must be able to
+  // generate without meeting a single advanced control.
+  const [mode, setMode] = useState<"simple" | "custom">(
+    initialValues?.mode ?? "simple",
+  );
+  const custom = mode === "custom";
 
   const titleRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -236,6 +246,23 @@ export function GenerationForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+      <div className="flex items-center justify-between gap-3">
+        <Tabs
+          label="Generation mode"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "simple", label: "Simple" },
+            { value: "custom", label: "Custom" },
+          ]}
+        />
+        {!custom && (
+          <p className="hidden text-xs text-[var(--text-muted)] sm:block">
+            Everything else is chosen for you.
+          </p>
+        )}
+      </div>
+
       {parent && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-violet-900/60 bg-violet-950/20 px-3 py-2">
           <p className="text-sm text-violet-200">
@@ -302,8 +329,10 @@ export function GenerationForm({
             {errors.prompt}
           </p>
         )}
+        <PromptChips value={prompt} onChange={setPrompt} disabled={disabled} />
       </div>
 
+      {custom && (
       <SongPresets
         lyrics={lyrics}
         disabled={disabled}
@@ -316,6 +345,7 @@ export function GenerationForm({
         }}
         onApplyTemplate={setLyrics}
       />
+      )}
 
       <div>
         <label htmlFor={ids.lyrics} className={labelClass}>
@@ -334,9 +364,10 @@ export function GenerationForm({
                 type="button"
                 onClick={() => insertSectionTag(tag)}
                 disabled={disabled}
-                className="rounded border border-zinc-700 px-2 py-1 font-mono text-xs text-zinc-300
-                  transition-colors hover:border-violet-600 hover:text-violet-200
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500
+                className="inline-flex min-h-9 items-center rounded-[var(--radius-sm)]
+                  border border-[var(--border-default)] px-2.5 font-mono text-xs
+                  text-[var(--text-secondary)] transition-colors
+                  hover:border-[var(--brand)] hover:text-[var(--brand-text)]
                   disabled:opacity-50"
               >
                 {tag}
@@ -377,7 +408,7 @@ export function GenerationForm({
         <AdvisoryList advisories={preflight.advisories} checking={preflight.checking} />
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className={custom ? "grid gap-5 sm:grid-cols-3" : "grid gap-5 sm:grid-cols-1"}>
         <div>
           <label htmlFor={ids.vocal} className={labelClass}>
             Vocal
@@ -397,6 +428,7 @@ export function GenerationForm({
           </select>
         </div>
 
+        {custom && (
         <div>
           <label htmlFor={ids.language} className={labelClass}>
             Language
@@ -415,7 +447,9 @@ export function GenerationForm({
             ))}
           </select>
         </div>
+        )}
 
+        {custom && (
         <div>
           <label htmlFor={ids.duration} className={labelClass}>
             Duration
@@ -434,8 +468,10 @@ export function GenerationForm({
             ))}
           </select>
         </div>
+        )}
       </div>
 
+      {custom && (
       <AdvancedControls
         bpm={bpm}
         keyScale={keyScale}
@@ -451,6 +487,7 @@ export function GenerationForm({
         bpmError={errors.bpm}
         disabled={disabled}
       />
+      )}
 
       <button
         type="submit"

@@ -93,6 +93,8 @@ export interface Generation {
   /** Lineage: set when this came from "Generate again". */
   parent_generation_id: string | null;
   variation_label: string | null;
+  /** Workspace this generation is filed under, if any. */
+  project_id?: string | null;
   /** Pre-flight findings recorded at submission. */
   advisories: Advisory[];
   /**
@@ -303,4 +305,86 @@ export function findMasterAsset(generation: Generation): AudioAsset | null {
 
 export function findPreviewAsset(generation: Generation): AudioAsset | null {
   return generation.audio_assets.find((a) => a.asset_type === "PREVIEW") ?? null;
+}
+
+/* ── Projects ──────────────────────────────────────────────────────── */
+
+export interface Project {
+  id: string;
+  name: string;
+  generation_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store", ...init });
+  if (!res.ok) {
+    throw new ApiError(`${init?.method ?? "GET"} ${path} failed: ${res.status}`, res.status,
+      await readErrorCode(res));
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+export async function listProjects(): Promise<Project[]> {
+  return (await request<{ items: Project[] }>("/v1/projects")).items;
+}
+
+export async function createProject(name: string): Promise<Project> {
+  return request<Project>("/v1/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function renameProject(id: string, name: string): Promise<Project> {
+  return request<Project>(`/v1/projects/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await request<void>(`/v1/projects/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listProjectGenerations(id: string): Promise<Generation[]> {
+  const body = await request<GenerationListResponse>(
+    `/v1/projects/${encodeURIComponent(id)}/generations`,
+  );
+  return body.items;
+}
+
+/** File a generation under a project, or pass `null` to unfile it. */
+export async function assignGenerationToProject(
+  generationId: string,
+  projectId: string | null,
+): Promise<void> {
+  await request<unknown>(`/v1/generations/${encodeURIComponent(generationId)}/project`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_id: projectId }),
+  });
+}
+
+/* ── Lineage ───────────────────────────────────────────────────────── */
+
+export interface Lineage {
+  generation_id: string;
+  parent: Generation | null;
+  children: Generation[];
+}
+
+/**
+ * A generation's origin and descendants.
+ *
+ * Called lineage rather than "variations" deliberately: the provider
+ * does not perform audio-to-audio mutation, so a child is a
+ * re-generation that recorded where it came from.
+ */
+export async function getLineage(generationId: string): Promise<Lineage> {
+  return request<Lineage>(`/v1/generations/${encodeURIComponent(generationId)}/lineage`);
 }

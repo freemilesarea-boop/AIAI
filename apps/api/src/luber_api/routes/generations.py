@@ -30,6 +30,7 @@ from luber_api.schemas import (
     GenerationQARequest,
     GenerationQAResponse,
     GenerationResponse,
+    LineageResponse,
     LongFormQAResponse,
     LyricLineQAEntry,
     PreflightRequest,
@@ -664,3 +665,33 @@ def decode_string_map(raw: str | None) -> dict[str, str]:
     if not isinstance(decoded, dict):
         return {}
     return {str(k): str(v) for k, v in decoded.items()}
+
+
+@router.get("/{generation_id}/lineage", response_model=LineageResponse)
+async def get_generation_lineage(
+    generation_id: uuid.UUID,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> LineageResponse:
+    """Where a generation came from and what came from it.
+
+    Deliberately called lineage rather than "variations": on this
+    provider path nothing is audio-to-audio, so a child is a
+    re-generation that recorded its origin, not a mutation of its
+    parent's audio. The UI must not imply otherwise.
+    """
+    generation = await repository.get_generation(generation_id)
+    if generation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    parent = None
+    if generation.parent_generation_id is not None:
+        parent_row = await repository.get_generation(generation.parent_generation_id)
+        if parent_row is not None:
+            parent = serialize_generation(parent_row)
+
+    children = await repository.list_children(generation_id)
+    return LineageResponse(
+        generation_id=generation_id,
+        parent=parent,
+        children=[serialize_generation(child) for child in children],
+    )

@@ -66,6 +66,12 @@ class Generation(Base):
     )
     variation_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    #: Workspace this generation is filed under (Phase 11). SET NULL on
+    #: delete: removing a project must never remove the music in it.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -94,6 +100,7 @@ class Generation(Base):
     lyric_line_qa: Mapped[list[LyricLineQA]] = relationship(
         back_populates="generation", cascade="all, delete-orphan"
     )
+    project: Mapped[Project | None] = relationship(back_populates="generations")
 
 
 class GenerationJob(Base):
@@ -220,3 +227,27 @@ class LyricLineQA(Base):
     )
 
     generation: Mapped[Generation] = relationship(back_populates="lyric_line_qa")
+
+
+class Project(Base):
+    """A workspace grouping for generations.
+
+    Deliberately minimal: a name and the generations filed under it.
+    Collaboration, sharing and permissions are later phases, and
+    modelling them now would be guessing at requirements.
+    """
+
+    __tablename__ = "projects"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Reserved for the authentication phase, like ``Generation.user_id``.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    generations: Mapped[list[Generation]] = relationship(back_populates="project")

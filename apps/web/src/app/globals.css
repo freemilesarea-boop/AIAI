@@ -1,11 +1,173 @@
 @import "tailwindcss";
 
+/**
+ * LUBER design tokens.
+ *
+ * Every colour, radius and elevation in the product comes from here.
+ * Components reference tokens, never raw hex values — so the identity
+ * can change in one file instead of two hundred class strings.
+ *
+ * Dark-first by intent: this is a music tool, and the surfaces are
+ * meant to recede so cover art and waveforms carry the colour.
+ */
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
+  /* Surfaces, from furthest back to closest to the user. */
+  --surface-base: #08080b;
+  --surface-sunken: #050507;
+  --surface-raised: #101014;
+  --surface-overlay: #16161c;
+  --surface-hover: #1c1c23;
+
+  /* Text. */
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-inverse: #08080b;
+
+  /* Borders. */
+  --border-subtle: #1f1f26;
+  --border-default: #27272e;
+  --border-strong: #3a3a44;
+
+  /* Brand. LUBER's identity is a warm violet against near-black,
+     with an amber accent reserved for "in progress". */
+  --brand: #7c5cff;
+  --brand-hover: #8f74ff;
+  --brand-muted: #2a2145;
+  --brand-text: #c4b5fd;
+
+  --accent: #f5a524;
+  --accent-muted: #3a2a10;
+
+  --danger: #f75f5f;
+  --danger-muted: #3a1b1b;
+  --success: #3fbf7f;
+
+  /* Radius scale. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  /* Layout constants the shell depends on. */
+  --sidebar-width: 232px;
+  --player-height: 84px;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+  --shadow-overlay: 0 24px 64px -16px rgb(0 0 0 / 80%);
+
+  --focus-ring: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--brand);
+}
+
+html,
+body {
+  background: var(--surface-base);
+  color: var(--text-primary);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One focus treatment everywhere. Visible, never removed — a music tool
+   has to be operable from the keyboard. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Respect users who asked the OS for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes luber-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Skeletons: a shimmer that reads as "loading" without a spinner. */
+.luber-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-raised) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-raised) 100%
+  );
+  background-size: 200% 100%;
+  animation: luber-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes luber-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.luber-pulse {
+  animation: luber-pulse 1.8s ease-in-out infinite;
+}
+
+/* Native range input, restyled once for the player's seek and volume. */
+.luber-range {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.luber-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+}
+.luber-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+}
+.luber-range:hover::-webkit-slider-thumb {
+  background: var(--brand-hover);
+}
+.luber-range::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+}
+.luber-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+}
+
+/* Thin scrollbars so long lists don't shout. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+  background-clip: content-box;
 }
