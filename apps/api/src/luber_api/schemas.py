@@ -30,6 +30,16 @@ from luber_schemas import (
 #: in a BIGINT column, so this is the API-level guard.
 SEED_MAX = 2**63 - 1
 
+#: Songs one CREATE may produce. Two is the product default because
+#: comparing alternatives is the point; the ceiling exists because each
+#: result is a full independent inference run, not a cheap extra sample.
+MAX_RESULT_COUNT = 2
+
+#: Upper bound on one bulk operation. Large enough for "select all" over
+#: a realistic library, small enough that a single request cannot be used
+#: to hold a transaction open indefinitely.
+MAX_BULK_IDS = 200
+
 
 class GenerationCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -52,6 +62,12 @@ class GenerationCreateRequest(BaseModel):
     #: Set when this request came from "generate again" or a variation.
     parent_generation_id: uuid.UUID | None = None
     variation_label: str | None = Field(default=None, max_length=50)
+
+    #: How many independent songs this CREATE should produce. Each one is
+    #: a separate generation with its own job, seed, status and asset —
+    #: this is *not* a provider batch size, and the provider is never told
+    #: about it.
+    result_count: int = Field(default=1, ge=1, le=MAX_RESULT_COUNT)
 
     @field_validator("key_scale")
     @classmethod
@@ -106,12 +122,86 @@ class AdvisoryResponse(BaseModel):
     detail: dict[str, object] = Field(default_factory=dict)
 
 
+class CreatedGeneration(BaseModel):
+    """One accepted generation from a CREATE."""
+
+    generation_id: uuid.UUID
+    status: GenerationStatus
+    #: The seed this run will use, when the caller pinned one. ``None``
+    #: means the engine picks; the seed it actually used is recorded on
+    #: the generation once the run completes.
+    seed: int | None = None
+
+
 class GenerationCreateResponse(BaseModel):
+    #: The first accepted generation. Retained as a top-level field so
+    #: single-result callers written before Phase 12 keep working.
     generation_id: uuid.UUID
     status: GenerationStatus
     #: Advisories recorded for this request. Informational: the
     #: generation was accepted regardless of what they say.
     advisories: list[AdvisoryResponse] = Field(default_factory=list)
+    #: Shared by every result of this CREATE. Present even for a single
+    #: result, so the client has one way to re-read a submission.
+    generation_group_id: uuid.UUID | None = None
+    #: Every accepted generation, in order. Length equals ``result_count``.
+    generations: list[CreatedGeneration] = Field(default_factory=list)
+
+
+class GenerationUpdateRequest(BaseModel):
+    """Editable presentation metadata. Nothing else is reachable.
+
+    ``extra="forbid"`` is the enforcement: a client that tries to PATCH
+    ``prompt``, ``lyrics``, ``seed``, ``model_name`` or any other
+    provenance field gets a 422 rather than a silent no-op. Those fields
+    describe a run that already happened and are not opinions that can be
+    revised. To change them, duplicate the settings and generate again.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    favorite: bool | None = None
+
+    @field_validator("title")
+    @classmethod
+    def _trim_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("title cannot be blank")
+        return trimmed
+
+    @model_validator(mode="after")
+    def _at_least_one_change(self) -> GenerationUpdateRequest:
+        if self.title is None and self.favorite is None:
+            raise ValueError("nothing to update")
+        return self
+
+
+class BulkIdsRequest(BaseModel):
+    """Ids for a bulk action."""
+
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_BULK_IDS)
+
+
+class BulkProjectRequest(BulkIdsRequest):
+    """Move several generations into a project, or out with ``null``."""
+
+    project_id: uuid.UUID | None = None
+
+
+class BulkResultResponse(BaseModel):
+    """How many rows the action actually affected.
+
+    Deliberately the *actual* count rather than an echo of the request
+    size: ids that no longer exist are not failures worth aborting a bulk
+    action for, but the user should not be told they deleted more than
+    they did.
+    """
+
+    affected: int
 
 
 class PreflightRequest(BaseModel):
@@ -196,6 +286,15 @@ class GenerationResponse(BaseModel):
     time_signature: str | None = None
     parent_generation_id: uuid.UUID | None = None
     variation_label: str | None = None
+    project_id: uuid.UUID | None = None
+    #: Phase 12 product state.
+    favorite: bool = False
+    #: Shared by songs produced by the same CREATE. LUBER metadata only.
+    generation_group_id: uuid.UUID | None = None
+    #: Generated cover art, when a later phase produces it. ``None`` means
+    #: the client should use its own placeholder — it is never a stand-in
+    #: URL that does not resolve.
+    cover_art_url: str | None = None
     #: Pre-flight findings recorded at submission. Empty list means
     #: "none found"; these were persisted as JSON.
     advisories: list[AdvisoryResponse] = Field(default_factory=list)

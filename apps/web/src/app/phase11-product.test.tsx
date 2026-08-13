@@ -18,7 +18,7 @@ import LibraryPage from "@/app/library/page";
 import { matchesFilter } from "@/lib/library";
 import ProjectsPage from "@/app/projects/page";
 import CreatePage from "@/app/create/page";
-import type { Generation } from "@/lib/api";
+import { generation } from "@/test/factories";
 
 let pathname = "/create";
 vi.mock("next/navigation", () => ({
@@ -27,31 +27,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({ id: "gen-1" }),
 }));
-
-function generation(overrides: Partial<Generation> = {}): Generation {
-  return {
-    id: "gen-1", title: "Midnight Window", prompt: "Dreamy Korean indie pop",
-    lyrics: "[Verse]\n가사", vocal_gender: "female", duration_requested: 30,
-    duration_actual: 30, seed: 1, language: "ko", instrumental: false,
-    bpm: null, key_scale: null, time_signature: null,
-    parent_generation_id: null, variation_label: null, advisories: [],
-    request_trace: null, status: "COMPLETED", provider: "ace_step",
-    model_name: "acestep-v15-turbo", model_version: "1.5.0",
-    created_at: new Date().toISOString(), started_at: null, completed_at: null,
-    error_code: null, error_message: null,
-    audio_assets: [
-      { id: "a1", asset_type: "MASTER", format: "wav", mime_type: "audio/wav",
-        file_extension: "wav", sample_rate: 48000, bit_depth: 24, bitrate: null,
-        channels: 2, duration: 30, storage_key: "k", sha256: "s", file_size: 1,
-        created_at: new Date().toISOString() },
-      { id: "a2", asset_type: "PREVIEW", format: "mp3", mime_type: "audio/mpeg",
-        file_extension: "mp3", sample_rate: 48000, bit_depth: null, bitrate: 320000,
-        channels: 2, duration: 30, storage_key: "k2", sha256: "s2", file_size: 1,
-        created_at: new Date().toISOString() },
-    ],
-    ...overrides,
-  };
-}
 
 /** SongCard consumes the player context, so any page that renders
  *  cards must be mounted inside the provider — same as in the app. */
@@ -254,7 +229,7 @@ describe("create modes", () => {
     await user.type(screen.getByLabelText("Music description"), "Warm lo-fi");
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => {
       const post = fetchMock.mock.calls.find(
@@ -318,7 +293,7 @@ describe("library", () => {
       json({ items: [generation(), generation({ id: "g2", title: "Other Song" })], total: 2, limit: 20, offset: 0 })));
     renderWithPlayer(<LibraryPage />);
     await screen.findByText("Midnight Window");
-    await user.type(screen.getByLabelText("Search by title"), "Other");
+    await user.type(screen.getByLabelText("Search by title or description"), "Other");
     expect(screen.queryByText("Midnight Window")).toBeNull();
     expect(screen.getByText("Other Song")).toBeInTheDocument();
   });
@@ -328,7 +303,7 @@ describe("library", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [generation()], total: 1, limit: 20, offset: 0 })));
     renderWithPlayer(<LibraryPage />);
     await screen.findByText("Midnight Window");
-    await user.type(screen.getByLabelText("Search by title"), "zzzz");
+    await user.type(screen.getByLabelText("Search by title or description"), "zzzz");
     expect(await screen.findByText("No matches")).toBeInTheDocument();
   });
 
@@ -354,7 +329,7 @@ describe("projects", () => {
   it("shows an empty state before any project exists", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [] })));
     render(<ProjectsPage />);
-    expect(await screen.findByText(/No projects yet. Name one above/)).toBeInTheDocument();
+    expect(await screen.findByText(/Projects group related tracks/)).toBeInTheDocument();
   });
 
   it("creates a project and opens it", async () => {
@@ -373,8 +348,12 @@ describe("projects", () => {
     await user.type(await screen.findByLabelText("New project name"), "Summer EP");
     await user.click(screen.getByRole("button", { name: "Add" }));
 
-    expect(await screen.findByRole("heading", { name: "Summer EP" })).toBeInTheDocument();
-    expect(await screen.findByText("Nothing filed here yet")).toBeInTheDocument();
+    // The index lists it and links to its own route, so an opened
+    // project has a URL and survives a refresh.
+    expect(await screen.findByRole("link", { name: "Summer EP" })).toHaveAttribute(
+      "href",
+      "/projects/p1",
+    );
   });
 
   it("says plainly that deleting a project keeps the music", async () => {

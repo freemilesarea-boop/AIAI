@@ -8,6 +8,8 @@
  * factually. Updates are announced through an `aria-live` region.
  */
 
+import { useId } from "react";
+
 import type { GenerationStatus } from "@/lib/api";
 import {
   ACTIVE_STATUS_SEQUENCE,
@@ -29,13 +31,16 @@ export function GenerationStatusPanel({
 }: GenerationStatusPanelProps) {
   const label = submitting || !status ? "Submitting your request" : statusLabel(status);
   const currentIndex = status ? ACTIVE_STATUS_SEQUENCE.indexOf(status) : -1;
+  // Several generations can be in flight at once since Phase 12, so the
+  // heading id has to be unique per instance rather than a constant.
+  const headingId = useId();
 
   return (
     <section
-      aria-labelledby="generation-status-heading"
+      aria-labelledby={headingId}
       className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6"
     >
-      <h2 id="generation-status-heading" className="sr-only">
+      <h2 id={headingId} className="sr-only">
         Generation status
       </h2>
 

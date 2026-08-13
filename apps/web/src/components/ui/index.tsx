@@ -12,7 +12,7 @@
  * component framework would add weight without adding capability.
  */
 
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode, Ref } from "react";
 
 function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -28,6 +28,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize;
   /** Renders a busy label and blocks interaction. */
   busy?: boolean;
+  /**
+   * React 19 passes `ref` to function components as an ordinary prop, so
+   * no `forwardRef` wrapper is needed. Declared explicitly because
+   * `ButtonHTMLAttributes` does not include it.
+   */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
@@ -58,11 +64,13 @@ export function Button({
   disabled,
   className,
   children,
+  ref,
   ...rest
 }: ButtonProps) {
   return (
     <button
       {...rest}
+      ref={ref}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       className={cx(
@@ -137,31 +145,37 @@ export interface TabsProps<T extends string> {
 
 export function Tabs<T extends string>({ value, onChange, options, label }: TabsProps<T>) {
   return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="inline-flex rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-1"
-    >
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
-            key={option.value}
-            role="tab"
-            type="button"
-            aria-selected={active}
-            onClick={() => onChange(option.value)}
-            className={cx(
-              "rounded-[var(--radius-sm)] px-4 py-1.5 text-sm font-medium transition-colors",
-              active
-                ? "bg-[var(--surface-overlay)] text-[var(--text-primary)]"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
+    // Scrolls inside its own box rather than widening the page. Five
+    // filters do not fit across 390px, and a tab strip that pushes the
+    // whole document sideways breaks every other layout on the screen.
+    <div className="max-w-full overflow-x-auto">
+      <div
+        role="tablist"
+        aria-label={label}
+        className="inline-flex rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-1"
+      >
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              role="tab"
+              type="button"
+              aria-selected={active}
+              onClick={() => onChange(option.value)}
+              className={cx(
+                "shrink-0 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm font-medium",
+                "transition-colors sm:px-4",
+                active
+                  ? "bg-[var(--surface-overlay)] text-[var(--text-primary)]"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

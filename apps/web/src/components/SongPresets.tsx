@@ -89,7 +89,8 @@ export function SongPresets({
   };
 
   const chipClass =
-    "rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 " +
+    "inline-flex min-h-9 items-center rounded-lg border border-zinc-700 px-3 " +
+    "text-xs font-medium text-zinc-300 " +
     "transition-colors hover:border-violet-600 hover:text-violet-200 " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 " +
     "disabled:cursor-not-allowed disabled:opacity-50";
@@ -161,7 +162,7 @@ export function SongPresets({
             <button
               type="button"
               onClick={() => resolve(false)}
-              className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white
+              className="inline-flex min-h-9 items-center rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white
                 transition-colors hover:bg-violet-500 focus-visible:outline-none
                 focus-visible:ring-2 focus-visible:ring-violet-400"
             >
@@ -170,7 +171,7 @@ export function SongPresets({
             <button
               type="button"
               onClick={() => resolve(true)}
-              className="rounded-lg border border-amber-700 px-3 py-1.5 text-xs font-semibold
+              className="inline-flex min-h-9 items-center rounded-lg border border-amber-700 px-3 text-xs font-semibold
                 text-amber-200 transition-colors hover:bg-amber-900/40
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
             >

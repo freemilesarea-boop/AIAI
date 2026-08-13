@@ -52,6 +52,7 @@ class GenerationRepository:
         advisories: str | None = None,
         parent_generation_id: UUID | None = None,
         variation_label: str | None = None,
+        generation_group_id: UUID | None = None,
         user_id: UUID | None = None,
         idempotency_key: str | None = None,
     ) -> Generation:
@@ -76,6 +77,7 @@ class GenerationRepository:
             advisories=advisories,
             parent_generation_id=parent_generation_id,
             variation_label=variation_label,
+            generation_group_id=generation_group_id,
             status=status,
             user_id=user_id,
             idempotency_key=idempotency_key,
@@ -192,10 +194,28 @@ class GenerationRepository:
         Deletes children explicitly (portable across SQLite/PostgreSQL
         regardless of FK enforcement). Returns False when the row does
         not exist.
+
+        Descendants are *kept* and re-pointed to ``NULL``. Deleting a take
+        must never delete the takes made from it, and a child left
+        pointing at a row that no longer exists is a lie the lineage view
+        would then have to render. PostgreSQL would do this itself via
+        ``ON DELETE SET NULL``; doing it here as well means SQLite (where
+        the unit tests run, with FK enforcement off) reaches the same
+        state instead of quietly diverging from production.
         """
         generation = await self._session.get(Generation, generation_id)
         if generation is None:
             return False
+        for child in (
+            (
+                await self._session.execute(
+                    select(Generation).where(Generation.parent_generation_id == generation_id)
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            child.parent_generation_id = None
         for job in (
             (
                 await self._session.execute(
@@ -219,6 +239,63 @@ class GenerationRepository:
         await self._session.delete(generation)
         await self._session.commit()
         return True
+
+    # ── product metadata (Phase 12) ────────────────────────────────
+    #
+    # Presentation state only. Everything a generation *is* — prompt,
+    # lyrics, seed, model, parameters — is a historical fact about a run
+    # that already happened, and none of it is reachable from here.
+
+    async def update_generation_metadata(
+        self,
+        generation_id: UUID,
+        *,
+        title: str | None = None,
+        favorite: bool | None = None,
+    ) -> Generation:
+        """Rename and/or (un)favourite. ``None`` means "leave alone"."""
+        generation = await self._session.get(Generation, generation_id)
+        if generation is None:
+            raise LookupError(f"generation not found: {generation_id}")
+        if title is not None:
+            generation.title = title
+        if favorite is not None:
+            generation.favorite = favorite
+        await self._session.commit()
+        await self._session.refresh(generation)
+        return generation
+
+    async def list_generations_in_group(self, group_id: UUID) -> list[Generation]:
+        """Siblings from one CREATE, in the order they were created."""
+        result = await self._session.execute(
+            select(Generation)
+            .options(selectinload(Generation.audio_assets))
+            .where(Generation.generation_group_id == group_id)
+            .order_by(Generation.created_at.asc(), Generation.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def bulk_set_project(self, generation_ids: list[UUID], project_id: UUID | None) -> int:
+        """File (or unfile) several generations in one transaction.
+
+        Returns how many rows actually existed, so the caller can report
+        the truth rather than echoing the request size back.
+        """
+        if not generation_ids:
+            return 0
+        rows = (
+            (
+                await self._session.execute(
+                    select(Generation).where(Generation.id.in_(generation_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in rows:
+            row.project_id = project_id
+        await self._session.commit()
+        return len(rows)
 
     # ── jobs ───────────────────────────────────────────────────────
 
@@ -434,6 +511,22 @@ class GenerationRepository:
     async def list_projects(self) -> list[Project]:
         result = await self._session.execute(select(Project).order_by(Project.created_at.desc()))
         return list(result.scalars().all())
+
+    async def list_projects_with_counts(self) -> list[tuple[Project, int]]:
+        """Every project with its song count, in one query.
+
+        Counting per project in a loop is an N+1 that grows with the
+        sidebar, and the sidebar is rendered on every visit to Projects.
+        An outer join keeps projects with no songs, which are exactly the
+        ones a new user has.
+        """
+        result = await self._session.execute(
+            select(Project, func.count(Generation.id))
+            .outerjoin(Generation, Generation.project_id == Project.id)
+            .group_by(Project.id)
+            .order_by(Project.created_at.desc())
+        )
+        return [(project, int(count)) for project, count in result.all()]
 
     async def rename_project(self, project_id: UUID, *, name: str) -> Project:
         project = await self.get_project(project_id)

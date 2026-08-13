@@ -77,6 +77,34 @@ export interface GenerationFormInitialValues {
   timeSignature: string;
   /** Opens straight into Custom when a draft carries advanced settings. */
   mode: "simple" | "custom";
+  /** Empty means Random. A value pins the seed. */
+  seed: string;
+  /** How many songs one press of Generate should produce. */
+  resultCount: 1 | 2;
+}
+
+/**
+ * Two by default.
+ *
+ * Comparing alternatives is how people actually pick a take, and a
+ * single result makes every generation feel like a verdict. Each result
+ * is an independent job — this is not a provider batch size.
+ */
+export const DEFAULT_RESULT_COUNT = 2;
+
+/** Largest seed the API accepts. Mirrors ``SEED_MAX`` in the backend. */
+const SEED_MAX = 2 ** 53 - 1;
+
+/** Parse the seed field. Empty is valid and means "engine chooses". */
+export function parseSeedInput(raw: string): { seed: number | null; error?: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { seed: null };
+  if (!/^\d+$/.test(trimmed)) return { seed: null, error: "A seed must be a whole number." };
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value) || value > SEED_MAX) {
+    return { seed: null, error: "That seed is too large." };
+  }
+  return { seed: value };
 }
 
 export interface GenerationFormProps {
@@ -94,6 +122,7 @@ interface FieldErrors {
   prompt?: string;
   lyrics?: string;
   bpm?: string;
+  seed?: string;
 }
 
 export function GenerationForm({
@@ -111,6 +140,7 @@ export function GenerationForm({
     vocal: useId(),
     language: useId(),
     duration: useId(),
+    seed: useId(),
   };
 
   const [title, setTitle] = useState(initialValues?.title ?? "");
@@ -124,6 +154,13 @@ export function GenerationForm({
   const [bpm, setBpm] = useState(initialValues?.bpm ?? "");
   const [keyScale, setKeyScale] = useState(initialValues?.keyScale ?? "");
   const [timeSignature, setTimeSignature] = useState(initialValues?.timeSignature ?? "");
+  const [seed, setSeed] = useState(initialValues?.seed ?? "");
+  const [seedMode, setSeedMode] = useState<"random" | "fixed">(
+    initialValues?.seed ? "fixed" : "random",
+  );
+  const [resultCount, setResultCount] = useState<1 | 2>(
+    initialValues?.resultCount ?? DEFAULT_RESULT_COUNT,
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
   // Simple is the default: a first-time user must be able to
   // generate without meeting a single advanced control.
@@ -199,10 +236,15 @@ export function GenerationForm({
     if (!instrumental && !lyrics.trim())
       next.lyrics = "Add lyrics, or switch the vocal to Instrumental.";
 
-    // The only advanced-control rejection: a value the engine cannot
+    // The only advanced-control rejections: values the engine cannot
     // accept. Nothing here rejects a draft for being *unwise*.
     const bpmError = parseBpmInput(bpm).error;
     if (bpmError) next.bpm = bpmError;
+
+    if (seedMode === "fixed") {
+      const seedError = parseSeedInput(seed).error;
+      if (seedError) next.seed = seedError;
+    }
 
     return next;
   };
@@ -233,6 +275,9 @@ export function GenerationForm({
       key_scale: keyScale || null,
       time_signature: timeSignature || null,
       parent_generation_id: parent?.id ?? null,
+      // Random is the absence of a seed, not a seed we invent.
+      seed: seedMode === "fixed" ? parseSeedInput(seed).seed : null,
+      result_count: resultCount,
     });
   };
 
@@ -472,6 +517,58 @@ export function GenerationForm({
       </div>
 
       {custom && (
+        <fieldset className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] p-4">
+          <legend className="px-1 text-sm font-medium text-[var(--text-primary)]">Seed</legend>
+          <p className="text-xs text-[var(--text-muted)]">
+            The seed is the engine&rsquo;s starting point. Reusing one keeps a generation close
+            to a previous take — it does not promise identical audio, and this engine makes no
+            such guarantee.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Tabs
+              label="Seed mode"
+              value={seedMode}
+              onChange={setSeedMode}
+              options={[
+                { value: "random", label: "Random" },
+                { value: "fixed", label: "Fixed" },
+              ]}
+            />
+            {seedMode === "fixed" && (
+              <div>
+                <label htmlFor={ids.seed} className="sr-only">
+                  Seed value
+                </label>
+                <input
+                  id={ids.seed}
+                  type="text"
+                  inputMode="numeric"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value)}
+                  placeholder="e.g. 12345"
+                  disabled={disabled}
+                  aria-invalid={Boolean(errors.seed)}
+                  aria-describedby={errors.seed ? `${ids.seed}-error` : undefined}
+                  className={`w-40 ${fieldClass}`}
+                />
+              </div>
+            )}
+          </div>
+          {errors.seed && (
+            <p id={`${ids.seed}-error`} className={errorClass}>
+              {errors.seed}
+            </p>
+          )}
+          {seedMode === "fixed" && resultCount === 2 && (
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
+              With two songs, the seed applies to the first. The second gets its own — two
+              identical seeds would give you the same song twice.
+            </p>
+          )}
+        </fieldset>
+      )}
+
+      {custom && (
       <AdvancedControls
         bpm={bpm}
         keyScale={keyScale}
@@ -489,17 +586,35 @@ export function GenerationForm({
       />
       )}
 
-      <button
-        type="submit"
-        disabled={disabled || busy}
-        className="mt-1 rounded-lg bg-violet-600 px-6 py-3 text-base font-semibold text-white
-          transition-colors hover:bg-violet-500 focus-visible:outline-none
-          focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2
-          focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed
-          disabled:bg-violet-900 disabled:text-zinc-400"
-      >
-        {busy ? "Generating…" : "Generate"}
-      </button>
+      {/* Result count sits beside Create, because it is a property of
+          pressing Create rather than a property of the song. */}
+      <div className="mt-1 flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={disabled || busy}
+          className="rounded-lg bg-violet-600 px-6 py-3 text-base font-semibold text-white
+            transition-colors hover:bg-violet-500 focus-visible:outline-none
+            focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2
+            focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed
+            disabled:bg-violet-900 disabled:text-zinc-400"
+        >
+          {busy ? "Sending…" : "Create"}
+        </button>
+        <Tabs
+          label="Number of songs"
+          value={String(resultCount) as "1" | "2"}
+          onChange={(value) => setResultCount(value === "2" ? 2 : 1)}
+          options={[
+            { value: "1", label: "1 Song" },
+            { value: "2", label: "2 Songs" },
+          ]}
+        />
+      </div>
+      <p className="text-xs text-[var(--text-muted)]">
+        {resultCount === 2
+          ? "Two independent songs so you can compare. Each takes its own turn on the engine."
+          : "One song."}
+      </p>
     </form>
   );
 }

@@ -9,7 +9,7 @@ tests. Status/enum values are stored as text and owned by
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -22,11 +22,17 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from luber_database.base import Base
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware insert-time default with sub-second resolution."""
+    return datetime.now(UTC)
 
 
 class Generation(Base):
@@ -71,6 +77,24 @@ class Generation(Base):
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
     )
+
+    #: Phase 12 product state. Server-side, because a favourite that only
+    #: exists in one browser is not a favourite.
+    favorite: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
+    #: Siblings produced by a single CREATE, so the user can compare
+    #: alternatives. Purely LUBER application metadata — the provider is
+    #: never told about it, and each sibling is an independent job with
+    #: its own seed, status and asset. No foreign key: a group is the set
+    #: of rows sharing this id, not a separate entity with a lifecycle.
+    generation_group_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+
+    #: Reserved for generated cover art. Never written in Phase 12 — the
+    #: UI falls back to the deterministic placeholder while this is NULL.
+    #: A fabricated URL here would be worse than nothing.
+    cover_art_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -131,7 +155,15 @@ class AudioAsset(Base):
     # One asset per role per generation. This is the DB-level guarantee
     # that re-running post-processing (a retry) updates a generation's
     # master/preview instead of accumulating duplicates.
-    __table_args__ = (UniqueConstraint("generation_id", "asset_type"),)
+    #
+    # Named to match migration 0003. Left unnamed, autogenerate invents a
+    # different name from the one in the database and `alembic check`
+    # reports permanent phantom drift, which trains everyone to ignore it.
+    __table_args__ = (
+        UniqueConstraint(
+            "generation_id", "asset_type", name="uq_audio_assets_generation_id_asset_type"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     generation_id: Mapped[uuid.UUID] = mapped_column(
@@ -243,11 +275,21 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     #: Reserved for the authentication phase, like ``Generation.user_id``.
     user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    # A client-side default as well as the server one. Projects are
+    # ordered by creation, and SQLite's CURRENT_TIMESTAMP has one-second
+    # resolution — two projects made in the same second tie, and the
+    # order the user sees then depends on the query plan. The Python
+    # default has microsecond resolution and applies on every ORM insert;
+    # the server default stays for anything writing raw SQL.
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=func.now(),
+        index=True,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, default=_utcnow, server_default=func.now()
     )
 
     generations: Mapped[list[Generation]] = relationship(back_populates="project")

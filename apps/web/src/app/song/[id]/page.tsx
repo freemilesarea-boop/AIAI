@@ -15,14 +15,16 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { trackFromGeneration, usePlayer } from "@/components/player/PlayerProvider";
+import { SongActions } from "@/components/SongActions";
 import { SongCard } from "@/components/SongCard";
 import { Button, Card, EmptyState, Skeleton, StatusPill } from "@/components/ui";
 import {
-  getAudioAssetUrl,
   getGeneration,
   getLineage,
+  listProjects,
   type Generation,
   type Lineage,
+  type Project,
 } from "@/lib/api";
 import { describeGenerationFailure } from "@/lib/errors";
 
@@ -42,6 +44,7 @@ export default function SongDetailPage() {
   const player = usePlayer();
   const [generation, setGeneration] = useState<Generation | null>(null);
   const [lineage, setLineage] = useState<Lineage | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [missing, setMissing] = useState(false);
 
   const id = params?.id;
@@ -49,9 +52,14 @@ export default function SongDetailPage() {
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [g, l] = await Promise.all([getGeneration(id), getLineage(id).catch(() => null)]);
+      const [g, l, p] = await Promise.all([
+        getGeneration(id),
+        getLineage(id).catch(() => null),
+        listProjects().catch(() => []),
+      ]);
       setGeneration(g);
       setLineage(l);
+      setProjects(p);
     } catch {
       setMissing(true);
     }
@@ -118,19 +126,28 @@ export default function SongDetailPage() {
         </Card>
       )}
 
-      {ready && (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="primary" onClick={() => track && player.play(track)}>
-            Play
-          </Button>
-          <a href={getAudioAssetUrl(generation.id, "master", true)} download>
-            <Button>Download WAV</Button>
-          </a>
-          <Link href={`/create?from=${generation.id}`}>
-            <Button>Generate again</Button>
-          </Link>
-        </div>
-      )}
+      <div className="flex flex-col gap-3">
+        {ready && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={() => track && player.play(track)}>
+              Play
+            </Button>
+            <Link href={`/create?from=${generation.id}`}>
+              <Button>Generate again</Button>
+            </Link>
+          </div>
+        )}
+        {/* Rename, favourite, duplicate, downloads, project and delete —
+            the same component every other surface uses, so they cannot
+            behave differently here. */}
+        <SongActions
+          generation={generation}
+          projects={projects}
+          variant="detail"
+          onChanged={setGeneration}
+          onDeleted={() => router.push("/library")}
+        />
+      </div>
 
       <Card className="p-5">
         <h2 className="text-sm font-semibold">Brief</h2>

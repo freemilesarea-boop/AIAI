@@ -41,19 +41,47 @@ function safeLocalStorage(): Storage | null {
 }
 
 export function loadActiveGenerationId(): string | null {
+  return loadActiveGenerationIds()[0] ?? null;
+}
+
+/**
+ * Every generation this browser had running when it was last here.
+ *
+ * A list rather than a single id since Phase 12: one CREATE can start
+ * two songs, and a user can start a third while those run. Reconnecting
+ * to only the most recent would strand the others in a state the page
+ * never shows again.
+ *
+ * Tolerates the Phase 11 format — a bare id string — so a refresh across
+ * the upgrade reconnects instead of silently dropping the job.
+ */
+export function loadActiveGenerationIds(): string[] {
   const store = safeLocalStorage();
-  if (!store) return null;
+  if (!store) return [];
   const raw = store.getItem(ACTIVE_KEY);
-  if (!isValidGenerationId(raw)) {
-    if (raw !== null) store.removeItem(ACTIVE_KEY);
-    return null;
+  if (raw === null) return [];
+  if (isValidGenerationId(raw)) return [raw];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter(isValidGenerationId);
+  } catch {
+    // Corrupt or hand-edited: drop it rather than carry it forward.
   }
-  return raw;
+  store.removeItem(ACTIVE_KEY);
+  return [];
+}
+
+export function setActiveGenerationIds(ids: string[]): void {
+  const store = safeLocalStorage();
+  if (!store) return;
+  const valid = ids.filter(isValidGenerationId);
+  if (valid.length === 0) store.removeItem(ACTIVE_KEY);
+  else store.setItem(ACTIVE_KEY, JSON.stringify(valid));
 }
 
 export function saveActiveGenerationId(id: string): void {
   if (!isValidGenerationId(id)) return;
-  safeLocalStorage()?.setItem(ACTIVE_KEY, id);
+  setActiveGenerationIds([...loadActiveGenerationIds().filter((x) => x !== id), id]);
 }
 
 export function clearActiveGenerationId(): void {

@@ -11,7 +11,31 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { PlayerProvider } from "@/components/player/PlayerProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 import CreatePage from "./page";
+
+/** The page needs the providers the real layout mounts. */
+function renderCreate() {
+  return render(
+    <PlayerProvider>
+      <ToastProvider>
+        <CreatePage />
+      </ToastProvider>
+    </PlayerProvider>,
+  );
+}
+
+// The Create page navigates (it clears the ?from / ?duplicate parameter
+// after applying a prefill), so the router has to exist in tests.
+const routerReplace = vi.fn();
+const searchParams = new URLSearchParams();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: routerReplace, refresh: vi.fn() }),
+  useSearchParams: () => searchParams,
+  usePathname: () => "/create",
+}));
+
 
 const GEN_ID = "d1d76e27-119a-41e8-a358-a492141efaba";
 
@@ -129,7 +153,13 @@ function stubServer(options: { generation?: GenerationOverrides; preflight?: Pre
       });
     }
     if (init?.method === "POST") {
-      return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
+      return jsonResponse({
+        generation_id: GEN_ID,
+        status: "QUEUED",
+        advisories: [],
+        generation_group_id: "8b2f4a3e-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        generations: [{ generation_id: GEN_ID, status: "QUEUED", seed: null }],
+      });
     }
     return jsonResponse(generationBody(options.generation));
   });
@@ -180,7 +210,7 @@ afterEach(() => {
 describe("advanced controls", () => {
   it("are present and clearly optional", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     expect(screen.getByText(/Advanced controls/)).toBeInTheDocument();
@@ -194,7 +224,7 @@ describe("advanced controls", () => {
 
   it("default to unset", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     expect(screen.getByLabelText("BPM")).toHaveValue(null);
@@ -205,11 +235,11 @@ describe("advanced controls", () => {
   it("a form with no advanced controls touched submits Phase 7 fields", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     const body = await submittedBody(fetchMock);
     // The Phase 7 contract, unchanged.
@@ -231,12 +261,12 @@ describe("advanced controls", () => {
   it("sends a chosen BPM", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "128");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect((await submittedBody(fetchMock)).bpm).toBe(128);
   });
@@ -244,12 +274,12 @@ describe("advanced controls", () => {
   it("sends a chosen key/scale", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
     await user.selectOptions(screen.getByLabelText("Key / Scale"), "F# minor");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect((await submittedBody(fetchMock)).key_scale).toBe("F# minor");
   });
@@ -257,12 +287,12 @@ describe("advanced controls", () => {
   it("sends a chosen time signature as the bare numerator", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
     await user.selectOptions(screen.getByLabelText("Time Signature"), "3");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect((await submittedBody(fetchMock)).time_signature).toBe("3");
   });
@@ -270,14 +300,14 @@ describe("advanced controls", () => {
   it("sends all three together", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "92");
     await user.selectOptions(screen.getByLabelText("Key / Scale"), "Bb major");
     await user.selectOptions(screen.getByLabelText("Time Signature"), "6");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     const body = await submittedBody(fetchMock);
     expect(body.bpm).toBe(92);
@@ -287,7 +317,7 @@ describe("advanced controls", () => {
 
   it("only offers key/scale values the engine accepts", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     const select = screen.getByLabelText("Key / Scale");
@@ -303,7 +333,7 @@ describe("advanced controls", () => {
 
   it("only offers time signatures the engine accepts", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     const values = within(screen.getByLabelText("Time Signature"))
@@ -315,12 +345,12 @@ describe("advanced controls", () => {
   it("rejects an out-of-range BPM without submitting", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "900");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect(await screen.findByText("BPM must be between 30 and 300.")).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(0);
@@ -329,7 +359,7 @@ describe("advanced controls", () => {
   it("clears the advanced controls on request", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.type(screen.getByLabelText("BPM"), "128");
@@ -345,7 +375,7 @@ describe("song structure editor", () => {
   it("offers section tags without requiring them", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     expect(screen.getByRole("button", { name: "[Chorus]" })).toBeInTheDocument();
@@ -355,7 +385,7 @@ describe("song structure editor", () => {
     await user.type(screen.getByLabelText("Music description"), "Soft piano");
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("just a line\nand another");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect((await submittedBody(fetchMock)).lyrics).toBe("just a line\nand another");
   });
@@ -363,7 +393,7 @@ describe("song structure editor", () => {
   it("inserts a section tag at the cursor on an explicit click", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(screen.getByRole("button", { name: "[Verse 1]" }));
@@ -385,7 +415,7 @@ describe("song structure editor", () => {
         ],
       },
     });
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     const messy = "[Drop]\n  spaced out  \n\n\n[chorus]\nhook";
@@ -398,7 +428,7 @@ describe("song structure editor", () => {
     expect(await screen.findByText(/not recognised/)).toBeInTheDocument();
     // …and the text is untouched, on screen and on the wire.
     expect(screen.getByLabelText("Lyrics")).toHaveValue(messy);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     expect((await submittedBody(fetchMock)).lyrics).toBe(messy);
   });
 
@@ -429,7 +459,7 @@ describe("song structure editor", () => {
         ],
       },
     });
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
@@ -448,7 +478,7 @@ describe("pre-flight advisories", () => {
   it("are fetched from the backend rather than recomputed in the browser", async () => {
     const user = userEvent.setup();
     const { preflightCalls } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
@@ -477,7 +507,7 @@ describe("pre-flight advisories", () => {
         ],
       },
     });
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
@@ -507,13 +537,13 @@ describe("pre-flight advisories", () => {
         ],
       },
     });
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
     expect(await screen.findByText(/is dense/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(1));
   });
 
@@ -526,12 +556,18 @@ describe("pre-flight advisories", () => {
           return { ok: false, status: 500, json: async () => ({}) };
         }
         if (init?.method === "POST") {
-          return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
+          return jsonResponse({
+        generation_id: GEN_ID,
+        status: "QUEUED",
+        advisories: [],
+        generation_group_id: "8b2f4a3e-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        generations: [{ generation_id: GEN_ID, status: "QUEUED", seed: null }],
+      });
         }
         return jsonResponse(generationBody());
       }),
     );
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(screen.getByLabelText("Lyrics"));
@@ -553,11 +589,11 @@ describe("generate again", () => {
     generation: GenerationOverrides = {},
   ) {
     const stub = stubServer({ generation });
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
     return stub;
   }
 
@@ -601,7 +637,7 @@ describe("generate again", () => {
     const { fetchMock } = await completeAGeneration(user);
 
     await user.click(screen.getByRole("button", { name: "Generate again" }));
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(2));
     const second = fetchMock.mock.calls.filter(isCreatePost)[1];
@@ -617,7 +653,7 @@ describe("generate again", () => {
     await user.type(screen.getByLabelText("BPM"), "90");
     await user.clear(screen.getByLabelText("Title"));
     await user.type(screen.getByLabelText("Title"), "Second Take");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(2));
     const body = jsonBodyOf(fetchMock.mock.calls.filter(isCreatePost)[1][1] as RequestInit);
@@ -637,7 +673,7 @@ describe("generate again", () => {
     expect(screen.getByLabelText("Title")).toHaveValue("");
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(2));
     const body = jsonBodyOf(fetchMock.mock.calls.filter(isCreatePost)[1][1] as RequestInit);
@@ -651,15 +687,15 @@ describe("completed track details", () => {
   it("reports the controls that were used", async () => {
     const user = userEvent.setup();
     stubServer({ generation: { bpm: 128, key_scale: "F# minor", time_signature: "3" } });
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
     // Scoped to the result card: "F# minor" is also a select option.
-    const card = screen.getByRole("region", { name: "Midnight Window" });
+    const card = screen.getByRole("group", { name: "Midnight Window" });
     expect(within(card).getByText("128")).toBeInTheDocument();
     expect(within(card).getByText("F# minor")).toBeInTheDocument();
     expect(within(card).getByText("3")).toBeInTheDocument();
@@ -668,12 +704,12 @@ describe("completed track details", () => {
   it("still offers playback and download", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
     expect(screen.getByRole("link", { name: "Download WAV" })).toHaveAttribute(
       "href",

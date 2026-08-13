@@ -38,7 +38,8 @@ async def test_authorized_master_wav_download(client):
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "audio/wav"
     assert resp.headers["content-disposition"].startswith("attachment")
-    assert "midnight-window.wav" in resp.headers["content-disposition"]
+    # Human-readable name, RFC 5987 encoded because of the spaces.
+    assert "LUBER%20-%20Midnight%20Window.wav" in resp.headers["content-disposition"]
     assert int(resp.headers["content-length"]) == len(resp.content)
     assert resp.content[:4] == b"RIFF" and resp.content[8:12] == b"WAVE"
 
@@ -53,7 +54,7 @@ async def test_authorized_preview_mp3_download(client):
 
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "audio/mpeg"
-    assert "midnight-window.mp3" in resp.headers["content-disposition"]
+    assert "LUBER%20-%20Midnight%20Window.mp3" in resp.headers["content-disposition"]
     assert len(resp.content) > 0
     # MPEG frame sync or ID3 header.
     assert resp.content[0] == 0xFF or resp.content[:3] == b"ID3"
@@ -308,8 +309,8 @@ async def test_storage_keys_stay_relative(client):
 
 def test_download_filename_uses_the_asset_extension():
     gid = uuid.uuid4()
-    assert build_download_filename("Midnight Window", gid, "wav") == "midnight-window.wav"
-    assert build_download_filename("Midnight Window", gid, "mp3") == "midnight-window.mp3"
+    assert build_download_filename("Midnight Window", gid, "wav") == "LUBER - Midnight Window.wav"
+    assert build_download_filename("Midnight Window", gid, "mp3") == "LUBER - Midnight Window.mp3"
 
 
 @pytest.mark.parametrize(
@@ -324,9 +325,20 @@ def test_download_filename_neutralizes_hostile_titles(hostile):
 
 def test_download_filename_neutralizes_hostile_extension():
     name = build_download_filename("Song", uuid.uuid4(), "../../evil")
-    assert name == "song.evil"
+    assert name == "LUBER - Song.evil"
 
 
-def test_download_filename_falls_back_for_non_ascii_title():
+def test_download_filename_keeps_a_korean_title_readable():
+    """A Korean title must survive to the user's downloads folder.
+
+    Phase 3 slugged to ASCII, which turned every Korean track into
+    ``luber-track-1a2b3c4d`` — unusable for this product's main audience.
+    Starlette emits ``filename*=utf-8''`` for these, which browsers decode.
+    """
     gid = uuid.uuid4()
-    assert build_download_filename("오늘 밤", gid, "wav") == f"luber-track-{gid.hex[:8]}.wav"
+    assert build_download_filename("오늘 밤", gid, "wav") == "LUBER - 오늘 밤.wav"
+
+
+def test_download_filename_falls_back_when_a_title_sanitises_to_nothing():
+    gid = uuid.uuid4()
+    assert build_download_filename("///", gid, "wav") == f"LUBER - track-{gid.hex[:8]}.wav"

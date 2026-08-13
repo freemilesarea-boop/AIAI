@@ -23,6 +23,10 @@ from luber_api.dependencies import get_audio_storage, get_enqueuer, get_reposito
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
     AdvisoryResponse,
+    BulkIdsRequest,
+    BulkProjectRequest,
+    BulkResultResponse,
+    CreatedGeneration,
     ExpectedLineResponse,
     GenerationCreateRequest,
     GenerationCreateResponse,
@@ -30,6 +34,7 @@ from luber_api.schemas import (
     GenerationQARequest,
     GenerationQAResponse,
     GenerationResponse,
+    GenerationUpdateRequest,
     LineageResponse,
     LongFormQAResponse,
     LyricLineQAEntry,
@@ -60,7 +65,15 @@ router = APIRouter(prefix="/v1/generations", tags=["generations"])
 
 IDEMPOTENCY_KEY_MAX_LENGTH = 200
 
-_FILENAME_STRIP = re.compile(r"[^a-z0-9]+")
+#: Characters no mainstream filesystem accepts in a name, plus control
+#: characters. Everything else — including Korean — is kept, because the
+#: point of this filename is that a human recognises the track in their
+#: downloads folder.
+_FILENAME_UNSAFE = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]+')
+_FILENAME_WHITESPACE = re.compile(r"\s+")
+_FILENAME_DOT_RUN = re.compile(r"\.{2,}")
+_EXTENSION_STRIP = re.compile(r"[^a-z0-9]+")
+DOWNLOAD_FILENAME_PREFIX = "LUBER - "
 DOWNLOAD_FILENAME_MAX_LENGTH = 60
 #: Signed download URLs are deliberately short-lived: long enough for a
 #: browser to start the transfer, short enough that a leaked URL expires.
@@ -83,19 +96,31 @@ class AudioAssetKind(StrEnum):
 
 
 def build_download_filename(title: str, generation_id: uuid.UUID, extension: str = "wav") -> str:
-    """ASCII-safe filename derived from a user-supplied title.
+    """Human-readable download name: ``LUBER - Midnight Window.wav``.
 
     User input never reaches the filesystem — this only labels the
-    download. Non-ASCII titles (e.g. Korean) legitimately slug to
-    nothing, so a stable generation-derived name is used instead. The
-    extension comes from the asset's format contract, never from input.
+    download — but it does reach the *user's* filesystem, so every
+    character a mainstream OS rejects is removed, runs of dots are
+    collapsed (no ``..`` can survive), and the length is bounded.
+
+    Unicode is deliberately preserved. Phase 3 slugged titles to ASCII,
+    which turned every Korean title into ``luber-track-1a2b3c4d`` — the
+    opposite of recognisable for this product's main audience. Starlette
+    emits a ``filename*=utf-8''`` header for non-ASCII names, which every
+    current browser decodes. A title that sanitises to nothing still
+    falls back to a stable generation-derived name.
+
+    The extension comes from the asset's format contract, never from
+    user input, and is scrubbed regardless.
     """
-    slug = _FILENAME_STRIP.sub("-", title.lower()).strip("-")[:DOWNLOAD_FILENAME_MAX_LENGTH]
-    slug = slug.strip("-")
-    if not slug:
-        slug = f"luber-track-{generation_id.hex[:8]}"
-    safe_extension = _FILENAME_STRIP.sub("", extension.lower()) or "bin"
-    return f"{slug}.{safe_extension}"
+    cleaned = _FILENAME_UNSAFE.sub(" ", title)
+    cleaned = _FILENAME_WHITESPACE.sub(" ", cleaned).strip()
+    cleaned = _FILENAME_DOT_RUN.sub(".", cleaned).strip(". ")
+    cleaned = cleaned[:DOWNLOAD_FILENAME_MAX_LENGTH].strip(". ")
+    if not cleaned:
+        cleaned = f"track-{generation_id.hex[:8]}"
+    safe_extension = _EXTENSION_STRIP.sub("", extension.lower()) or "bin"
+    return f"{DOWNLOAD_FILENAME_PREFIX}{cleaned}.{safe_extension}"
 
 
 def decode_advisories(raw: str | None) -> list[AdvisoryResponse]:
@@ -230,11 +255,7 @@ async def create_generation(
     if idempotency_key is not None:
         existing = await repository.get_by_idempotency_key(idempotency_key)
         if existing is not None:
-            return GenerationCreateResponse(
-                generation_id=existing.id,
-                status=GenerationStatus(existing.status),
-                advisories=decode_advisories(existing.advisories),
-            )
+            return await _replay_response(repository, existing)
 
     # Advisory only. Every finding here is recorded and returned, and
     # none of them stops the generation: the user's input is submitted
@@ -256,69 +277,138 @@ async def create_generation(
         if parent is None or not caller_may_access(parent, caller):
             raise HTTPException(status_code=422, detail="parent generation not found")
 
-    try:
-        generation = await repository.create_generation(
-            title=payload.title,
-            prompt=payload.prompt,
-            lyrics=payload.lyrics,
-            vocal_gender=payload.vocal_gender.value,
-            duration_requested=payload.duration,
-            seed=payload.seed,
-            language=payload.language,
-            instrumental=payload.instrumental,
-            bpm=payload.bpm,
-            key_scale=payload.key_scale,
-            time_signature=payload.time_signature,
-            advisories=json.dumps(
-                [advisory.to_dict() for advisory in advisories], ensure_ascii=False
-            ),
-            parent_generation_id=payload.parent_generation_id,
-            variation_label=payload.variation_label,
-            status=GenerationStatus.QUEUED.value,
-            idempotency_key=idempotency_key,
-        )
-    except IntegrityError:
-        # Concurrent duplicate: the unique index won the race — return
-        # the winner's generation instead of creating a second one.
-        if idempotency_key is None:
-            raise
-        existing = await repository.get_by_idempotency_key(idempotency_key)
-        if existing is None:
-            raise
-        return GenerationCreateResponse(
-            generation_id=existing.id,
-            status=GenerationStatus(existing.status),
-            advisories=decode_advisories(existing.advisories),
-        )
+    advisory_json = json.dumps([advisory.to_dict() for advisory in advisories], ensure_ascii=False)
+    # Every result of one CREATE shares this. It is application metadata:
+    # the provider is never told, and each sibling below is a fully
+    # independent generation — its own row, job, seed, status and asset.
+    group_id = uuid.uuid4()
+    created: list[Generation] = []
 
-    await repository.create_job(
-        generation.id,
-        queue_name=GENERATION_QUEUE_NAME,
-        status=GenerationStatus.QUEUED.value,
-    )
+    for index in range(payload.result_count):
+        try:
+            generation = await repository.create_generation(
+                title=payload.title,
+                prompt=payload.prompt,
+                lyrics=payload.lyrics,
+                vocal_gender=payload.vocal_gender.value,
+                duration_requested=payload.duration,
+                # A pinned seed applies to the first result only. Giving
+                # every sibling the same seed would ask the engine for the
+                # same song twice, which defeats the purpose of asking for
+                # alternatives. The rest get engine-chosen seeds, and the
+                # seed each one actually used is recorded on completion.
+                seed=payload.seed if index == 0 else None,
+                language=payload.language,
+                instrumental=payload.instrumental,
+                bpm=payload.bpm,
+                key_scale=payload.key_scale,
+                time_signature=payload.time_signature,
+                advisories=advisory_json,
+                parent_generation_id=payload.parent_generation_id,
+                variation_label=payload.variation_label,
+                generation_group_id=group_id,
+                status=GenerationStatus.QUEUED.value,
+                # Only the first result carries the caller's key. The
+                # column is unique, and a replay resolves the whole group
+                # through this row — so siblings need no derived key, and
+                # no key can be truncated into a collision.
+                idempotency_key=idempotency_key if index == 0 else None,
+            )
+        except IntegrityError:
+            # Concurrent duplicate: the unique index won the race — return
+            # the winner's generation instead of creating a second one.
+            if idempotency_key is None or index > 0:
+                raise
+            existing = await repository.get_by_idempotency_key(idempotency_key)
+            if existing is None:
+                raise
+            return await _replay_response(repository, existing)
 
-    try:
-        await enqueuer.enqueue(generation.id)
-    except Exception as exc:
-        logger.exception(
-            "failed to enqueue generation",
-            extra={"generation_id": str(generation.id)},
-        )
-        await repository.mark_failed(
+        await repository.create_job(
             generation.id,
-            status=GenerationStatus.FAILED.value,
-            error_code=ErrorCode.QUEUE_FAILED.value,
-            error_message=str(exc),
+            queue_name=GENERATION_QUEUE_NAME,
+            status=GenerationStatus.QUEUED.value,
         )
+        created.append(generation)
+
+    accepted: list[CreatedGeneration] = []
+    for generation in created:
+        try:
+            await enqueuer.enqueue(generation.id)
+            accepted.append(
+                CreatedGeneration(
+                    generation_id=generation.id,
+                    status=GenerationStatus(generation.status),
+                    seed=generation.seed,
+                )
+            )
+        except Exception as exc:
+            # One sibling failing to reach the queue does not invalidate
+            # the other. The failure is recorded on the row it belongs to
+            # and reported in place, so the user sees one result working
+            # and one broken rather than losing both.
+            logger.exception(
+                "failed to enqueue generation",
+                extra={"generation_id": str(generation.id)},
+            )
+            await repository.mark_failed(
+                generation.id,
+                status=GenerationStatus.FAILED.value,
+                error_code=ErrorCode.QUEUE_FAILED.value,
+                error_message=str(exc),
+            )
+            accepted.append(
+                CreatedGeneration(
+                    generation_id=generation.id,
+                    status=GenerationStatus.FAILED,
+                    seed=generation.seed,
+                )
+            )
+
+    if all(item.status is GenerationStatus.FAILED for item in accepted):
+        # Nothing was queued at all — this is an outage, not a partial
+        # result, and the caller should be told with a status code.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=ErrorCode.QUEUE_FAILED.value,
-        ) from exc
+        )
 
     return GenerationCreateResponse(
-        generation_id=generation.id,
-        status=GenerationStatus(generation.status),
+        generation_id=accepted[0].generation_id,
+        status=accepted[0].status,
         advisories=to_advisory_responses(advisories),
+        generation_group_id=group_id,
+        generations=accepted,
+    )
+
+
+async def _replay_response(
+    repository: GenerationRepository, existing: Generation
+) -> GenerationCreateResponse:
+    """Answer a repeated Idempotency-Key with what was already created.
+
+    A replayed two-result submission must return *both* songs, not just
+    the one that happens to carry the key — otherwise a retrying client
+    would lose track of its second result and could submit it again.
+    """
+    siblings = (
+        await repository.list_generations_in_group(existing.generation_group_id)
+        if existing.generation_group_id is not None
+        else [existing]
+    ) or [existing]
+    return GenerationCreateResponse(
+        generation_id=existing.id,
+        status=GenerationStatus(existing.status),
+        advisories=decode_advisories(existing.advisories),
+        generation_group_id=existing.generation_group_id,
+        generations=[
+            CreatedGeneration(
+                generation_id=row.id,
+                status=GenerationStatus(row.status),
+                seed=row.seed,
+            )
+            for row in siblings
+        ],
     )
 
 
@@ -480,6 +570,101 @@ async def list_generations(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/groups/{group_id}", response_model=GenerationListResponse)
+async def list_group_generations(
+    group_id: uuid.UUID,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> GenerationListResponse:
+    """Every song produced by one CREATE.
+
+    This is what makes a two-result submission survive a page refresh:
+    the client can re-read the whole group from one id instead of holding
+    both generation ids in transient state.
+    """
+    generations = await repository.list_generations_in_group(group_id)
+    if not generations:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="group not found")
+    return GenerationListResponse(
+        items=[serialize_generation(g) for g in generations],
+        total=len(generations),
+        limit=len(generations),
+        offset=0,
+    )
+
+
+@router.patch("/{generation_id}", response_model=GenerationResponse)
+async def update_generation(
+    generation_id: uuid.UUID,
+    payload: GenerationUpdateRequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> GenerationResponse:
+    """Edit presentation metadata: the title, and whether it is a favourite.
+
+    Nothing else is editable, and the request model forbids unknown keys
+    so an attempt to revise the prompt, lyrics, seed or model is a 422
+    rather than a silent no-op. Those fields record what was actually
+    generated; changing them would make the library disagree with the
+    audio it describes. Duplicate the settings and generate again instead.
+    """
+    try:
+        generation = await repository.update_generation_metadata(
+            generation_id,
+            title=payload.title,
+            favorite=payload.favorite,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="generation not found"
+        ) from None
+    refreshed = await repository.get_generation(generation.id)
+    assert refreshed is not None
+    return serialize_generation(refreshed)
+
+
+@router.post("/bulk-delete", response_model=BulkResultResponse)
+async def bulk_delete_generations(
+    payload: BulkIdsRequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+    storage: Annotated[AudioStorage, Depends(get_audio_storage)],
+) -> BulkResultResponse:
+    """Delete several generations, reporting how many actually existed.
+
+    Ids that are already gone are skipped rather than failing the whole
+    request: the user's intent ("remove these") is satisfied either way,
+    and a partially stale selection is normal in a list they have had
+    open for a while.
+    """
+    affected = 0
+    for generation_id in payload.ids:
+        if await repository.get_generation(generation_id) is None:
+            continue
+        # DB first, storage second — the same order the single delete
+        # uses, so a storage failure can never leave a row pointing at
+        # audio that has been removed.
+        await repository.delete_generation(generation_id)
+        affected += 1
+        try:
+            await storage.delete_generation_audio(generation_id)
+        except AudioStorageError:
+            logger.exception(
+                "failed to delete stored audio",
+                extra={"generation_id": str(generation_id)},
+            )
+    return BulkResultResponse(affected=affected)
+
+
+@router.post("/bulk-project", response_model=BulkResultResponse)
+async def bulk_assign_project(
+    payload: BulkProjectRequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> BulkResultResponse:
+    """File several generations under a project, or unfile them with ``null``."""
+    if payload.project_id is not None and await repository.get_project(payload.project_id) is None:
+        raise HTTPException(status_code=422, detail="project not found")
+    affected = await repository.bulk_set_project(payload.ids, payload.project_id)
+    return BulkResultResponse(affected=affected)
 
 
 @router.delete("/{generation_id}", status_code=status.HTTP_204_NO_CONTENT)

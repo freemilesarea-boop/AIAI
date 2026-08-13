@@ -8,16 +8,20 @@
  * behind Advanced on the detail page, not on the object a listener
  * scans through.
  *
- * The artwork is a deterministic gradient derived from the generation
- * id, so a track looks the same every time you see it without the
- * product pretending to have generated cover art.
+ * Artwork comes from `cover_art_url` when a generation has one. Nothing
+ * produces one yet, so in practice every card falls back to a
+ * deterministic gradient derived from the id — the same track looks the
+ * same every time without the product pretending to have generated cover
+ * art it did not generate.
  */
 
 import Link from "next/link";
 
+import { FavoriteButton } from "@/components/SongActions";
 import { usePlayer, trackFromGeneration } from "@/components/player/PlayerProvider";
 import { Card, StatusPill, cx } from "@/components/ui";
 import { getAudioAssetUrl, type Generation } from "@/lib/api";
+import { downloadFilename } from "@/lib/download";
 
 /** Stable hue pair from the id — same track, same colours, always. */
 function artwork(id: string): { from: string; to: string } {
@@ -46,26 +50,70 @@ function formatWhen(iso: string): string {
 export interface SongCardProps {
   generation: Generation;
   onGenerateAgain?: (generation: Generation) => void;
+  /** Called after a favourite or rename so the list can stay current. */
+  onChanged?: (generation: Generation) => void;
   /** Rendered in the overflow area — used for project assignment. */
   extraActions?: React.ReactNode;
+  /** Selection mode. When defined, the card shows a checkbox. */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }
 
-export function SongCard({ generation, onGenerateAgain, extraActions }: SongCardProps) {
+export function SongCard({
+  generation,
+  onGenerateAgain,
+  onChanged,
+  extraActions,
+  selected,
+  onSelectedChange,
+}: SongCardProps) {
   const player = usePlayer();
   const colours = artwork(generation.id);
   const track = trackFromGeneration(generation);
   const isCurrent = player.track?.id === generation.id;
   const ready = generation.status === "COMPLETED" && track !== null;
   const duration = generation.duration_actual ?? generation.duration_requested;
+  const selectable = onSelectedChange !== undefined;
 
   return (
-    <Card className="group flex gap-4 p-3 transition-colors hover:border-[var(--border-default)]">
+    <Card
+      className={cx(
+        "group flex gap-4 p-3 transition-colors hover:border-[var(--border-default)]",
+        selected && "border-[var(--brand)] bg-[var(--brand-muted)]/20",
+      )}
+    >
+      {/* The label is the touch target, not the box itself: it gives a
+          40px square to hit while the control stays visually small. A
+          bare 16px checkbox is unusable on a phone. */}
+      {selectable && (
+        <label className="-m-1 flex shrink-0 cursor-pointer items-center p-1">
+          <span className="flex h-10 w-10 items-center justify-center">
+            <span className="sr-only">Select {generation.title}</span>
+            <input
+              type="checkbox"
+              checked={selected ?? false}
+              onChange={(e) => onSelectedChange?.(e.target.checked)}
+              className="h-5 w-5 accent-[var(--brand)]"
+            />
+          </span>
+        </label>
+      )}
+
       <div className="relative shrink-0">
-        <div
-          aria-hidden="true"
-          className="h-[72px] w-[72px] rounded-[var(--radius-md)]"
-          style={{ background: `linear-gradient(135deg, ${colours.from}, ${colours.to})` }}
-        />
+        {generation.cover_art_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={generation.cover_art_url}
+            alt=""
+            className="h-[72px] w-[72px] rounded-[var(--radius-md)] object-cover"
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="h-[72px] w-[72px] rounded-[var(--radius-md)]"
+            style={{ background: `linear-gradient(135deg, ${colours.from}, ${colours.to})` }}
+          />
+        )}
         {ready && (
           <button
             type="button"
@@ -108,12 +156,18 @@ export function SongCard({ generation, onGenerateAgain, extraActions }: SongCard
           <div className="flex items-start justify-between gap-3">
             <Link
               href={`/song/${generation.id}`}
-              className="-my-1 inline-flex min-h-8 min-w-0 items-center truncate py-1 text-sm
+              className="-my-1 inline-flex min-h-8 min-w-0 items-center py-1 text-sm
                 font-semibold text-[var(--text-primary)] hover:underline"
             >
-              {generation.title}
+              {/* Truncation belongs on the text, not on the flex box:
+                  `text-overflow` does nothing on a flex container, so a
+                  long title was hard-clipped with no ellipsis. */}
+              <span className="truncate">{generation.title}</span>
             </Link>
-            {generation.status !== "COMPLETED" && <StatusPill status={generation.status} />}
+            <div className="flex shrink-0 items-center gap-1">
+              {generation.status !== "COMPLETED" && <StatusPill status={generation.status} />}
+              <FavoriteButton generation={generation} onChanged={onChanged} />
+            </div>
           </div>
           <p className="mt-0.5 truncate text-xs text-[var(--text-secondary)]">
             {generation.prompt}
@@ -128,7 +182,7 @@ export function SongCard({ generation, onGenerateAgain, extraActions }: SongCard
             {ready && (
               <a
                 href={getAudioAssetUrl(generation.id, "master", true)}
-                download
+                download={downloadFilename(generation.title, generation.id, "wav")}
                 className="inline-flex h-8 items-center rounded-[var(--radius-sm)] px-2 transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
               >
                 WAV

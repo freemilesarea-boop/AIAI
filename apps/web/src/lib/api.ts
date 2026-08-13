@@ -95,6 +95,15 @@ export interface Generation {
   variation_label: string | null;
   /** Workspace this generation is filed under, if any. */
   project_id?: string | null;
+  /** Server-side favourite state, not browser storage. */
+  favorite: boolean;
+  /** Shared by songs produced by the same CREATE. */
+  generation_group_id: string | null;
+  /**
+   * Generated cover art. `null` means there is none — the UI draws its
+   * own placeholder rather than the API inventing a URL.
+   */
+  cover_art_url: string | null;
   /** Pre-flight findings recorded at submission. */
   advisories: Advisory[];
   /**
@@ -140,13 +149,31 @@ export interface CreateGenerationInput {
   /** Set when this request came from "Generate again". */
   parent_generation_id?: string | null;
   variation_label?: string | null;
+  /** Pinned seed. Omitted means the engine chooses. */
+  seed?: number | null;
+  /**
+   * How many songs to produce. Each is an independent generation with
+   * its own job, seed and status — never a provider batch.
+   */
+  result_count?: number;
+}
+
+/** One accepted generation from a CREATE. */
+export interface CreatedGeneration {
+  generation_id: string;
+  status: GenerationStatus;
+  seed: number | null;
 }
 
 export interface CreateGenerationResponse {
+  /** The first result. Retained for single-result callers. */
   generation_id: string;
   status: GenerationStatus;
   /** Informational. The generation was accepted regardless. */
   advisories: Advisory[];
+  generation_group_id: string | null;
+  /** Every accepted result, in order. */
+  generations: CreatedGeneration[];
 }
 
 /**
@@ -278,6 +305,63 @@ export async function listGenerations(
   return (await res.json()) as GenerationListResponse;
 }
 
+/* ── Song management (Phase 12) ────────────────────────────────────── */
+
+/**
+ * Edit presentation metadata.
+ *
+ * Only the title and the favourite flag are editable. Prompt, lyrics,
+ * seed, model and generation parameters describe a run that already
+ * happened; the backend rejects any attempt to send them.
+ */
+export async function updateGeneration(
+  generationId: string,
+  patch: { title?: string; favorite?: boolean },
+): Promise<Generation> {
+  return request<Generation>(`/v1/generations/${encodeURIComponent(generationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteGeneration(generationId: string): Promise<void> {
+  await request<void>(`/v1/generations/${encodeURIComponent(generationId)}`, {
+    method: "DELETE",
+  });
+}
+
+/** Every song produced by one CREATE — how a group survives a refresh. */
+export async function listGroupGenerations(groupId: string): Promise<Generation[]> {
+  const body = await request<GenerationListResponse>(
+    `/v1/generations/groups/${encodeURIComponent(groupId)}`,
+  );
+  return body.items;
+}
+
+export interface BulkResult {
+  affected: number;
+}
+
+export async function bulkDeleteGenerations(ids: string[]): Promise<BulkResult> {
+  return request<BulkResult>("/v1/generations/bulk-delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export async function bulkAssignProject(
+  ids: string[],
+  projectId: string | null,
+): Promise<BulkResult> {
+  return request<BulkResult>("/v1/generations/bulk-project", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, project_id: projectId }),
+  });
+}
+
 /** Which delivery asset to fetch. */
 export type AudioAssetKind = "master" | "preview";
 
@@ -331,6 +415,10 @@ export async function listProjects(): Promise<Project[]> {
   return (await request<{ items: Project[] }>("/v1/projects")).items;
 }
 
+export async function getProject(id: string): Promise<Project> {
+  return request<Project>(`/v1/projects/${encodeURIComponent(id)}`);
+}
+
 export async function createProject(name: string): Promise<Project> {
   return request<Project>("/v1/projects", {
     method: "POST",
@@ -362,8 +450,8 @@ export async function listProjectGenerations(id: string): Promise<Generation[]> 
 export async function assignGenerationToProject(
   generationId: string,
   projectId: string | null,
-): Promise<void> {
-  await request<unknown>(`/v1/generations/${encodeURIComponent(generationId)}/project`, {
+): Promise<Generation> {
+  return request<Generation>(`/v1/generations/${encodeURIComponent(generationId)}/project`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ project_id: projectId }),

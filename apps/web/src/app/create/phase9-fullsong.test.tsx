@@ -12,7 +12,31 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { PlayerProvider } from "@/components/player/PlayerProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 import CreatePage from "./page";
+
+/** The page needs the providers the real layout mounts. */
+function renderCreate() {
+  return render(
+    <PlayerProvider>
+      <ToastProvider>
+        <CreatePage />
+      </ToastProvider>
+    </PlayerProvider>,
+  );
+}
+
+// The Create page navigates (it clears the ?from / ?duplicate parameter
+// after applying a prefill), so the router has to exist in tests.
+const routerReplace = vi.fn();
+const searchParams = new URLSearchParams();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: routerReplace, refresh: vi.fn() }),
+  useSearchParams: () => searchParams,
+  usePathname: () => "/create",
+}));
+
 
 const GEN_ID = "d1d76e27-119a-41e8-a358-a492141efaba";
 
@@ -49,7 +73,13 @@ function stubServer() {
       });
     }
     if (init?.method === "POST") {
-      return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
+      return jsonResponse({
+        generation_id: GEN_ID,
+        status: "QUEUED",
+        advisories: [],
+        generation_group_id: "8b2f4a3e-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        generations: [{ generation_id: GEN_ID, status: "QUEUED", seed: null }],
+      });
     }
     return jsonResponse({ id: GEN_ID, status: "QUEUED", audio_assets: [] });
   });
@@ -94,7 +124,7 @@ afterEach(() => {
 describe("full-song durations", () => {
   it("offers exactly the validated set", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     const values = within(screen.getByLabelText("Duration"))
       .getAllByRole("option")
@@ -104,7 +134,7 @@ describe("full-song durations", () => {
 
   it("does not offer durations the engine accepts but we have not validated", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     const values = within(screen.getByLabelText("Duration"))
       .getAllByRole("option")
@@ -116,31 +146,31 @@ describe("full-song durations", () => {
   it("still defaults to 30 seconds, so nothing changes for existing users", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await fillRequired(user);
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     expect((await submittedBody(fetchMock)).duration).toBe(30);
   });
 
   it("submits a full-song duration when chosen", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await fillRequired(user);
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("가사");
     await user.selectOptions(screen.getByLabelText("Duration"), "240");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     expect((await submittedBody(fetchMock)).duration).toBe(240);
   });
 
   it("labels minute-length durations readably", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     const labels = within(screen.getByLabelText("Duration"))
       .getAllByRole("option")
@@ -160,7 +190,7 @@ describe("full-song durations", () => {
 describe("song presets", () => {
   it("are offered and marked optional", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     expect(screen.getByText(/Song presets/)).toBeInTheDocument();
     expect(presetGroup().getByRole("button", { name: /Full Pop Song/ })).toBeInTheDocument();
@@ -171,7 +201,7 @@ describe("song presets", () => {
   it("sets the duration and inserts a structure into an empty sheet", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
@@ -185,7 +215,7 @@ describe("song presets", () => {
   it("never writes lyrics, only structure", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
@@ -200,7 +230,7 @@ describe("song presets", () => {
   it("the instrumental preset switches the vocal off and adds no tags", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /^Instrumental/ }));
@@ -212,12 +242,12 @@ describe("song presets", () => {
   it("a preset frame reaches the API", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     await user.click(presetGroup().getByRole("button", { name: /^Ballad/ }));
     await fillRequired(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     const body = await submittedBody(fetchMock);
     expect(body.duration).toBe(240);
@@ -230,7 +260,7 @@ describe("song presets", () => {
 describe("structure templates", () => {
   it("are offered separately from presets", async () => {
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     const group = screen.getByRole("group", { name: "Structure templates" });
     expect(within(group).getByRole("button", { name: /Pop/ })).toBeInTheDocument();
@@ -240,7 +270,7 @@ describe("structure templates", () => {
   it("insert their sections into an empty sheet", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     const group = screen.getByRole("group", { name: "Structure templates" });
@@ -255,7 +285,7 @@ describe("structure templates", () => {
     // A template that warned about its own tags would be a bug.
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
 
     const group = screen.getByRole("group", { name: "Structure templates" });
@@ -285,7 +315,7 @@ describe("applying structure to existing lyrics", () => {
   it("asks before touching lyrics that have words in them", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await writeLyrics(user);
 
@@ -299,7 +329,7 @@ describe("applying structure to existing lyrics", () => {
   it("appends after the existing lyrics when asked to", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await writeLyrics(user);
 
@@ -314,7 +344,7 @@ describe("applying structure to existing lyrics", () => {
   it("replaces only on a second, explicit confirmation", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await writeLyrics(user);
 
@@ -329,7 +359,7 @@ describe("applying structure to existing lyrics", () => {
   it("cancelling leaves the lyrics untouched", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await writeLyrics(user);
 
@@ -343,7 +373,7 @@ describe("applying structure to existing lyrics", () => {
   it("swaps a bare skeleton without asking, because nothing is lost", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await user.click(screen.getByLabelText("Lyrics"));
     await user.paste("[Verse]\n[Chorus]");
@@ -360,7 +390,7 @@ describe("applying structure to existing lyrics", () => {
   it("a preset applied over written lyrics still sets the duration", async () => {
     const user = userEvent.setup();
     stubServer();
-    render(<CreatePage />);
+    renderCreate();
     await switchToCustom();
     await writeLyrics(user);
 

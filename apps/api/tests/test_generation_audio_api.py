@@ -63,7 +63,7 @@ async def test_download_flag_sets_attachment_disposition(client):
 
     disposition = resp.headers["content-disposition"]
     assert disposition.startswith("attachment")
-    assert "midnight-window.wav" in disposition
+    assert "LUBER%20-%20Midnight%20Window.wav" in disposition
 
 
 async def test_missing_generation_returns_404(client):
@@ -152,10 +152,11 @@ def test_resolve_path_allows_normal_key(tmp_path):
 # ── download filename safety ──────────────────────────────────────────
 
 
-def test_download_filename_slugifies_title():
+def test_download_filename_is_human_readable():
     gid = uuid.uuid4()
-    assert build_download_filename("Midnight Window", gid) == "midnight-window.wav"
-    assert build_download_filename("  Hello   World!! ", gid) == "hello-world.wav"
+    assert build_download_filename("Midnight Window", gid) == "LUBER - Midnight Window.wav"
+    # Surrounding and repeated whitespace is collapsed, punctuation kept.
+    assert build_download_filename("  Hello   World!! ", gid) == "LUBER - Hello World!!.wav"
 
 
 @pytest.mark.parametrize(
@@ -172,12 +173,12 @@ def test_download_filename_strips_path_and_control_characters(hostile_title):
     assert name.endswith(".wav")
 
 
-def test_download_filename_falls_back_for_non_ascii_title():
+def test_download_filename_keeps_unicode_titles():
     gid = uuid.uuid4()
-    name = build_download_filename("오늘 밤", gid)
-    assert name == f"luber-track-{gid.hex[:8]}.wav"
+    assert build_download_filename("오늘 밤", gid) == "LUBER - 오늘 밤.wav"
 
 
 def test_download_filename_is_length_bounded():
     name = build_download_filename("word " * 200, uuid.uuid4())
-    assert len(name.removesuffix(".wav")) <= 60
+    title_part = name.removesuffix(".wav").removeprefix("LUBER - ")
+    assert len(title_part) <= 60

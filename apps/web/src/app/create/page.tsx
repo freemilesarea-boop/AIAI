@@ -3,49 +3,63 @@
 /**
  * The generation workspace.
  *
- * Desktop: form on the left, status/result on the right. Mobile: single
- * column, form first. Every backend interaction goes through
- * `@/lib/api` — the browser never contacts the model runtime.
+ * The rule this page is built around: **pressing Create must never take
+ * the workspace away from you.** The form stays live, results appear
+ * beside it, and starting a second song while the first renders is
+ * ordinary rather than blocked. The Create button is disabled only while
+ * the POST is in the air — a few hundred milliseconds — not for the
+ * minutes the engine spends working.
+ *
+ * Two ways in from elsewhere in the app, and they are not the same thing:
+ *
+ * - `?from=<id>` — **Generate again.** Prefills the settings *and*
+ *   records that track as the new generation's parent.
+ * - `?duplicate=<id>` — **Duplicate settings.** Prefills the same fields
+ *   and records no lineage. Nothing is created until Create is pressed.
+ *
+ * Every backend interaction goes through `@/lib/api`; the browser never
+ * contacts the model runtime.
  */
 
-import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { GenerationFailure } from "@/components/GenerationFailure";
 import {
   GenerationForm,
   type GenerationFormInitialValues,
 } from "@/components/GenerationForm";
-import { GenerationResult } from "@/components/GenerationResult";
-import { GenerationStatusPanel } from "@/components/GenerationStatusPanel";
-import { RecentGenerations } from "@/components/RecentGenerations";
-import { useGenerationJob } from "@/hooks/useGenerationJob";
+import { GenerationJobCard } from "@/components/GenerationJobCard";
+import { SongCard } from "@/components/SongCard";
+import { Button, EmptyState } from "@/components/ui";
+import { useGenerationQueue } from "@/hooks/useGenerationQueue";
 import {
   getGeneration,
   type CreateGenerationInput,
   type Generation,
   type VocalGender,
 } from "@/lib/api";
-import { describeGenerationFailure } from "@/lib/errors";
 import { loadRecentGenerations } from "@/lib/generationStorage";
 
-/** A draft started from an existing track: its settings, plus lineage. */
-interface BasedOnDraft {
-  parent: { id: string; title: string };
-  values: GenerationFormInitialValues;
+/** A draft started from an existing track. */
+interface Draft {
+  /** Present only for Generate again — Duplicate settings records none. */
+  parent: { id: string; title: string } | null;
+  key: string;
+  values: Partial<GenerationFormInitialValues>;
 }
 
 /**
  * Carry a finished generation's settings into a new draft.
  *
- * This is the whole of "Generate again": the previous request's inputs
- * become the starting point and the previous generation becomes the
- * parent. No audio is reused — the pinned engine exposes no
- * audio-conditioned variation on this path, so none is implied.
+ * No audio is reused in either mode — the pinned engine exposes no
+ * audio-conditioned variation on this path, so none is implied. The only
+ * difference between the two is whether a parent is recorded.
  */
-function draftFrom(generation: Generation): BasedOnDraft {
+function draftFrom(generation: Generation, mode: "again" | "duplicate"): Draft {
   return {
-    parent: { id: generation.id, title: generation.title },
+    parent: mode === "again" ? { id: generation.id, title: generation.title } : null,
+    key: `${mode}:${generation.id}`,
     values: {
       title: generation.title,
       prompt: generation.prompt,
@@ -56,12 +70,17 @@ function draftFrom(generation: Generation): BasedOnDraft {
       bpm: generation.bpm === null ? "" : String(generation.bpm),
       keyScale: generation.key_scale ?? "",
       timeSignature: generation.time_signature ?? "",
+      // The seed is offered, not imposed: duplicating settings starts
+      // from Random unless the original pinned one, because reusing a
+      // seed is a deliberate act.
+      seed: generation.seed === null ? "" : String(generation.seed),
       // A draft carrying advanced settings opens in Custom, so the
       // values the user is inheriting are visible rather than hidden.
       mode:
         generation.bpm !== null ||
         generation.key_scale !== null ||
-        generation.time_signature !== null
+        generation.time_signature !== null ||
+        generation.seed !== null
           ? "custom"
           : "simple",
     },
@@ -69,190 +88,205 @@ function draftFrom(generation: Generation): BasedOnDraft {
 }
 
 function CreateWorkspace() {
-  const job = useGenerationJob();
-  const [recent, setRecent] = useState<Generation[]>([]);
-  const [basedOn, setBasedOn] = useState<BasedOnDraft | null>(null);
+  const queue = useGenerationQueue();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const lastInputRef = useRef<CreateGenerationInput | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [recent, setRecent] = useState<Generation[]>([]);
 
   const handleSubmit = useCallback(
     (input: CreateGenerationInput) => {
-      lastInputRef.current = input;
-      void job.submit(input);
+      void queue.submit(input);
     },
-    [job],
+    [queue],
   );
 
-  const handleGenerateAgain = useCallback(
-    (generation: Generation) => {
-      setBasedOn(draftFrom(generation));
-      job.reset();
-      // The form is above the result on mobile and beside it on desktop;
-      // either way the user needs to see the prefilled draft.
+  const startDraft = useCallback(
+    (generation: Generation, mode: "again" | "duplicate") => {
+      setDraft(draftFrom(generation, mode));
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
-    [job],
+    [],
   );
 
-  // Arriving from a song page with ?from=<id> seeds the draft from
-  // that track, so "Generate again" works from anywhere in the app.
+  // Arriving from a song page seeds the draft. The parameter is cleared
+  // afterwards so a refresh does not silently re-apply a prefill the
+  // user may have since edited away.
   const fromId = searchParams?.get("from") ?? null;
+  const duplicateId = searchParams?.get("duplicate") ?? null;
   useEffect(() => {
-    if (!fromId) return;
+    const sourceId = fromId ?? duplicateId;
+    if (!sourceId) return;
     let cancelled = false;
     void (async () => {
-      const source = await getGeneration(fromId).catch(() => null);
-      if (source && !cancelled) setBasedOn(draftFrom(source));
+      const source = await getGeneration(sourceId).catch(() => null);
+      if (!source || cancelled) return;
+      setDraft(draftFrom(source, fromId ? "again" : "duplicate"));
+      router.replace("/create");
     })();
     return () => {
       cancelled = true;
     };
-  }, [fromId]);
+  }, [fromId, duplicateId, router]);
 
-  const handleRetry = useCallback(() => {
-    // A new Idempotency-Key is minted inside submit(), so this is a new job.
-    const previous = lastInputRef.current;
-    if (previous) void job.submit(previous);
-    else job.reset();
-  }, [job]);
-
-  // Session list. The actively-tracked generation is taken from the
-  // poller rather than re-fetched, so history never duplicates a
-  // request that polling is already making.
-  const [historyIds, setHistoryIds] = useState<string[]>([]);
-  useEffect(() => {
-    setHistoryIds(loadRecentGenerations().map((e) => e.id));
-  }, [job.phase, job.generationId]);
+  // Session history: ids this browser created, minus anything already on
+  // screen as a live job, so nothing is listed twice.
+  const liveIds = useMemo(
+    () => new Set(queue.entries.map((entry) => entry.id)),
+    [queue.entries],
+  );
+  const finishedCount = queue.entries.filter((entry) => entry.done).length;
 
   useEffect(() => {
     let cancelled = false;
-    const others = historyIds.filter((id) => id !== job.generationId);
-    if (others.length === 0) {
+    const ids = loadRecentGenerations()
+      .map((entry) => entry.id)
+      .filter((id) => !liveIds.has(id))
+      .slice(0, 6);
+    if (ids.length === 0) {
       setRecent([]);
       return;
     }
     void (async () => {
-      const results = await Promise.all(
-        others.map((id) => getGeneration(id).catch(() => null)),
-      );
+      const results = await Promise.all(ids.map((id) => getGeneration(id).catch(() => null)));
       if (!cancelled) setRecent(results.filter((g): g is Generation => g !== null));
     })();
     return () => {
       cancelled = true;
     };
-  }, [historyIds, job.generationId]);
+    // Re-read when a job finishes: that is when history gains an entry.
+  }, [liveIds, finishedCount]);
 
-  // Merge the live generation into the list, preserving recency order.
-  const historyItems = useMemo(() => {
-    const byId = new Map<string, Generation>();
-    if (job.generation) byId.set(job.generation.id, job.generation);
-    for (const g of recent) byId.set(g.id, g);
-    return historyIds
-      .map((id) => byId.get(id))
-      .filter((g): g is Generation => g !== undefined);
-  }, [historyIds, recent, job.generation]);
+  // Siblings from one CREATE are labelled so a pair reads as a pair.
+  const groupPositions = useMemo(() => {
+    const counts = new Map<string, number>();
+    const positions = new Map<string, string>();
+    for (const entry of queue.entries) {
+      if (!entry.groupId) continue;
+      const seen = (counts.get(entry.groupId) ?? 0) + 1;
+      counts.set(entry.groupId, seen);
+      positions.set(entry.id, `Result ${seen}`);
+    }
+    // A group of one is not a group; drop the label.
+    for (const entry of queue.entries) {
+      if (entry.groupId && counts.get(entry.groupId) === 1) positions.delete(entry.id);
+    }
+    return positions;
+  }, [queue.entries]);
 
-  const status = job.generation?.status ?? null;
-  const isBusy = job.phase === "submitting" || job.phase === "tracking";
-  const completed = job.phase === "done" && job.generation?.status === "COMPLETED";
-  const failedGeneration =
-    job.phase === "done" &&
-    (job.generation?.status === "FAILED" || job.generation?.status === "CANCELLED")
-      ? job.generation
-      : null;
-
-  const showDeveloperDetails = useMemo(
-    () => process.env.NEXT_PUBLIC_SHOW_GENERATION_DETAILS === "true",
-    [],
+  /**
+   * Resubmit a failed run with the settings it recorded.
+   *
+   * A fresh Idempotency-Key is minted inside `submit`, so this is a new
+   * generation rather than a resurrection of the failed one. Retried as
+   * a single result: the user asked for this take specifically.
+   */
+  const handleRetry = useCallback(
+    (generation: Generation) => {
+      void queue.submit({
+        title: generation.title,
+        prompt: generation.prompt,
+        lyrics: generation.lyrics,
+        vocal_gender: generation.vocal_gender as VocalGender,
+        language: generation.language ?? "ko",
+        duration: generation.duration_requested,
+        bpm: generation.bpm,
+        key_scale: generation.key_scale,
+        time_signature: generation.time_signature,
+        parent_generation_id: generation.parent_generation_id,
+        seed: null,
+        result_count: 1,
+      });
+    },
+    [queue],
   );
+
+  const refreshRecent = useCallback((updated: Generation) => {
+    setRecent((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    );
+  }, []);
 
   return (
     <div className="flex flex-col gap-2">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Create</h1>
-        <p className="mt-1.5 text-zinc-400">
+        <h1 className="text-2xl font-bold tracking-tight">Create</h1>
+        <p className="mt-1.5 text-sm text-[var(--text-secondary)]">
           Describe your track, add lyrics, and generate a finished master.
         </p>
       </header>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
         <div className="lg:sticky lg:top-8">
-          {/* Remounting on a new parent is what applies the prefill: the
+          {/* Remounting on a new draft is what applies the prefill: the
               form owns its field state, so a fresh instance is the
               cleanest way to seed it without fighting the user's edits. */}
           <GenerationForm
-            key={basedOn?.parent.id ?? "blank"}
+            key={draft?.key ?? "blank"}
             onSubmit={handleSubmit}
-            busy={isBusy}
-            disabled={isBusy}
-            initialValues={basedOn?.values}
-            parent={basedOn?.parent ?? null}
-            onClearParent={() => setBasedOn(null)}
+            busy={queue.submitting}
+            initialValues={draft?.values}
+            parent={draft?.parent ?? null}
+            onClearParent={() => setDraft(null)}
           />
         </div>
 
         <div className="flex flex-col gap-6">
-          {job.phase === "idle" && (
-            <section className="rounded-xl border border-dashed border-zinc-800 p-6">
-              <h2 className="text-lg font-medium text-zinc-300">Your track appears here</h2>
-              <p className="mt-1.5 text-sm text-zinc-500">
-                Fill in the form and press Generate. Creating a 30-second track usually takes
-                under a minute.
-              </p>
+          {queue.submitError && (
+            <GenerationFailure
+              error={queue.submitError}
+              onDismiss={queue.clearSubmitError}
+            />
+          )}
+
+          {queue.entries.length === 0 ? (
+            <EmptyState
+              title="Your tracks appear here"
+              description="Fill in the form and press Create. You can keep working while a song generates, and start another at any time."
+            />
+          ) : (
+            <section aria-labelledby="queue-heading" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 id="queue-heading" className="text-sm font-semibold">
+                  This session
+                </h2>
+                {finishedCount > 0 && (
+                  <Button size="sm" variant="ghost" onClick={queue.clearFinished}>
+                    Clear finished
+                  </Button>
+                )}
+              </div>
+              {queue.entries.map((entry) => (
+                <GenerationJobCard
+                  key={entry.id}
+                  entry={entry}
+                  resultLabel={groupPositions.get(entry.id)}
+                  onDismiss={queue.dismiss}
+                  onRetry={handleRetry}
+                  onGenerateAgain={(generation) => startDraft(generation, "again")}
+                />
+              ))}
             </section>
           )}
 
-          {(job.phase === "submitting" || job.phase === "tracking") && (
-            <GenerationStatusPanel
-              status={status}
-              elapsedSeconds={job.elapsedSeconds}
-              submitting={job.phase === "submitting"}
-            />
-          )}
-
-          {job.phase === "stalled" && (
-            <section className="rounded-xl border border-amber-900/60 bg-amber-950/20 p-6">
-              <h2 className="text-lg font-semibold text-amber-200">Still working</h2>
-              <p className="mt-2 text-sm text-amber-100/90">
-                This is taking longer than expected. Your track may still be generating —
-                refresh the page to reconnect.
-              </p>
+          {recent.length > 0 && (
+            <section aria-labelledby="recent-heading" className="flex flex-col gap-3">
+              <h2
+                id="recent-heading"
+                className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]"
+              >
+                Recent generations
+              </h2>
+              {recent.map((generation) => (
+                <SongCard
+                  key={generation.id}
+                  generation={generation}
+                  onChanged={refreshRecent}
+                  onGenerateAgain={(item) => startDraft(item, "again")}
+                />
+              ))}
             </section>
           )}
-
-          {job.phase === "error" && job.error && (
-            <GenerationFailure
-              error={job.error}
-              onRetry={handleRetry}
-              onDismiss={job.reset}
-            />
-          )}
-
-          {failedGeneration && (
-            <GenerationFailure
-              error={describeGenerationFailure(failedGeneration.error_code)}
-              onRetry={handleRetry}
-              onDismiss={job.reset}
-            />
-          )}
-
-          {completed && job.generation && (
-            <GenerationResult
-              generation={job.generation}
-              onCreateAnother={() => {
-                setBasedOn(null);
-                job.reset();
-              }}
-              onGenerateAgain={handleGenerateAgain}
-              showTechnicalDetails={showDeveloperDetails}
-            />
-          )}
-
-          <RecentGenerations
-            items={historyItems}
-            activeId={job.generationId}
-            onSelect={job.reconnect}
-          />
         </div>
       </div>
     </div>

@@ -8,7 +8,35 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { PlayerProvider } from "@/components/player/PlayerProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 import CreatePage from "./page";
+
+/**
+ * The page relies on the providers the real layout mounts: results play
+ * through the one global audio element, and actions confirm themselves
+ * through the toast region.
+ */
+function renderCreate() {
+  return render(
+    <PlayerProvider>
+      <ToastProvider>
+        <CreatePage />
+      </ToastProvider>
+    </PlayerProvider>,
+  );
+}
+
+// The Create page navigates (it clears the ?from / ?duplicate parameter
+// after applying a prefill), so the router has to exist in tests.
+const routerReplace = vi.fn();
+const searchParams = new URLSearchParams();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: routerReplace, refresh: vi.fn() }),
+  useSearchParams: () => searchParams,
+  usePathname: () => "/create",
+}));
+
 
 const GEN_ID = "d1d76e27-119a-41e8-a358-a492141efaba";
 
@@ -35,6 +63,10 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
     time_signature: null,
     parent_generation_id: null,
     variation_label: null,
+    project_id: null,
+    favorite: false,
+    generation_group_id: null,
+    cover_art_url: null,
     advisories: [],
     request_trace: null,
     status,
@@ -85,6 +117,17 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
   };
 }
 
+/** A CREATE response in the Phase 12 shape: a group and its results. */
+function createdBody(ids: string[] = [GEN_ID]) {
+  return {
+    generation_id: ids[0],
+    status: "QUEUED",
+    advisories: [],
+    generation_group_id: "8b2f4a3e-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+    generations: ids.map((id) => ({ generation_id: id, status: "QUEUED", seed: null })),
+  };
+}
+
 function jsonResponse(body: unknown) {
   return { ok: true, status: 200, json: async () => body };
 }
@@ -128,7 +171,7 @@ function stubServer(statuses: StubGeneration[]) {
       return jsonResponse(preflightBody());
     }
     if (init?.method === "POST") {
-      return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
+      return jsonResponse(createdBody());
     }
     getCalls.push(url);
     const spec = statuses[Math.min(index, statuses.length - 1)];
@@ -164,9 +207,9 @@ describe("form validation", () => {
   it("blocks submission and reports missing fields", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer([{ status: "QUEUED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect(await screen.findByText("Add a title for your track.")).toBeInTheDocument();
     expect(screen.getByText("Describe the music you want.")).toBeInTheDocument();
@@ -177,11 +220,11 @@ describe("form validation", () => {
   it("requires lyrics unless the track is instrumental", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "QUEUED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await user.type(screen.getByLabelText("Title"), "T");
     await user.type(screen.getByLabelText("Music description"), "P");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect(
       await screen.findByText("Add lyrics, or switch the vocal to Instrumental."),
@@ -191,7 +234,7 @@ describe("form validation", () => {
   it("disables the lyrics field for instrumental tracks", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "QUEUED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await user.selectOptions(screen.getByLabelText("Vocal"), "instrumental");
 
@@ -202,9 +245,9 @@ describe("form validation", () => {
   it("marks invalid fields with aria-invalid", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "QUEUED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect(await screen.findByLabelText("Title")).toHaveAttribute("aria-invalid", "true");
   });
@@ -214,10 +257,10 @@ describe("submission", () => {
   it("posts to the LUBER API with a fresh Idempotency-Key and Korean lyrics intact", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer([{ status: "QUEUED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(isCreatePost)).toBe(true);
@@ -238,15 +281,15 @@ describe("submission", () => {
   it("uses a different Idempotency-Key for each generation", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer([{ status: "COMPLETED", withMaster: true }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
-    await user.click(screen.getByRole("button", { name: "Create another" }));
 
-    await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    // The form stays live after a submission, so a second generation is
+    // just a second press — no "start over" step in between.
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => {
       const posts = fetchMock.mock.calls.filter(isCreatePost);
@@ -257,19 +300,51 @@ describe("submission", () => {
     });
   });
 
-  it("prevents duplicate submission while a generation is in flight", async () => {
+  it("collapses a double click into one submission", async () => {
     const user = userEvent.setup();
-    const { fetchMock } = stubServer([{ status: "GENERATING" }]);
-    render(<CreatePage />);
+    // A deliberately slow POST, so the in-flight window is observable —
+    // that window is exactly what the guard protects.
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "POST" && isPreflight(url)) return jsonResponse(preflightBody());
+      if (init?.method === "POST") {
+        await new Promise((r) => setTimeout(r, 120));
+        return jsonResponse(createdBody());
+      }
+      return jsonResponse(generationBody({ status: "GENERATING" }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderCreate();
 
     await fillValidForm(user);
-    const button = screen.getByRole("button", { name: "Generate" });
-    await user.click(button);
+    const button = screen.getByRole("button", { name: "Create" });
+    await user.dblClick(button);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Generating…" })).toBeDisabled());
-    await user.click(screen.getByRole("button", { name: "Generating…" }));
-
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 300));
+    });
     expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(1);
+  });
+
+  // Phase 11 disabled the whole form for the duration of inference,
+  // which at 240s made the page unusable for minutes.
+  it("does not block the workspace while a generation runs", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = stubServer([{ status: "GENERATING" }]);
+    renderCreate();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Creating your music"),
+    );
+
+    // Still editable, still submittable, mid-inference.
+    const create = screen.getByRole("button", { name: "Create" });
+    expect(create).toBeEnabled();
+    expect(screen.getByLabelText("Title")).toBeEnabled();
+
+    await user.click(create);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost).length).toBe(2));
   });
 });
 
@@ -277,10 +352,10 @@ describe("status rendering", () => {
   it("shows QUEUED as user-facing language", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "QUEUED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Preparing generation");
   });
@@ -288,10 +363,10 @@ describe("status rendering", () => {
   it("shows GENERATING and an elapsed timer, with no fake percentage", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "GENERATING" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Creating your music"),
@@ -305,19 +380,21 @@ describe("completed result", () => {
   it("renders the player and download pointing at the LUBER audio endpoint", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "COMPLETED", withMaster: true }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
-    expect(await screen.findByText("Track ready")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Midnight Window" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Midnight Window" })).toBeInTheDocument();
 
-    // Playback uses the compressed preview; the master stays downloadable.
-    const player = screen.getByLabelText("Preview player for Midnight Window");
+    // Playback goes through the single global element, not a per-card
+    // <audio> — two cards with two elements would play over each other.
+    expect(document.querySelectorAll("audio")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Play" }));
+    const player = screen.getByLabelText("LUBER audio player");
     expect(player).toHaveAttribute("src", expect.stringContaining(`/v1/generations/${GEN_ID}/audio`));
+    // The compressed preview streams; the master stays the download.
     expect(player).toHaveAttribute("src", expect.stringContaining("asset=preview"));
-    expect(player).toHaveAttribute("controls");
 
     const wav = screen.getByRole("link", { name: "Download WAV" });
     expect(wav).toHaveAttribute("href", expect.stringContaining("asset=master"));
@@ -333,24 +410,24 @@ describe("completed result", () => {
   it("shows the production master and preview formats", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "COMPLETED", withMaster: true }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
-    expect(screen.getByText(/WAV · 48 kHz · 24-bit · Stereo/)).toBeInTheDocument();
-    expect(screen.getByText(/MP3 · 320 kbps/)).toBeInTheDocument();
+    expect(screen.getByText(/Master WAV · 48 kHz · 24-bit/)).toBeInTheDocument();
+    expect(screen.getByText(/Preview MP3 · 320 kbps/)).toBeInTheDocument();
   });
 
   it("never exposes storage keys, absolute paths, or the model runtime", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "COMPLETED", withMaster: true }]);
-    const { container } = render(<CreatePage />);
+    const { container } = renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
     const html = container.innerHTML;
     expect(html).not.toContain("/Users/");
@@ -366,11 +443,11 @@ describe("completed result", () => {
   it("stops polling once the generation is COMPLETED", async () => {
     const user = userEvent.setup();
     const { getCalls } = stubServer([{ status: "COMPLETED", withMaster: true }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
     const afterTerminal = getCalls.length;
     await act(async () => {
@@ -387,24 +464,24 @@ describe("failure UX", () => {
   it("renders a safe message and a Retry action when the generation FAILS", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "FAILED", error_code: "MODEL_LOAD_FAILED" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     const panel = await screen.findByRole("alert");
     expect(panel).toHaveTextContent("The music model is not available right now.");
     expect(panel.textContent).not.toMatch(/Traceback|\/Users\/|acestep|redis/i);
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("Retry submits again under a new Idempotency-Key", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer([{ status: "FAILED", error_code: "GENERATION_TIMEOUT" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByRole("button", { name: "Retry" });
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
@@ -423,10 +500,10 @@ describe("failure UX", () => {
       "fetch",
       vi.fn().mockRejectedValue(new TypeError("fetch failed ECONNREFUSED 127.0.0.1:8000")),
     );
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Could not reach the LUBER service.");
@@ -436,10 +513,10 @@ describe("failure UX", () => {
   it("stops polling after a terminal FAILED state", async () => {
     const user = userEvent.setup();
     const { getCalls } = stubServer([{ status: "FAILED", error_code: "OUT_OF_MEMORY" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByRole("alert");
 
     const before = getCalls.filter((u) => u.endsWith(GEN_ID)).length;
@@ -455,7 +532,7 @@ describe("refresh recovery", () => {
     window.localStorage.setItem("luber.activeGenerationId", GEN_ID);
     stubServer([{ status: "GENERATING" }]);
 
-    render(<CreatePage />);
+    renderCreate();
 
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Creating your music"),
@@ -463,22 +540,20 @@ describe("refresh recovery", () => {
   });
 
   it("shows the finished result when the stored generation already COMPLETED", async () => {
-    window.localStorage.setItem("luber.activeGenerationId", GEN_ID);
+    window.localStorage.setItem("luber.activeGenerationId", JSON.stringify([GEN_ID]));
     stubServer([{ status: "COMPLETED", withMaster: true }]);
 
-    render(<CreatePage />);
+    renderCreate();
 
-    expect(await screen.findByText("Track ready")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Preview player for Midnight Window"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Midnight Window" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
   });
 
   it("shows failure when the stored generation already FAILED", async () => {
     window.localStorage.setItem("luber.activeGenerationId", GEN_ID);
     stubServer([{ status: "FAILED", error_code: "UNKNOWN_GENERATION_ERROR" }]);
 
-    render(<CreatePage />);
+    renderCreate();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
   });
@@ -487,10 +562,10 @@ describe("refresh recovery", () => {
     window.localStorage.setItem("luber.activeGenerationId", "../../etc/passwd");
     const { getCalls } = stubServer([{ status: "QUEUED" }]);
 
-    render(<CreatePage />);
+    renderCreate();
 
     await waitFor(() => {
-      expect(screen.getByText("Your track appears here")).toBeInTheDocument();
+      expect(screen.getByText("Your tracks appear here")).toBeInTheDocument();
     });
     expect(getCalls.some((u) => u.includes("etc/passwd"))).toBe(false);
   });
@@ -498,24 +573,28 @@ describe("refresh recovery", () => {
   it("persists the active id so a refresh can recover it", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "GENERATING" }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
+    // Stored as a list: one CREATE can start two songs, and a user can
+    // start a third while those run.
     await waitFor(() => {
-      expect(window.localStorage.getItem("luber.activeGenerationId")).toBe(GEN_ID);
+      expect(
+        JSON.parse(window.localStorage.getItem("luber.activeGenerationId") ?? "[]"),
+      ).toContain(GEN_ID);
     });
   });
 
   it("clears the active id once the generation finishes", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "COMPLETED", withMaster: true }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
     await waitFor(() => {
       expect(window.localStorage.getItem("luber.activeGenerationId")).toBeNull();
@@ -524,21 +603,42 @@ describe("refresh recovery", () => {
 });
 
 describe("session history", () => {
-  it("lists a completed generation and restores it on click", async () => {
+  it("keeps a finished generation in the workspace instead of clearing it", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "COMPLETED", withMaster: true }]);
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
-    await screen.findByText("Track ready");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
 
-    const history = await screen.findByRole("region", { name: /this session/i });
-    const entry = within(history).getByRole("button", { name: /Midnight Window/ });
-    expect(entry).toBeInTheDocument();
+    const session = await screen.findByRole("region", { name: /this session/i });
+    // The finished track is still there, linked to its own page, so
+    // pressing Create again does not make the previous result vanish.
+    expect(within(session).getByRole("link", { name: "Midnight Window" })).toHaveAttribute(
+      "href",
+      `/song/${GEN_ID}`,
+    );
+  });
 
-    await user.click(entry);
-    expect(await screen.findByText("Track ready")).toBeInTheDocument();
+  it("lets a finished card be dismissed without deleting the song", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = stubServer([{ status: "COMPLETED", withMaster: true }]);
+    renderCreate();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Midnight Window" });
+
+    await user.click(screen.getByRole("button", { name: /Dismiss/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: /this session/i })).not.toBeInTheDocument(),
+    );
+    // Dismissing is a view action; nothing was deleted.
+    expect(
+      fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "DELETE"),
+    ).toBe(false);
   });
 });
 
@@ -554,7 +654,7 @@ describe("polling discipline", () => {
           return jsonResponse(preflightBody());
         }
         if (init?.method === "POST") {
-          return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
+          return jsonResponse(createdBody());
         }
         inFlight += 1;
         maxConcurrent = Math.max(maxConcurrent, inFlight);
@@ -563,10 +663,10 @@ describe("polling discipline", () => {
         return jsonResponse(generationBody({ status: "GENERATING" }));
       }),
     );
-    render(<CreatePage />);
+    renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await act(async () => {
       await new Promise((r) => setTimeout(r, 300));
     });

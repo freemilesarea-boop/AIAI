@@ -21,6 +21,7 @@ from luber_api.routes.generations import serialize_generation
 from luber_api.schemas import (
     AssignProjectRequest,
     GenerationListResponse,
+    GenerationResponse,
     ProjectCreateRequest,
     ProjectListResponse,
     ProjectResponse,
@@ -55,8 +56,19 @@ async def create_project(
 async def list_projects(
     repository: Annotated[GenerationRepository, Depends(get_repository)],
 ) -> ProjectListResponse:
-    projects = await repository.list_projects()
-    return ProjectListResponse(items=[await _to_response(repository, p) for p in projects])
+    """Every project with its song count, resolved in a single query."""
+    return ProjectListResponse(
+        items=[
+            ProjectResponse(
+                id=project.id,
+                name=project.name,
+                generation_count=count,
+                created_at=project.created_at,
+                updated_at=project.updated_at,
+            )
+            for project, count in await repository.list_projects_with_counts()
+        ]
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -118,13 +130,18 @@ async def list_project_generations(
 assign_router = APIRouter(prefix="/v1/generations", tags=["projects"])
 
 
-@assign_router.put("/{generation_id}/project", response_model=GenerationListResponse)
+@assign_router.put("/{generation_id}/project", response_model=GenerationResponse)
 async def assign_generation_to_project(
     generation_id: uuid.UUID,
     payload: AssignProjectRequest,
     repository: Annotated[GenerationRepository, Depends(get_repository)],
-) -> GenerationListResponse:
-    """File a generation under a project, or unfile it with ``null``."""
+) -> GenerationResponse:
+    """File a generation under a project, or unfile it with ``null``.
+
+    Returns the updated generation. Phase 11 wrapped this single row in a
+    list response, which made every caller unwrap a collection that could
+    only ever hold one item.
+    """
     if await repository.get_generation(generation_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
     if payload.project_id is not None and await repository.get_project(payload.project_id) is None:
@@ -133,6 +150,4 @@ async def assign_generation_to_project(
     await repository.set_generation_project(generation_id, payload.project_id)
     generation = await repository.get_generation(generation_id)
     assert generation is not None
-    return GenerationListResponse(
-        items=[serialize_generation(generation)], total=1, limit=1, offset=0
-    )
+    return serialize_generation(generation)
