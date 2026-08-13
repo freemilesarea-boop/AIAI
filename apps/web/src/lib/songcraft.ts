@@ -1,0 +1,111 @@
+/**
+ * Advanced musical controls and song-structure vocabulary.
+ *
+ * Every value here mirrors `packages/schemas` (`luber_schemas.songcraft`),
+ * which in turn was read out of the pinned ACE-Step build
+ * (`acestep/constants.py` @ 6d467e4b) rather than chosen. The UI must
+ * never offer a value the engine does not accept, so
+ * `songcraft.parity.test.ts` asserts this file against the Python source
+ * of truth — a drifting constant fails the web test suite.
+ *
+ * Only parameters LUBER has verified are exposed. Several other engine
+ * parameters exist and are deliberately absent; the reasons live next to
+ * `UNEXPOSED_ENGINE_PARAMETERS` in the Python module.
+ */
+
+/** Upstream `BPM_MIN` / `BPM_MAX`. */
+export const BPM_MIN = 30;
+export const BPM_MAX = 300;
+
+/** Upstream allows 10–600; LUBER caps at 360 (verified path only). */
+export const DURATION_MIN = 10;
+export const DURATION_MAX = 360;
+
+/**
+ * Upstream `VALID_TIME_SIGNATURES = [2, 3, 4, 6]`.
+ *
+ * The value the engine conditions on is the bare numerator ("4"), not
+ * "4/4" — the LM's metadata vocabulary is constrained to those integers.
+ * The label is for humans only; the value is what gets sent.
+ */
+export const TIME_SIGNATURE_OPTIONS: { value: string; label: string }[] = [
+  { value: "2", label: "2 (2/4)" },
+  { value: "3", label: "3 (3/4)" },
+  { value: "4", label: "4 (4/4)" },
+  { value: "6", label: "6 (6/8)" },
+];
+
+export const KEYSCALE_NOTES = ["A", "B", "C", "D", "E", "F", "G"] as const;
+/** Upstream also accepts ♯/♭; LUBER offers one spelling per key. */
+export const KEYSCALE_ACCIDENTALS = ["", "#", "b"] as const;
+export const KEYSCALE_MODES = ["major", "minor"] as const;
+
+/** The 42 key/scale values the pinned engine accepts, in the same order. */
+export const VALID_KEY_SCALES: string[] = KEYSCALE_NOTES.flatMap((note) =>
+  KEYSCALE_ACCIDENTALS.flatMap((accidental) =>
+    KEYSCALE_MODES.map((mode) => `${note}${accidental} ${mode}`),
+  ),
+);
+
+/** Canonical section tags the editor offers, in song order. */
+export const SECTION_TAG_PALETTE = [
+  "[Intro]",
+  "[Verse]",
+  "[Verse 1]",
+  "[Verse 2]",
+  "[Pre-Chorus]",
+  "[Chorus]",
+  "[Post-Chorus]",
+  "[Bridge]",
+  "[Break]",
+  "[Instrumental]",
+  "[Outro]",
+] as const;
+
+/** A non-blocking pre-flight finding. Never prevents generation. */
+export interface Advisory {
+  code: string;
+  level: "info" | "warning";
+  message: string;
+  detail: Record<string, unknown>;
+}
+
+/** One parsed lyric section, as reported by the backend parser. */
+export interface SectionSummary {
+  kind: string | null;
+  label: string;
+  index: number | null;
+  line_number: number;
+  line_count: number;
+  has_content: boolean;
+  recognised: boolean;
+}
+
+export interface PreflightResponse {
+  advisories: Advisory[];
+  sections: SectionSummary[];
+  preamble_line_count: number;
+  estimated_syllables: number;
+}
+
+export function isWarning(advisory: Advisory): boolean {
+  return advisory.level === "warning";
+}
+
+/**
+ * Parse a BPM text field.
+ *
+ * Empty means "not specified" — the engine decides — which is a
+ * different answer from any particular number and must stay
+ * distinguishable from one.
+ */
+export function parseBpmInput(raw: string): { bpm: number | null; error: string | null } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { bpm: null, error: null };
+  if (!/^\d+$/.test(trimmed)) return { bpm: null, error: "BPM must be a whole number." };
+  const value = Number(trimmed);
+  if (value < BPM_MIN || value > BPM_MAX) {
+    return { bpm: null, error: `BPM must be between ${BPM_MIN} and ${BPM_MAX}.` };
+  }
+  return { bpm: value, error: null };
+}

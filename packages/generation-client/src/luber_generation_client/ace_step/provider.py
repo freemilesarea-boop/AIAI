@@ -98,7 +98,40 @@ class AceStepProvider(MusicGenerationProvider):
         if request.seed is not None:
             payload["use_random_seed"] = False
             payload["seed"] = request.seed
+        # Musical metadata. Verified at the pinned commit to reach the
+        # DiT via ``dit_generate_kwargs`` in acestep/inference.py — the
+        # ``user_metadata`` block a few lines above it is LM-only, but
+        # these three are forwarded whether or not the LM runs. Omitted
+        # entirely when unset: upstream treats "" as "not specified",
+        # and sending an empty string would be indistinguishable from a
+        # deliberate choice in the trace.
+        if request.bpm is not None:
+            payload["bpm"] = request.bpm
+        if request.key_scale:
+            payload["key_scale"] = request.key_scale
+        if request.time_signature:
+            payload["time_signature"] = request.time_signature
         return payload
+
+    def describe_request(self, request: GenerationRequest) -> dict[str, object]:
+        """Sanitized trace of the request. No base_url, no api_key."""
+        compiled = self._compiler.compile(request)
+        payload = self._build_payload(request)
+        return {
+            "provider": ACE_STEP_PROVIDER_NAME,
+            "model": self._config.model,
+            "engine_version": ACE_STEP_VERSION,
+            "inference_steps": self._config.inference_steps,
+            "original_prompt": compiled.original_prompt,
+            "compiled_prompt": compiled.prompt,
+            "original_lyrics": request.lyrics,
+            "compiled_lyrics": compiled.lyrics,
+            "vocal_language": compiled.vocal_language,
+            "instrumental": compiled.instrumental,
+            "added_conditioning": list(compiled.added_conditioning),
+            "skipped_conditioning": list(compiled.skipped_conditioning),
+            "payload": payload,
+        }
 
     async def generate(self, request: GenerationRequest) -> GenerationResult:
         try:

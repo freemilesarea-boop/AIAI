@@ -26,6 +26,14 @@ class MusicGenerationProvider(ABC):
    the audio worker.
 4. A provider failure surfaces as a standard `ErrorCode` — never a
    fabricated success.
+5. `describe_request(request)` (Phase 8) reports what a provider *would*
+   send without sending it, so a failed run stays inspectable. The base
+   implementation is concrete and returns `{}`, so providers written
+   before Phase 8 keep working unchanged and simply record no trace.
+   Implementations must keep the trace free of credentials, hostnames
+   and local paths — see `PHASE8_ADVANCED_CONTROLS.md`.
+6. A provider that cannot honour an optional musical control must ignore
+   it, never approximate it.
 
 ## Prompt compilation & vocal conditioning (Phase 2+)
 

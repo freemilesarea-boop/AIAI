@@ -24,6 +24,8 @@ Browser → Next.js → FastAPI (POST /v1/generations)
 - Provider contract: `packages/generation-client`
   (`GenerationRequest` → `GenerationResult`), model-agnostic.
 - Status lifecycle + error codes: `packages/schemas`.
+- Advanced musical controls (bpm / key_scale / time_signature),
+  pre-flight advisories, request trace and lineage: `PHASE8_ADVANCED_CONTROLS.md`.
 
 ## Rules
 

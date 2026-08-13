@@ -15,6 +15,7 @@ raw exception strings never reach clients (they are stored in
 
 from __future__ import annotations
 
+import json
 import logging
 from uuid import UUID
 
@@ -56,7 +57,31 @@ class GenerationService:
             seed=generation.seed,
             language=generation.language,
             instrumental=generation.instrumental,
+            bpm=generation.bpm,
+            key_scale=generation.key_scale,
+            time_signature=generation.time_signature,
         )
+
+    async def _record_trace(self, generation_id: UUID, request: GenerationRequest) -> None:
+        """Persist what the provider is about to send.
+
+        Best-effort by design: a trace is diagnostic metadata, so
+        failing to write it must never fail the generation the user
+        actually asked for.
+        """
+        try:
+            trace = self._provider.describe_request(request)
+            if not trace:
+                return
+            await self._repository.record_request_trace(
+                generation_id, trace=json.dumps(trace, ensure_ascii=False)
+            )
+        except Exception:
+            logger.warning(
+                "could not record provider request trace",
+                extra={"generation_id": str(generation_id)},
+                exc_info=True,
+            )
 
     async def execute(
         self, generation_id: UUID, *, worker_id: str | None = None
@@ -76,6 +101,7 @@ class GenerationService:
         try:
             await repo.mark_started(generation_id, status=GenerationStatus.STARTING.value)
             request = self._to_provider_request(generation)
+            await self._record_trace(generation_id, request)
 
             await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
             result = await self._provider.generate(request)

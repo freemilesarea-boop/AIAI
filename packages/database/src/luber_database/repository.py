@@ -39,6 +39,12 @@ class GenerationRepository:
         seed: int | None = None,
         language: str | None = None,
         instrumental: bool = False,
+        bpm: int | None = None,
+        key_scale: str | None = None,
+        time_signature: str | None = None,
+        advisories: str | None = None,
+        parent_generation_id: UUID | None = None,
+        variation_label: str | None = None,
         user_id: UUID | None = None,
         idempotency_key: str | None = None,
     ) -> Generation:
@@ -57,6 +63,12 @@ class GenerationRepository:
             seed=seed,
             language=language,
             instrumental=instrumental,
+            bpm=bpm,
+            key_scale=key_scale,
+            time_signature=time_signature,
+            advisories=advisories,
+            parent_generation_id=parent_generation_id,
+            variation_label=variation_label,
             status=status,
             user_id=user_id,
             idempotency_key=idempotency_key,
@@ -112,6 +124,18 @@ class GenerationRepository:
             raise LookupError(f"generation not found: {generation_id}")
         generation.status = status
         generation.started_at = _utcnow()
+        await self._session.commit()
+
+    async def record_request_trace(self, generation_id: UUID, *, trace: str) -> None:
+        """Store the provider request trace.
+
+        Written *before* the provider runs, so a failed generation is as
+        inspectable as a successful one.
+        """
+        generation = await self._session.get(Generation, generation_id)
+        if generation is None:
+            raise LookupError(f"generation not found: {generation_id}")
+        generation.request_trace = trace
         await self._session.commit()
 
     async def mark_completed(

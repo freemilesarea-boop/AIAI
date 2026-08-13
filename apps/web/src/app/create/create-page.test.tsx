@@ -30,6 +30,13 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
     seed: 1234,
     language: "ko",
     instrumental: false,
+    bpm: null,
+    key_scale: null,
+    time_signature: null,
+    parent_generation_id: null,
+    variation_label: null,
+    advisories: [],
+    request_trace: null,
     status,
     provider: withMaster ? "ace_step" : null,
     model_name: withMaster ? "acestep-v15-turbo" : null,
@@ -82,6 +89,27 @@ function jsonResponse(body: unknown) {
   return { ok: true, status: 200, json: async () => body };
 }
 
+/** Empty advisory result — the editor's pre-flight probe. */
+function preflightBody() {
+  return { advisories: [], sections: [], preamble_line_count: 0, estimated_syllables: 0 };
+}
+
+function isPreflight(url: unknown): boolean {
+  return String(url).includes("/preflight");
+}
+
+/**
+ * A POST that creates a generation.
+ *
+ * The lyrics editor also POSTs to `/v1/generations/preflight` for
+ * advisories, so "did we submit?" assertions must exclude it — a
+ * pre-flight probe is not a submission.
+ */
+function isCreatePost(call: readonly unknown[]): boolean {
+  const [url, init] = call as [string, RequestInit | undefined];
+  return init?.method === "POST" && !isPreflight(url);
+}
+
 /** `RequestInit.headers` is a union; the client always sends a record. */
 function headerOf(init: RequestInit | undefined, name: string): string | undefined {
   return (init?.headers as Record<string, string> | undefined)?.[name];
@@ -96,8 +124,11 @@ function stubServer(statuses: StubGeneration[]) {
   const getCalls: string[] = [];
   let index = 0;
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "POST" && isPreflight(url)) {
+      return jsonResponse(preflightBody());
+    }
     if (init?.method === "POST") {
-      return jsonResponse({ generation_id: GEN_ID, status: "QUEUED" });
+      return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
     }
     getCalls.push(url);
     const spec = statuses[Math.min(index, statuses.length - 1)];
@@ -140,7 +171,7 @@ describe("form validation", () => {
     expect(await screen.findByText("Add a title for your track.")).toBeInTheDocument();
     expect(screen.getByText("Describe the music you want.")).toBeInTheDocument();
     // Nothing was sent to the backend.
-    expect(fetchMock.mock.calls.filter(([, i]) => i?.method === "POST")).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(0);
   });
 
   it("requires lyrics unless the track is instrumental", async () => {
@@ -189,9 +220,9 @@ describe("submission", () => {
     await user.click(screen.getByRole("button", { name: "Generate" }));
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([, i]) => i?.method === "POST")).toBe(true);
+      expect(fetchMock.mock.calls.some(isCreatePost)).toBe(true);
     });
-    const [url, init] = fetchMock.mock.calls.find(([, i]) => i?.method === "POST")!;
+    const [url, init] = fetchMock.mock.calls.find(isCreatePost)!;
     expect(url).toContain("/v1/generations");
     expect(headerOf(init, "Idempotency-Key")).toMatch(/.+/);
     const payload = jsonBodyOf(init);
@@ -218,7 +249,7 @@ describe("submission", () => {
     await user.click(screen.getByRole("button", { name: "Generate" }));
 
     await waitFor(() => {
-      const posts = fetchMock.mock.calls.filter(([, i]) => i?.method === "POST");
+      const posts = fetchMock.mock.calls.filter(isCreatePost);
       expect(posts.length).toBe(2);
       expect(headerOf(posts[0][1], "Idempotency-Key")).not.toBe(
         headerOf(posts[1][1], "Idempotency-Key"),
@@ -238,7 +269,7 @@ describe("submission", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Generating…" })).toBeDisabled());
     await user.click(screen.getByRole("button", { name: "Generating…" }));
 
-    expect(fetchMock.mock.calls.filter(([, i]) => i?.method === "POST")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(1);
   });
 });
 
@@ -378,7 +409,7 @@ describe("failure UX", () => {
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
     await waitFor(() => {
-      const posts = fetchMock.mock.calls.filter(([, i]) => i?.method === "POST");
+      const posts = fetchMock.mock.calls.filter(isCreatePost);
       expect(posts.length).toBe(2);
       expect(headerOf(posts[0][1], "Idempotency-Key")).not.toBe(
         headerOf(posts[1][1], "Idempotency-Key"),
@@ -519,8 +550,11 @@ describe("polling discipline", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST" && isPreflight(url)) {
+          return jsonResponse(preflightBody());
+        }
         if (init?.method === "POST") {
-          return jsonResponse({ generation_id: GEN_ID, status: "QUEUED" });
+          return jsonResponse({ generation_id: GEN_ID, status: "QUEUED", advisories: [] });
         }
         inFlight += 1;
         maxConcurrent = Math.max(maxConcurrent, inFlight);

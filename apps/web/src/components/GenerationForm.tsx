@@ -1,17 +1,31 @@
 "use client";
 
 /**
- * The generation form: title, prompt, lyrics, vocal, language, duration.
+ * The generation form: title, prompt, lyrics, vocal, language, duration,
+ * plus the optional Phase 8 advanced controls and structure editor.
  *
  * Semantic form controls with real labels throughout — validation
  * errors are announced via `aria-describedby` and the invalid field
  * receives focus, so keyboard and screen-reader users get the same
  * feedback as sighted mouse users.
+ *
+ * Two Phase 8 rules are enforced here rather than trusted:
+ *
+ * - **Advanced controls are optional and default to empty.** A form the
+ *   user never touches submits exactly the fields Phase 7 submitted.
+ * - **Advisories never gate submission.** They are rendered beside the
+ *   lyrics and ignored by `handleSubmit`; only objectively invalid input
+ *   (an out-of-range BPM, a missing title) stops a request.
  */
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { AdvancedControls } from "@/components/AdvancedControls";
+import { AdvisoryList } from "@/components/AdvisoryList";
+import { StructureOutline } from "@/components/StructureOutline";
+import { usePreflight } from "@/hooks/usePreflight";
 import type { CreateGenerationInput, VocalGender } from "@/lib/api";
+import { SECTION_TAG_PALETTE, parseBpmInput } from "@/lib/songcraft";
 
 const VOCAL_OPTIONS: { value: VocalGender; label: string }[] = [
   { value: "female", label: "Female" },
@@ -24,7 +38,13 @@ const LANGUAGE_OPTIONS = [
   { value: "en", label: "English" },
 ];
 
-/** Phase 3 exposes conservative presets, not the upstream 600s ceiling. */
+/**
+ * Conservative presets, not the engine ceiling.
+ *
+ * `luber_schemas.songcraft` defines longer presets, but nothing above
+ * 60s has been verified end to end on this deployment — so nothing above
+ * 60s is offered. See docs/PHASE8_ADVANCED_CONTROLS.md.
+ */
 const DURATION_OPTIONS = [
   { value: 30, label: "30 seconds" },
   { value: 60, label: "60 seconds" },
@@ -34,19 +54,44 @@ export const TITLE_MAX = 200;
 export const PROMPT_MAX = 4000;
 export const LYRICS_MAX = 20000;
 
+/** Everything "Generate again" carries over from a previous track. */
+export interface GenerationFormInitialValues {
+  title: string;
+  prompt: string;
+  lyrics: string;
+  vocalGender: VocalGender;
+  language: string;
+  duration: number;
+  bpm: string;
+  keyScale: string;
+  timeSignature: string;
+}
+
 export interface GenerationFormProps {
   onSubmit: (input: CreateGenerationInput) => void;
   disabled?: boolean;
   busy?: boolean;
+  initialValues?: Partial<GenerationFormInitialValues>;
+  /** Lineage banner: the track this draft was started from. */
+  parent?: { id: string; title: string } | null;
+  onClearParent?: () => void;
 }
 
 interface FieldErrors {
   title?: string;
   prompt?: string;
   lyrics?: string;
+  bpm?: string;
 }
 
-export function GenerationForm({ onSubmit, disabled = false, busy = false }: GenerationFormProps) {
+export function GenerationForm({
+  onSubmit,
+  disabled = false,
+  busy = false,
+  initialValues,
+  parent = null,
+  onClearParent,
+}: GenerationFormProps) {
   const ids = {
     title: useId(),
     prompt: useId(),
@@ -56,19 +101,71 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
     duration: useId(),
   };
 
-  const [title, setTitle] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [lyrics, setLyrics] = useState("");
-  const [vocalGender, setVocalGender] = useState<VocalGender>("female");
-  const [language, setLanguage] = useState("ko");
-  const [duration, setDuration] = useState(30);
+  const [title, setTitle] = useState(initialValues?.title ?? "");
+  const [prompt, setPrompt] = useState(initialValues?.prompt ?? "");
+  const [lyrics, setLyrics] = useState(initialValues?.lyrics ?? "");
+  const [vocalGender, setVocalGender] = useState<VocalGender>(
+    initialValues?.vocalGender ?? "female",
+  );
+  const [language, setLanguage] = useState(initialValues?.language ?? "ko");
+  const [duration, setDuration] = useState(initialValues?.duration ?? 30);
+  const [bpm, setBpm] = useState(initialValues?.bpm ?? "");
+  const [keyScale, setKeyScale] = useState(initialValues?.keyScale ?? "");
+  const [timeSignature, setTimeSignature] = useState(initialValues?.timeSignature ?? "");
   const [errors, setErrors] = useState<FieldErrors>({});
 
   const titleRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
+  const pendingCaretRef = useRef<number | null>(null);
 
   const instrumental = vocalGender === "instrumental";
+
+  // Advisories come from the backend so the editor and the stored
+  // record can never disagree. Instrumental tracks still get checked:
+  // "these lyrics will not be sung" is a useful thing to hear.
+  const preflight = usePreflight({
+    lyrics,
+    duration,
+    language,
+    instrumental,
+  });
+
+  // Restore the caret after a section tag is inserted, so the user can
+  // keep typing where the tag left them.
+  useLayoutEffect(() => {
+    const caret = pendingCaretRef.current;
+    if (caret === null) return;
+    pendingCaretRef.current = null;
+    const element = lyricsRef.current;
+    if (!element) return;
+    element.focus();
+    element.setSelectionRange(caret, caret);
+  }, [lyrics]);
+
+  useEffect(() => {
+    // Clearing a BPM error as soon as the value becomes valid keeps the
+    // message from lingering after the user has fixed it.
+    if (!errors.bpm) return;
+    if (!parseBpmInput(bpm).error) setErrors((prev) => ({ ...prev, bpm: undefined }));
+  }, [bpm, errors.bpm]);
+
+  /** Insert a section tag on its own line at the caret. */
+  const insertSectionTag = (tag: string) => {
+    if (disabled || instrumental) return;
+    const element = lyricsRef.current;
+    const start = element?.selectionStart ?? lyrics.length;
+    const end = element?.selectionEnd ?? start;
+
+    const before = lyrics.slice(0, start);
+    const after = lyrics.slice(end);
+    const prefix = before === "" || before.endsWith("\n") ? "" : "\n";
+    const suffix = after.startsWith("\n") ? "" : "\n";
+    const insertion = `${prefix}${tag}${suffix}`;
+
+    pendingCaretRef.current = (before + insertion).length;
+    setLyrics(before + insertion + after);
+  };
 
   const validate = (): FieldErrors => {
     const next: FieldErrors = {};
@@ -83,6 +180,11 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
       next.lyrics = `Lyrics must be ${LYRICS_MAX} characters or fewer.`;
     if (!instrumental && !lyrics.trim())
       next.lyrics = "Add lyrics, or switch the vocal to Instrumental.";
+
+    // The only advanced-control rejection: a value the engine cannot
+    // accept. Nothing here rejects a draft for being *unwise*.
+    const bpmError = parseBpmInput(bpm).error;
+    if (bpmError) next.bpm = bpmError;
 
     return next;
   };
@@ -108,6 +210,11 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
       vocal_gender: vocalGender,
       language,
       duration,
+      // Unset controls are sent as null, never as a substituted default.
+      bpm: parseBpmInput(bpm).bpm,
+      key_scale: keyScale || null,
+      time_signature: timeSignature || null,
+      parent_generation_id: parent?.id ?? null,
     });
   };
 
@@ -121,6 +228,26 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+      {parent && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-violet-900/60 bg-violet-950/20 px-3 py-2">
+          <p className="text-sm text-violet-200">
+            Based on <span className="font-medium">{parent.title}</span> — adjust anything
+            before generating.
+          </p>
+          {onClearParent && (
+            <button
+              type="button"
+              onClick={onClearParent}
+              className="rounded border border-violet-800 px-2 py-1 text-xs font-medium
+                text-violet-200 transition-colors hover:bg-violet-900/40
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+            >
+              Start fresh
+            </button>
+          )}
+        </div>
+      )}
+
       <div>
         <label htmlFor={ids.title} className={labelClass}>
           Title
@@ -174,8 +301,29 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
           Lyrics
         </label>
         <p className="mt-1 text-xs text-zinc-500">
-          Section tags like [Verse] and [Chorus] are passed through as written.
+          Section tags like [Verse] and [Chorus] are passed through as written. Plain lyrics
+          with no tags work too.
         </p>
+
+        {!instrumental && (
+          <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Insert section tag">
+            {SECTION_TAG_PALETTE.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => insertSectionTag(tag)}
+                disabled={disabled}
+                className="rounded border border-zinc-700 px-2 py-1 font-mono text-xs text-zinc-300
+                  transition-colors hover:border-violet-600 hover:text-violet-200
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500
+                  disabled:opacity-50"
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+
         <textarea
           id={ids.lyrics}
           ref={lyricsRef}
@@ -199,6 +347,13 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
             {errors.lyrics}
           </p>
         )}
+
+        <StructureOutline
+          sections={preflight.sections}
+          preambleLineCount={preflight.preambleLineCount}
+          estimatedSyllables={preflight.estimatedSyllables}
+        />
+        <AdvisoryList advisories={preflight.advisories} checking={preflight.checking} />
       </div>
 
       <div className="grid gap-5 sm:grid-cols-3">
@@ -259,6 +414,22 @@ export function GenerationForm({ onSubmit, disabled = false, busy = false }: Gen
           </select>
         </div>
       </div>
+
+      <AdvancedControls
+        bpm={bpm}
+        keyScale={keyScale}
+        timeSignature={timeSignature}
+        onBpmChange={setBpm}
+        onKeyScaleChange={setKeyScale}
+        onTimeSignatureChange={setTimeSignature}
+        onClear={() => {
+          setBpm("");
+          setKeyScale("");
+          setTimeSignature("");
+        }}
+        bpmError={errors.bpm}
+        disabled={disabled}
+      />
 
       <button
         type="submit"

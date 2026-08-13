@@ -45,6 +45,27 @@ class Generation(Base):
     language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     instrumental: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # Advanced musical controls. NULL means "the user did not specify",
+    # which is distinct from any particular value — the provider omits
+    # the field entirely rather than sending a default of its own.
+    bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    key_scale: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    time_signature: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    #: JSON: exactly what was sent to the provider, minus credentials.
+    #: NULL on rows created before the trace existed.
+    request_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: JSON: pre-flight advisories recorded at submission time.
+    advisories: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    #: Set when this generation was produced by "generate again" or by
+    #: a variation. SET NULL on delete so removing an original does not
+    #: remove what was made from it.
+    parent_generation_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("generations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    variation_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

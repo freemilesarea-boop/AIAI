@@ -7,9 +7,11 @@ queue boundary.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
+from collections.abc import Iterable
 from enum import StrEnum
 from typing import Annotated
 
@@ -20,16 +22,28 @@ from sqlalchemy.exc import IntegrityError
 from luber_api.dependencies import get_audio_storage, get_enqueuer, get_repository
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
+    AdvisoryResponse,
     GenerationCreateRequest,
     GenerationCreateResponse,
     GenerationListResponse,
     GenerationResponse,
+    PreflightRequest,
+    PreflightResponse,
+    SectionSummary,
 )
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationRepository
 from luber_database.models.generation import Generation
 from luber_generation_client import GENERATION_QUEUE_NAME
-from luber_schemas import AssetType, ErrorCode, GenerationStatus
+from luber_schemas import (
+    Advisory,
+    AssetType,
+    ErrorCode,
+    GenerationStatus,
+    estimate_syllables,
+    parse_structure,
+    preflight,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +56,10 @@ DOWNLOAD_FILENAME_MAX_LENGTH = 60
 #: Signed download URLs are deliberately short-lived: long enough for a
 #: browser to start the transfer, short enough that a leaked URL expires.
 SIGNED_URL_TTL_SECONDS = 300
+
+#: Response fields stored as JSON text on the ORM row; decoded rather
+#: than read straight off the model.
+_DECODED_JSON_FIELDS = frozenset({"advisories", "request_trace"})
 
 
 class AudioAssetKind(StrEnum):
@@ -69,6 +87,84 @@ def build_download_filename(title: str, generation_id: uuid.UUID, extension: str
         slug = f"luber-track-{generation_id.hex[:8]}"
     safe_extension = _FILENAME_STRIP.sub("", extension.lower()) or "bin"
     return f"{slug}.{safe_extension}"
+
+
+def decode_advisories(raw: str | None) -> list[AdvisoryResponse]:
+    """Parse the stored advisory JSON.
+
+    Tolerant on purpose: advisories are diagnostic, so a row written by
+    an older build (or corrupted) degrades to "none recorded" rather
+    than turning a readable generation into a 500.
+    """
+    if not raw:
+        return []
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        logger.warning("could not decode stored advisories")
+        return []
+    if not isinstance(decoded, list):
+        return []
+    parsed: list[AdvisoryResponse] = []
+    for item in decoded:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(AdvisoryResponse.model_validate(item))
+        except ValueError:
+            continue
+    return parsed
+
+
+def to_advisory_responses(advisories: Iterable[Advisory]) -> list[AdvisoryResponse]:
+    """Domain advisories → wire advisories, unchanged in content."""
+    return [
+        AdvisoryResponse(
+            code=advisory.code,
+            level=advisory.level.value,
+            message=advisory.message,
+            detail=dict(advisory.detail),
+        )
+        for advisory in advisories
+    ]
+
+
+def decode_request_trace(raw: str | None) -> dict[str, object] | None:
+    """Parse the stored provider trace, or ``None`` if unavailable.
+
+    The trace is built by the provider's ``describe_request`` and is
+    already free of credentials and host details; this only decodes it.
+    """
+    if not raw:
+        return None
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        logger.warning("could not decode stored request trace")
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def serialize_generation(generation: Generation) -> GenerationResponse:
+    """ORM row → wire response, decoding the JSON text columns.
+
+    ``advisories`` and ``request_trace`` are stored as JSON text but
+    exposed as structured values, so they are decoded here instead of
+    being handed to ``from_attributes`` (which would see the raw string
+    and reject it).
+    """
+    fields = {
+        name: getattr(generation, name)
+        for name in GenerationResponse.model_fields
+        if name not in _DECODED_JSON_FIELDS
+    }
+    return GenerationResponse.model_validate(
+        {
+            **fields,
+            "advisories": decode_advisories(generation.advisories),
+            "request_trace": decode_request_trace(generation.request_trace),
+        }
+    )
 
 
 def caller_may_access(generation: Generation, caller: uuid.UUID | None) -> bool:
@@ -113,6 +209,7 @@ async def create_generation(
     payload: GenerationCreateRequest,
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
+    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> GenerationCreateResponse:
     if idempotency_key is not None and len(idempotency_key) > IDEMPOTENCY_KEY_MAX_LENGTH:
@@ -125,8 +222,30 @@ async def create_generation(
         existing = await repository.get_by_idempotency_key(idempotency_key)
         if existing is not None:
             return GenerationCreateResponse(
-                generation_id=existing.id, status=GenerationStatus(existing.status)
+                generation_id=existing.id,
+                status=GenerationStatus(existing.status),
+                advisories=decode_advisories(existing.advisories),
             )
+
+    # Advisory only. Every finding here is recorded and returned, and
+    # none of them stops the generation: the user's input is submitted
+    # exactly as typed even when the heuristics disagree with it.
+    advisories = preflight(
+        lyrics=payload.lyrics,
+        duration_seconds=payload.duration,
+        language=payload.language,
+        instrumental=payload.instrumental,
+    )
+
+    if payload.parent_generation_id is not None:
+        parent = await repository.get_generation(payload.parent_generation_id)
+        # Same answer for "no such parent" and "not yours", using the
+        # one ownership rule this module already applies to audio reads.
+        # Lineage must not become an existence oracle for other people's
+        # generations, and it must not let a caller attach their work to
+        # a parent they cannot read.
+        if parent is None or not caller_may_access(parent, caller):
+            raise HTTPException(status_code=422, detail="parent generation not found")
 
     try:
         generation = await repository.create_generation(
@@ -138,6 +257,14 @@ async def create_generation(
             seed=payload.seed,
             language=payload.language,
             instrumental=payload.instrumental,
+            bpm=payload.bpm,
+            key_scale=payload.key_scale,
+            time_signature=payload.time_signature,
+            advisories=json.dumps(
+                [advisory.to_dict() for advisory in advisories], ensure_ascii=False
+            ),
+            parent_generation_id=payload.parent_generation_id,
+            variation_label=payload.variation_label,
             status=GenerationStatus.QUEUED.value,
             idempotency_key=idempotency_key,
         )
@@ -150,7 +277,9 @@ async def create_generation(
         if existing is None:
             raise
         return GenerationCreateResponse(
-            generation_id=existing.id, status=GenerationStatus(existing.status)
+            generation_id=existing.id,
+            status=GenerationStatus(existing.status),
+            advisories=decode_advisories(existing.advisories),
         )
 
     await repository.create_job(
@@ -180,6 +309,45 @@ async def create_generation(
     return GenerationCreateResponse(
         generation_id=generation.id,
         status=GenerationStatus(generation.status),
+        advisories=to_advisory_responses(advisories),
+    )
+
+
+@router.post("/preflight", response_model=PreflightResponse)
+async def preflight_generation(payload: PreflightRequest) -> PreflightResponse:
+    """Advisories for a draft, without creating anything.
+
+    Read-only and side-effect free: it touches no database, enqueues no
+    job, and never reaches the provider. It exists so the editor can show
+    the findings that submitting *would* record, computed by the same
+    ``preflight`` the create path uses — one implementation, so the
+    editor and the stored advisories can never disagree.
+
+    Nothing here can reject a generation. Findings are advice.
+    """
+    structure = parse_structure(payload.lyrics)
+    advisories = preflight(
+        lyrics=payload.lyrics,
+        duration_seconds=payload.duration,
+        language=payload.language,
+        instrumental=payload.instrumental,
+    )
+    return PreflightResponse(
+        advisories=to_advisory_responses(advisories),
+        sections=[
+            SectionSummary(
+                kind=section.kind.value if section.kind is not None else None,
+                label=section.label,
+                index=section.index,
+                line_number=section.line_number,
+                line_count=len(section.lines),
+                has_content=section.has_content,
+                recognised=section.is_recognised,
+            )
+            for section in structure.sections
+        ],
+        preamble_line_count=len(structure.preamble),
+        estimated_syllables=estimate_syllables(payload.lyrics),
     )
 
 
@@ -191,7 +359,7 @@ async def get_generation(
     generation = await repository.get_generation(generation_id)
     if generation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
-    return GenerationResponse.model_validate(generation)
+    return serialize_generation(generation)
 
 
 @router.get("/{generation_id}/audio")
@@ -298,7 +466,7 @@ async def list_generations(
 ) -> GenerationListResponse:
     generations, total = await repository.list_generations(limit=limit, offset=offset)
     return GenerationListResponse(
-        items=[GenerationResponse.model_validate(g) for g in generations],
+        items=[serialize_generation(g) for g in generations],
         total=total,
         limit=limit,
         offset=offset,

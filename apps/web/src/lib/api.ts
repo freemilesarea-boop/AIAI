@@ -10,6 +10,8 @@
  * the persisted contract.
  */
 
+import type { Advisory, PreflightResponse } from "@/lib/songcraft";
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -84,6 +86,21 @@ export interface Generation {
   seed: number | null;
   language: string | null;
   instrumental: boolean;
+  /** Advanced controls. `null` means the engine chose, not a default. */
+  bpm: number | null;
+  key_scale: string | null;
+  time_signature: string | null;
+  /** Lineage: set when this came from "Generate again". */
+  parent_generation_id: string | null;
+  variation_label: string | null;
+  /** Pre-flight findings recorded at submission. */
+  advisories: Advisory[];
+  /**
+   * Sanitized record of what was sent to the provider. `null` means no
+   * trace was recorded — the row predates Phase 8, or the run never
+   * reached the provider.
+   */
+  request_trace: Record<string, unknown> | null;
   status: GenerationStatus;
   provider: string | null;
   model_name: string | null;
@@ -110,11 +127,24 @@ export interface CreateGenerationInput {
   vocal_gender: VocalGender;
   language: string;
   duration: number;
+  /**
+   * Advanced controls — all optional. Omitted (or `null`) means the
+   * engine decides; the backend sends nothing at all for an unset
+   * control rather than substituting a default of its own.
+   */
+  bpm?: number | null;
+  key_scale?: string | null;
+  time_signature?: string | null;
+  /** Set when this request came from "Generate again". */
+  parent_generation_id?: string | null;
+  variation_label?: string | null;
 }
 
 export interface CreateGenerationResponse {
   generation_id: string;
   status: GenerationStatus;
+  /** Informational. The generation was accepted regardless. */
+  advisories: Advisory[];
 }
 
 /**
@@ -175,6 +205,38 @@ export async function createGeneration(
     );
   }
   return (await res.json()) as CreateGenerationResponse;
+}
+
+/**
+ * Advisories for a draft, without creating anything.
+ *
+ * The backend runs the same `preflight` the create call runs, so the
+ * editor cannot show a different verdict from the one that gets stored.
+ * Deliberately not reimplemented in the browser.
+ */
+export async function preflightGeneration(
+  input: {
+    lyrics: string;
+    duration: number;
+    language?: string | null;
+    instrumental?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<PreflightResponse> {
+  const res = await fetch(`${API_BASE_URL}/v1/generations/preflight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    signal,
+  });
+  if (!res.ok) {
+    throw new ApiError(
+      `Preflight failed: ${res.status}`,
+      res.status,
+      await readErrorCode(res),
+    );
+  }
+  return (await res.json()) as PreflightResponse;
 }
 
 export async function getGeneration(

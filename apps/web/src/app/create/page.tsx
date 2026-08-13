@@ -11,24 +11,75 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { GenerationFailure } from "@/components/GenerationFailure";
-import { GenerationForm } from "@/components/GenerationForm";
+import {
+  GenerationForm,
+  type GenerationFormInitialValues,
+} from "@/components/GenerationForm";
 import { GenerationResult } from "@/components/GenerationResult";
 import { GenerationStatusPanel } from "@/components/GenerationStatusPanel";
 import { RecentGenerations } from "@/components/RecentGenerations";
 import { useGenerationJob } from "@/hooks/useGenerationJob";
-import { getGeneration, type CreateGenerationInput, type Generation } from "@/lib/api";
+import {
+  getGeneration,
+  type CreateGenerationInput,
+  type Generation,
+  type VocalGender,
+} from "@/lib/api";
 import { describeGenerationFailure } from "@/lib/errors";
 import { loadRecentGenerations } from "@/lib/generationStorage";
+
+/** A draft started from an existing track: its settings, plus lineage. */
+interface BasedOnDraft {
+  parent: { id: string; title: string };
+  values: GenerationFormInitialValues;
+}
+
+/**
+ * Carry a finished generation's settings into a new draft.
+ *
+ * This is the whole of "Generate again": the previous request's inputs
+ * become the starting point and the previous generation becomes the
+ * parent. No audio is reused — the pinned engine exposes no
+ * audio-conditioned variation on this path, so none is implied.
+ */
+function draftFrom(generation: Generation): BasedOnDraft {
+  return {
+    parent: { id: generation.id, title: generation.title },
+    values: {
+      title: generation.title,
+      prompt: generation.prompt,
+      lyrics: generation.lyrics,
+      vocalGender: generation.vocal_gender as VocalGender,
+      language: generation.language ?? "ko",
+      duration: generation.duration_requested,
+      bpm: generation.bpm === null ? "" : String(generation.bpm),
+      keyScale: generation.key_scale ?? "",
+      timeSignature: generation.time_signature ?? "",
+    },
+  };
+}
 
 export default function CreatePage() {
   const job = useGenerationJob();
   const [recent, setRecent] = useState<Generation[]>([]);
+  const [basedOn, setBasedOn] = useState<BasedOnDraft | null>(null);
   const lastInputRef = useRef<CreateGenerationInput | null>(null);
 
   const handleSubmit = useCallback(
     (input: CreateGenerationInput) => {
       lastInputRef.current = input;
       void job.submit(input);
+    },
+    [job],
+  );
+
+  const handleGenerateAgain = useCallback(
+    (generation: Generation) => {
+      setBasedOn(draftFrom(generation));
+      job.reset();
+      // The form is above the result on mobile and beside it on desktop;
+      // either way the user needs to see the prefilled draft.
+      window.scrollTo({ top: 0, behavior: "smooth" });
     },
     [job],
   );
@@ -101,7 +152,18 @@ export default function CreatePage() {
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
         <div className="lg:sticky lg:top-8">
-          <GenerationForm onSubmit={handleSubmit} busy={isBusy} disabled={isBusy} />
+          {/* Remounting on a new parent is what applies the prefill: the
+              form owns its field state, so a fresh instance is the
+              cleanest way to seed it without fighting the user's edits. */}
+          <GenerationForm
+            key={basedOn?.parent.id ?? "blank"}
+            onSubmit={handleSubmit}
+            busy={isBusy}
+            disabled={isBusy}
+            initialValues={basedOn?.values}
+            parent={basedOn?.parent ?? null}
+            onClearParent={() => setBasedOn(null)}
+          />
         </div>
 
         <div className="flex flex-col gap-6">
@@ -152,7 +214,11 @@ export default function CreatePage() {
           {completed && job.generation && (
             <GenerationResult
               generation={job.generation}
-              onCreateAnother={job.reset}
+              onCreateAnother={() => {
+                setBasedOn(null);
+                job.reset();
+              }}
+              onGenerateAgain={handleGenerateAgain}
               showTechnicalDetails={showDeveloperDetails}
             />
           )}

@@ -21,6 +21,11 @@ import { formatDuration } from "@/lib/generationStatus";
 export interface GenerationResultProps {
   generation: Generation;
   onCreateAnother?: () => void;
+  /**
+   * Start a new draft from this track, keeping its settings and
+   * recording it as the new generation's parent.
+   */
+  onGenerateAgain?: (generation: Generation) => void;
   /** Show provider/model details — useful locally, off by default. */
   showTechnicalDetails?: boolean;
 }
@@ -28,6 +33,7 @@ export interface GenerationResultProps {
 export function GenerationResult({
   generation,
   onCreateAnother,
+  onGenerateAgain,
   showTechnicalDetails = false,
 }: GenerationResultProps) {
   const master = findMasterAsset(generation);
@@ -79,6 +85,43 @@ export function GenerationResult({
         )}
       </dl>
 
+      {(generation.bpm !== null ||
+        generation.key_scale !== null ||
+        generation.time_signature !== null ||
+        generation.parent_generation_id !== null) && (
+        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-zinc-400">
+          {generation.bpm !== null && (
+            <div className="flex gap-1.5">
+              <dt>BPM</dt>
+              <dd className="font-mono tabular-nums text-zinc-300">{generation.bpm}</dd>
+            </div>
+          )}
+          {generation.key_scale !== null && (
+            <div className="flex gap-1.5">
+              <dt>Key</dt>
+              <dd className="text-zinc-300">{generation.key_scale}</dd>
+            </div>
+          )}
+          {generation.time_signature !== null && (
+            <div className="flex gap-1.5">
+              <dt>Time</dt>
+              <dd className="font-mono tabular-nums text-zinc-300">
+                {generation.time_signature}
+              </dd>
+            </div>
+          )}
+          {generation.parent_generation_id !== null && (
+            <div className="flex gap-1.5">
+              <dt>Lineage</dt>
+              <dd className="text-zinc-300">
+                Generated again from an earlier take
+                {generation.variation_label ? ` · ${generation.variation_label}` : ""}
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+
       {master ? (
         <>
           {/* Generated music has no captions track; the player is labelled instead. */}
@@ -114,6 +157,18 @@ export function GenerationResult({
               >
                 Download MP3
               </a>
+            )}
+            {onGenerateAgain && (
+              <button
+                type="button"
+                onClick={() => onGenerateAgain(generation)}
+                className="rounded-lg bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-100
+                  transition-colors hover:bg-zinc-700 focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2
+                  focus-visible:ring-offset-zinc-950"
+              >
+                Generate again
+              </button>
             )}
             {onCreateAnother && (
               <button
@@ -151,6 +206,21 @@ export function GenerationResult({
             </>
           )}
         </dl>
+      )}
+
+      {showTechnicalDetails && generation.request_trace && (
+        <details className="mt-4 border-t border-zinc-800 pt-4">
+          <summary className="cursor-pointer select-none text-xs font-medium text-zinc-400">
+            Request trace
+          </summary>
+          <p className="mt-1.5 text-xs text-zinc-500">
+            What LUBER actually sent to the generation provider. Credentials, hostnames and
+            local paths are never recorded.
+          </p>
+          <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-400">
+            {JSON.stringify(generation.request_trace, null, 2)}
+          </pre>
+        </details>
       )}
     </section>
   );
