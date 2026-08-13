@@ -23,24 +23,32 @@ from luber_api.dependencies import get_audio_storage, get_enqueuer, get_reposito
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
     AdvisoryResponse,
+    ExpectedLineResponse,
     GenerationCreateRequest,
     GenerationCreateResponse,
     GenerationListResponse,
+    GenerationQARequest,
+    GenerationQAResponse,
     GenerationResponse,
+    LongFormQAResponse,
+    LyricLineQAEntry,
     PreflightRequest,
     PreflightResponse,
     SectionSummary,
 )
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationRepository
-from luber_database.models.generation import Generation
+from luber_database.models.generation import Generation, GenerationQA, LyricLineQA
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
+    FULL_SONG_THRESHOLD_SECONDS,
     Advisory,
     AssetType,
     ErrorCode,
     GenerationStatus,
+    LineVerdict,
     estimate_syllables,
+    expected_lyric_lines,
     parse_structure,
     preflight,
 )
@@ -501,3 +509,158 @@ async def delete_generation(
             extra={"generation_id": str(generation_id)},
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _build_qa_response(
+    generation: Generation,
+    record: GenerationQA | None,
+    lines: list[LyricLineQA],
+) -> GenerationQAResponse:
+    """Assemble the QA view: expected lines plus whatever was recorded.
+
+    ``expected_lines`` is re-derived from the stored lyrics on every
+    read, so the review form is always anchored to what was actually
+    submitted rather than to a stale snapshot.
+    """
+    return GenerationQAResponse(
+        generation_id=generation.id,
+        overall_rating=record.overall_rating if record else None,
+        failure_tags=decode_string_list(record.failure_tags) if record else [],
+        section_verdicts=decode_string_map(record.section_verdicts) if record else {},
+        notes=record.notes if record else None,
+        reviewer=record.reviewer if record else None,
+        reviewed=record is not None,
+        expected_lines=[
+            ExpectedLineResponse(index=line.index, section_label=line.section_label, text=line.text)
+            for line in expected_lyric_lines(generation.lyrics)
+        ],
+        lyric_lines=[
+            LyricLineQAEntry(
+                line_index=row.line_index,
+                section_label=row.section_label,
+                line_text=row.line_text,
+                verdict=LineVerdict(row.verdict),
+                note=row.note,
+            )
+            for row in lines
+        ],
+    )
+
+
+@router.get("/{generation_id}/qa", response_model=GenerationQAResponse)
+async def get_generation_qa(
+    generation_id: uuid.UUID,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> GenerationQAResponse:
+    """Human QA for one generation, with the lines to judge against."""
+    generation = await repository.get_generation(generation_id)
+    if generation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+    record = await repository.get_generation_qa(generation_id)
+    lines = await repository.get_lyric_line_qa(generation_id)
+    return _build_qa_response(generation, record, lines)
+
+
+@router.put("/{generation_id}/qa", response_model=GenerationQAResponse)
+async def put_generation_qa(
+    generation_id: uuid.UUID,
+    payload: GenerationQARequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> GenerationQAResponse:
+    """Record a listener's review. Idempotent: re-reviewing corrects it.
+
+    This endpoint stores judgement, never audio analysis, and it never
+    changes the generation itself — a bad review does not alter, hide,
+    or reprocess the track it describes.
+    """
+    generation = await repository.get_generation(generation_id)
+    if generation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    record = await repository.upsert_generation_qa(
+        generation_id,
+        overall_rating=payload.overall_rating,
+        failure_tags=json.dumps([tag.value for tag in payload.failure_tags]),
+        section_verdicts=json.dumps(payload.section_verdicts, ensure_ascii=False),
+        notes=payload.notes,
+        reviewer=payload.reviewer,
+    )
+    lines = await repository.replace_lyric_line_qa(
+        generation_id,
+        [
+            {
+                "line_index": entry.line_index,
+                "section_label": entry.section_label,
+                "line_text": entry.line_text,
+                "verdict": entry.verdict.value,
+                "note": entry.note,
+            }
+            for entry in payload.lyric_lines
+        ],
+    )
+    return _build_qa_response(generation, record, lines)
+
+
+@router.get("/{generation_id}/longform-qa", response_model=LongFormQAResponse)
+async def get_longform_qa(
+    generation_id: uuid.UUID,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> LongFormQAResponse:
+    """Technical summary for the developer QA view.
+
+    Separate endpoint rather than extra fields on ``GenerationResponse``
+    so this diagnostic detail stays out of the listener-facing payload.
+    """
+    generation = await repository.get_generation(generation_id)
+    if generation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    seconds: float | None = None
+    if generation.started_at and generation.completed_at:
+        seconds = (generation.completed_at - generation.started_at).total_seconds()
+    rtf = (
+        seconds / generation.duration_actual
+        if seconds is not None and generation.duration_actual
+        else None
+    )
+    structure = parse_structure(generation.lyrics)
+    return LongFormQAResponse(
+        generation_id=generation.id,
+        requested_duration=generation.duration_requested,
+        actual_duration=generation.duration_actual,
+        sections_requested=len(structure.sections),
+        lyric_line_count=len(expected_lyric_lines(generation.lyrics)),
+        bpm_requested=generation.bpm,
+        key_requested=generation.key_scale,
+        time_signature_requested=generation.time_signature,
+        generation_seconds=round(seconds, 2) if seconds is not None else None,
+        real_time_factor=round(rtf, 3) if rtf is not None else None,
+        status=generation.status,
+        is_full_song=generation.duration_requested >= FULL_SONG_THRESHOLD_SECONDS,
+    )
+
+
+def decode_string_list(raw: str | None) -> list[str]:
+    """Parse a stored JSON list of strings, tolerating a corrupt value."""
+    if not raw:
+        return []
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        logger.warning("could not decode stored string list")
+        return []
+    return [str(item) for item in decoded] if isinstance(decoded, list) else []
+
+
+def decode_string_map(raw: str | None) -> dict[str, str]:
+    """Parse a stored JSON object of strings, tolerating a corrupt value."""
+    if not raw:
+        return {}
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        logger.warning("could not decode stored string map")
+        return {}
+    if not isinstance(decoded, dict):
+        return {}
+    return {str(k): str(v) for k, v in decoded.items()}

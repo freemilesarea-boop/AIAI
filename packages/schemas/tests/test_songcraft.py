@@ -333,7 +333,10 @@ def test_dense_lyrics_warn_and_suggest_a_longer_duration():
 
 
 def test_sparse_lyrics_are_info_and_never_a_warning():
-    found = analyze_density("안녕", 240)
+    # 60s: inside analyze_density's ownership range. At full-song
+    # lengths the budget engine reports this instead — see
+    # test_songform.py::test_density_ownership_switches_at_the_threshold.
+    found = analyze_density("안녕", 60)
     advisory = next(a for a in found if a.code == "LYRICS_SPARSE_FOR_DURATION")
     assert advisory.level is AdvisoryLevel.INFO
     assert advisory.detail["suggested_duration_seconds"] >= DURATION_MIN

@@ -83,7 +83,16 @@ async def test_provider_maps_task_failure(tmp_path):
 
 async def test_provider_times_out_with_generation_timeout(tmp_path):
     server = FakeAceStepServer(FIXTURE, never_finish=True)
-    provider = _provider(server, tmp_path, generation_timeout=0.05)
+    # Duration-aware scaling is switched off here so the flat budget is
+    # the one under test. An operator who deliberately tightens the
+    # timeout must still get the timeout they asked for.
+    provider = _provider(
+        server,
+        tmp_path,
+        generation_timeout=0.05,
+        timeout_base_seconds=0.0,
+        timeout_multiplier=0.0,
+    )
     with pytest.raises(GenerationProviderError) as excinfo:
         await provider.generate(_request())
     assert excinfo.value.error_code is ErrorCode.GENERATION_TIMEOUT

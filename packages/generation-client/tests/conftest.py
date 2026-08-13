@@ -5,9 +5,21 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from luber_database import Base, GenerationRepository, create_session_factory
-from luber_database.models.generation import AudioAsset, Generation, GenerationJob
+from luber_database.models.generation import (
+    AudioAsset,
+    Generation,
+    GenerationJob,
+    GenerationQA,
+    LyricLineQA,
+)
 
-GENERATION_TABLES = [Generation.__table__, GenerationJob.__table__, AudioAsset.__table__]
+GENERATION_TABLES = [
+    Generation.__table__,
+    GenerationJob.__table__,
+    AudioAsset.__table__,
+    GenerationQA.__table__,
+    LyricLineQA.__table__,
+]
 
 
 @pytest.fixture

@@ -109,3 +109,121 @@ export function parseBpmInput(raw: string): { bpm: number | null; error: string 
   }
   return { bpm: value, error: null };
 }
+
+/**
+ * Durations the product offers, shortest first.
+ *
+ * Mirrors `luber_schemas.songform.PRODUCT_DURATIONS`. Each is a
+ * validated point: 30/60 from Phase 3, 120/180/240 from the Phase 9
+ * long-form gates. The engine accepts up to 600s and the API schema up
+ * to 360s — neither is offered, because neither has been validated end
+ * to end on this deployment.
+ */
+export const PRODUCT_DURATIONS = [30, 60, 120, 180, 240] as const;
+export const PRODUCT_MAX_DURATION = 240;
+
+/** At or above this, a request is a full song rather than a demo. */
+export const FULL_SONG_THRESHOLD_SECONDS = 120;
+
+export interface StructureTemplate {
+  id: string;
+  name: string;
+  description: string;
+  sections: string[];
+  suggestedDuration: number;
+}
+
+/**
+ * Section-tag skeletons the editor can insert.
+ *
+ * These are conditioning aids, not controls: ACE-Step reads section
+ * tags as part of the lyric text and nothing more. A template makes a
+ * recognisable arrangement more likely; it does not enforce one.
+ */
+export const STRUCTURE_TEMPLATES: StructureTemplate[] = [
+  {
+    id: "pop",
+    name: "Pop",
+    description: "Two verses into a repeated chorus, with a bridge before the last one.",
+    sections: ["[Intro]", "[Verse 1]", "[Pre-Chorus]", "[Chorus]", "[Verse 2]",
+      "[Pre-Chorus]", "[Chorus]", "[Bridge]", "[Final Chorus]", "[Outro]"],
+    suggestedDuration: 180,
+  },
+  {
+    id: "ballad",
+    name: "Ballad",
+    description: "Verse-led and slower to arrive; the chorus lands after more story.",
+    sections: ["[Intro]", "[Verse 1]", "[Verse 2]", "[Chorus]", "[Verse 3]",
+      "[Chorus]", "[Bridge]", "[Final Chorus]", "[Outro]"],
+    suggestedDuration: 240,
+  },
+  {
+    id: "rnb",
+    name: "R&B",
+    description: "Tighter frame with room for phrasing rather than more sections.",
+    sections: ["[Intro]", "[Verse 1]", "[Pre-Chorus]", "[Chorus]", "[Verse 2]",
+      "[Chorus]", "[Bridge]", "[Outro]"],
+    suggestedDuration: 180,
+  },
+  {
+    id: "band",
+    name: "Band",
+    description: "Leaves an instrumental slot where a solo would sit.",
+    sections: ["[Intro]", "[Verse 1]", "[Chorus]", "[Verse 2]", "[Chorus]",
+      "[Instrumental]", "[Final Chorus]", "[Outro]"],
+    suggestedDuration: 180,
+  },
+  {
+    id: "minimal",
+    name: "Verse / Chorus",
+    description: "The smallest shape that still reads as a song.",
+    sections: ["[Verse]", "[Chorus]"],
+    suggestedDuration: 60,
+  },
+];
+
+export interface SongPreset {
+  id: string;
+  name: string;
+  description: string;
+  duration: number;
+  templateId: string | null;
+  instrumental: boolean;
+}
+
+/** A starting frame. Never carries a prompt or lyrics — that stays the user's. */
+export const SONG_PRESETS: SongPreset[] = [
+  { id: "short_demo", name: "Short Demo", description: "One verse and a chorus, for trying an idea quickly.", duration: 60, templateId: "minimal", instrumental: false },
+  { id: "full_pop_song", name: "Full Pop Song", description: "A complete pop arrangement with a bridge and a final chorus.", duration: 180, templateId: "pop", instrumental: false },
+  { id: "ballad", name: "Ballad", description: "Longer and verse-led, for a slower emotional build.", duration: 240, templateId: "ballad", instrumental: false },
+  { id: "rnb", name: "R&B", description: "A tighter frame that leaves space for vocal phrasing.", duration: 180, templateId: "rnb", instrumental: false },
+  { id: "band_song", name: "Band Song", description: "Verse/chorus with an instrumental section for a solo.", duration: 180, templateId: "band", instrumental: false },
+  { id: "instrumental", name: "Instrumental", description: "No vocals. Structure tags are left out entirely.", duration: 120, templateId: null, instrumental: true },
+];
+
+export function templateText(template: StructureTemplate): string {
+  return template.sections.join("\n\n") + "\n";
+}
+
+export function findTemplate(id: string | null): StructureTemplate | null {
+  return id ? (STRUCTURE_TEMPLATES.find((t) => t.id === id) ?? null) : null;
+}
+
+/**
+ * Whether the sheet holds writing the user would mind losing.
+ *
+ * Section tags alone do not count: swapping one bare skeleton for
+ * another loses nothing. Any other non-blank line does count.
+ */
+export function lyricsHaveContent(lyrics: string): boolean {
+  return lyrics
+    .split("\n")
+    .some((line) => line.trim() !== "" && !/^\s*\[[^\]]{1,40}\]\s*$/.test(line));
+}
+
+export function formatDurationLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds} seconds`;
+  const minutes = seconds / 60;
+  if (!Number.isInteger(minutes)) return `${seconds} seconds`;
+  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+}

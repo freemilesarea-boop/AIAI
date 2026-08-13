@@ -1,0 +1,326 @@
+[
+  {
+    "id": "gate_120s",
+    "generation_id": "9d2ee61d-8c9d-4ae8-981f-29f2309dcb32",
+    "group": "long_form_gate",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/9d2ee61d-8c9d-4ae8-981f-29f2309dcb32/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/9d2ee61d-8c9d-4ae8-981f-29f2309dcb32/audio?asset=master&download=true",
+    "duration_requested": 120,
+    "lyrics": "[Intro]\n[Verse 1]\n창밖에 비가 내려와\n너의 이름을 불러봐\n[Pre-Chorus]\n멀어지는 그 순간에\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n[Verse 2]\n조용한 방에 앉아서\n지난 계절을 세어봐\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n[Outro]",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "멀어지는 그 순간에",
+      "다시 만날 그날까지",
+      "나는 여기 있을게",
+      "조용한 방에 앉아서",
+      "지난 계절을 세어봐",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": true,
+    "sections": [
+      "intro",
+      "verse_1",
+      "chorus",
+      "verse_2",
+      "bridge",
+      "final_chorus",
+      "outro"
+    ]
+  },
+  {
+    "id": "gate_180s",
+    "generation_id": "a0dc7f68-e38b-4fd7-af35-2048df8deca9",
+    "group": "long_form_gate",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/a0dc7f68-e38b-4fd7-af35-2048df8deca9/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/a0dc7f68-e38b-4fd7-af35-2048df8deca9/audio?asset=master&download=true",
+    "duration_requested": 180,
+    "lyrics": "[Intro]\n[Verse 1]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Pre-Chorus]\n멀어지는 그 순간에\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n바람이 불어와도\n이 자리를 지킬게\n[Verse 2]\n조용한 방에 앉아서\n지난 계절을 세어봐\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n[Bridge]\n어둠이 걷히면\n[Final Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n[Outro]",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "멀어지는 그 순간에",
+      "다시 만날 그날까지",
+      "나는 여기 있을게",
+      "바람이 불어와도",
+      "이 자리를 지킬게",
+      "조용한 방에 앉아서",
+      "지난 계절을 세어봐",
+      "다시 만날 그날까지",
+      "나는 여기 있을게",
+      "어둠이 걷히면",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": true,
+    "sections": [
+      "intro",
+      "verse_1",
+      "chorus",
+      "verse_2",
+      "bridge",
+      "final_chorus",
+      "outro"
+    ]
+  },
+  {
+    "id": "gate_240s",
+    "generation_id": "c90f1955-1fc7-4a3f-aa6a-580fb0fae475",
+    "group": "long_form_gate",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/c90f1955-1fc7-4a3f-aa6a-580fb0fae475/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/c90f1955-1fc7-4a3f-aa6a-580fb0fae475/audio?asset=master&download=true",
+    "duration_requested": 240,
+    "lyrics": "[Intro]\n[Verse 1]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Pre-Chorus]\n멀어지는 그 순간에\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n바람이 불어와도\n이 자리를 지킬게\n[Verse 2]\n조용한 방에 앉아서\n지난 계절을 세어봐\n낡은 사진 한 장에\n우리 웃음이 남아서\n[Pre-Chorus]\n멀어지는 그 순간에\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n바람이 불어와도\n이 자리를 지킬게\n[Bridge]\n어둠이 걷히면\n새벽이 올 거야\n[Final Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n[Outro]",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "멀어지는 그 순간에",
+      "다시 만날 그날까지",
+      "나는 여기 있을게",
+      "바람이 불어와도",
+      "이 자리를 지킬게",
+      "조용한 방에 앉아서",
+      "지난 계절을 세어봐",
+      "낡은 사진 한 장에",
+      "우리 웃음이 남아서",
+      "멀어지는 그 순간에",
+      "다시 만날 그날까지",
+      "나는 여기 있을게",
+      "바람이 불어와도",
+      "이 자리를 지킬게",
+      "어둠이 걷히면",
+      "새벽이 올 거야",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": true,
+    "sections": [
+      "intro",
+      "verse_1",
+      "chorus",
+      "verse_2",
+      "bridge",
+      "final_chorus",
+      "outro"
+    ]
+  },
+  {
+    "id": "lyrics_dense_verse_A_asis",
+    "generation_id": "307c26c8-1926-49b3-b63f-bfc43cf54f4a",
+    "group": "lyric_formatting",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/307c26c8-1926-49b3-b63f-bfc43cf54f4a/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/307c26c8-1926-49b3-b63f-bfc43cf54f4a/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n조용한 방에 앉아서 지난 계절을 세어봐 낡은 사진 한 장에 우리 웃음이 남아서\n[Chorus]\n바람이 불어와도 이 자리를 지킬게\n",
+    "expected_lines": [
+      "조용한 방에 앉아서 지난 계절을 세어봐 낡은 사진 한 장에 우리 웃음이 남아서",
+      "바람이 불어와도 이 자리를 지킬게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "lyrics_dense_verse_B_shortlines",
+    "generation_id": "47317a12-78fc-4adc-b2bc-eb92cd83570b",
+    "group": "lyric_formatting",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/47317a12-78fc-4adc-b2bc-eb92cd83570b/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/47317a12-78fc-4adc-b2bc-eb92cd83570b/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse 1]\n조용한 방에 앉아서\n지난 계절을 세어봐\n[Verse 2]\n낡은 사진 한 장에\n우리 웃음이 남아서\n[Chorus]\n바람이 불어와도\n이 자리를 지킬게\n",
+    "expected_lines": [
+      "조용한 방에 앉아서",
+      "지난 계절을 세어봐",
+      "낡은 사진 한 장에",
+      "우리 웃음이 남아서",
+      "바람이 불어와도",
+      "이 자리를 지킬게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "lyrics_long_lines_A_asis",
+    "generation_id": "46dda2e7-6f80-4b9e-8e17-e192b46f38cb",
+    "group": "lyric_formatting",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/46dda2e7-6f80-4b9e-8e17-e192b46f38cb/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/46dda2e7-6f80-4b9e-8e17-e192b46f38cb/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와 너의 이름을 불러봐\n흐릿한 유리창 너머 지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지 나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와 너의 이름을 불러봐",
+      "흐릿한 유리창 너머 지난 여름이 스쳐가",
+      "다시 만날 그날까지 나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "lyrics_long_lines_B_shortlines",
+    "generation_id": "89b32c4a-4bb6-4a54-b35e-8830049e5c0a",
+    "group": "lyric_formatting",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/89b32c4a-4bb6-4a54-b35e-8830049e5c0a/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/89b32c4a-4bb6-4a54-b35e-8830049e5c0a/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "lyrics_untagged_A_asis",
+    "generation_id": "42306f71-7461-475d-bccd-32a0d1334919",
+    "group": "lyric_formatting",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/42306f71-7461-475d-bccd-32a0d1334919/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/42306f71-7461-475d-bccd-32a0d1334919/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "어둠이 걷히면 새벽이 올 거야 우리 다시 만나면 아무 말 없이 웃자\n",
+    "expected_lines": [
+      "어둠이 걷히면 새벽이 올 거야 우리 다시 만나면 아무 말 없이 웃자"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "lyrics_untagged_B_shortlines",
+    "generation_id": "902e8582-2a34-4aa4-a11d-c48b1fa195a1",
+    "group": "lyric_formatting",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/902e8582-2a34-4aa4-a11d-c48b1fa195a1/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/902e8582-2a34-4aa4-a11d-c48b1fa195a1/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n어둠이 걷히면\n새벽이 올 거야\n[Chorus]\n우리 다시 만나면\n아무 말 없이 웃자\n",
+    "expected_lines": [
+      "어둠이 걷히면",
+      "새벽이 올 거야",
+      "우리 다시 만나면",
+      "아무 말 없이 웃자"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "vocal_ballad_A_current",
+    "generation_id": "be016160-e298-4e23-8614-bb72d5651430",
+    "group": "vocal_conditioning",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/be016160-e298-4e23-8614-bb72d5651430/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/be016160-e298-4e23-8614-bb72d5651430/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "vocal_ballad_B_contemporary",
+    "generation_id": "0da3cd36-98e5-4ca2-839e-c489a18cb3e7",
+    "group": "vocal_conditioning",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/0da3cd36-98e5-4ca2-839e-c489a18cb3e7/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/0da3cd36-98e5-4ca2-839e-c489a18cb3e7/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "vocal_citypop_A_current",
+    "generation_id": "4c21807a-7b1d-4529-9f9c-74924d255f10",
+    "group": "vocal_conditioning",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/4c21807a-7b1d-4529-9f9c-74924d255f10/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/4c21807a-7b1d-4529-9f9c-74924d255f10/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "vocal_citypop_B_contemporary",
+    "generation_id": "408536ce-d66b-4277-ba00-8f4bc42ff91d",
+    "group": "vocal_conditioning",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/408536ce-d66b-4277-ba00-8f4bc42ff91d/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/408536ce-d66b-4277-ba00-8f4bc42ff91d/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "vocal_rnb_A_current",
+    "generation_id": "dd5aef0d-ec25-463e-89d3-7aaaa1215eca",
+    "group": "vocal_conditioning",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/dd5aef0d-ec25-463e-89d3-7aaaa1215eca/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/dd5aef0d-ec25-463e-89d3-7aaaa1215eca/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  },
+  {
+    "id": "vocal_rnb_B_contemporary",
+    "generation_id": "8be7f108-0dae-416d-b002-b8253228694a",
+    "group": "vocal_conditioning",
+    "audio_url": "http://127.0.0.1:8010/v1/generations/8be7f108-0dae-416d-b002-b8253228694a/audio?asset=preview",
+    "download_url": "http://127.0.0.1:8010/v1/generations/8be7f108-0dae-416d-b002-b8253228694a/audio?asset=master&download=true",
+    "duration_requested": 30,
+    "lyrics": "[Verse]\n창밖에 비가 내려와\n너의 이름을 불러봐\n흐릿한 유리창 너머\n지난 여름이 스쳐가\n[Chorus]\n다시 만날 그날까지\n나는 여기 있을게\n",
+    "expected_lines": [
+      "창밖에 비가 내려와",
+      "너의 이름을 불러봐",
+      "흐릿한 유리창 너머",
+      "지난 여름이 스쳐가",
+      "다시 만날 그날까지",
+      "나는 여기 있을게"
+    ],
+    "is_long_form": false,
+    "sections": []
+  }
+]

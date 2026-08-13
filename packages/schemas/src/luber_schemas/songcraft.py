@@ -122,6 +122,14 @@ SECTION_TAG_PALETTE: tuple[str, ...] = (
 #: Sections that carry no sung words by definition.
 NON_VOCAL_SECTIONS = frozenset({SectionKind.BREAK, SectionKind.INSTRUMENTAL})
 
+#: Sections that are *allowed* to be wordless without it being a mistake.
+#: Wider than ``NON_VOCAL_SECTIONS``: an intro or outro is very often
+#: purely instrumental in an otherwise sung song, so warning about it is
+#: a false positive — observed on the first real full-song request in
+#: Phase 9. These sections can still carry lyrics, so they stay outside
+#: ``NON_VOCAL_SECTIONS``, which governs the instrumental-track check.
+OPTIONALLY_WORDLESS_SECTIONS = NON_VOCAL_SECTIONS | {SectionKind.INTRO, SectionKind.OUTRO}
+
 _SECTION_LINE = re.compile(r"^\s*\[([^\]]{1,40})\]\s*$")
 _SECTION_NAME = re.compile(r"^(?P<name>[a-z][a-z \-]*?)\s*(?P<index>\d+)?$")
 
@@ -135,6 +143,13 @@ _SECTION_ALIASES: dict[str, SectionKind] = {
     "pre chorus": SectionKind.PRE_CHORUS,
     "chorus": SectionKind.CHORUS,
     "hook": SectionKind.CHORUS,
+    # Full-song templates end on a final/last chorus. Without these the
+    # templates Phase 9 ships would warn about their own tags — observed
+    # on the first real 180s run.
+    "final chorus": SectionKind.CHORUS,
+    "final-chorus": SectionKind.CHORUS,
+    "last chorus": SectionKind.CHORUS,
+    "last-chorus": SectionKind.CHORUS,
     "post-chorus": SectionKind.POST_CHORUS,
     "postchorus": SectionKind.POST_CHORUS,
     "post chorus": SectionKind.POST_CHORUS,
@@ -319,7 +334,7 @@ def validate_structure(structure: ParsedStructure, *, instrumental: bool = False
         empty = [
             s.label
             for s in structure.sections
-            if s.kind not in NON_VOCAL_SECTIONS and not s.has_content
+            if s.kind not in OPTIONALLY_WORDLESS_SECTIONS and not s.has_content
         ]
         if empty:
             advisories.append(
@@ -457,7 +472,13 @@ def _strip_non_lyrics(text: str) -> str:
 def analyze_density(
     lyrics: str, duration_seconds: int, *, instrumental: bool = False
 ) -> list[Advisory]:
-    """Compare lyric volume and section count against the target length."""
+    """Compare lyric volume and section count against the target length.
+
+    Owns whole-track density for **short** requests only. At full-song
+    lengths ``analyze_lyric_budget`` takes over the same judgement with
+    per-section detail, so the two never both report on total density —
+    one finding, one owner, no duplicate advice in the editor.
+    """
     if instrumental:
         return []
     advisories: list[Advisory] = []
@@ -469,7 +490,12 @@ def analyze_density(
     if syllables == 0:
         return advisories
 
-    if density > MAX_SYLLABLES_PER_SECOND:
+    # At full-song lengths the budget engine reports total density with
+    # per-section detail, so this one stays quiet about it and reports
+    # only the section-count finding below.
+    reports_density = duration_seconds < FULL_SONG_THRESHOLD_SECONDS
+
+    if reports_density and density > MAX_SYLLABLES_PER_SECOND:
         suggested = int(syllables / (MAX_SYLLABLES_PER_SECOND * SINGABLE_FRACTION))
         advisories.append(
             Advisory(
@@ -486,7 +512,7 @@ def analyze_density(
                 },
             )
         )
-    elif density < MIN_SYLLABLES_PER_SECOND:
+    elif reports_density and density < MIN_SYLLABLES_PER_SECOND:
         suggested = max(
             DURATION_MIN, int(syllables / (MIN_SYLLABLES_PER_SECOND * SINGABLE_FRACTION))
         )
@@ -522,6 +548,203 @@ def analyze_density(
                 detail={"sections": section_count, "max_recommended": max_sections},
             )
         )
+    return advisories
+
+
+# ── Lyric budget for full songs (Phase 9) ─────────────────────────────
+
+#: Above this duration a request is a "full song" rather than a demo,
+#: and per-section budgeting starts to matter more than whole-track
+#: density. Chosen to sit above the two short presets, not measured.
+FULL_SONG_THRESHOLD_SECONDS = 120
+
+#: Sung seconds a single section can plausibly carry before it stops
+#: reading as one section. Heuristic.
+MAX_SECONDS_PER_SECTION = 45
+#: Lines a verse/chorus can carry before the model has to rush them.
+#: Derived from the section-share arithmetic below, not from the model.
+MAX_LINES_PER_VERSE = 8
+MAX_LINES_PER_CHORUS = 6
+
+
+@dataclass(frozen=True)
+class LyricBudget:
+    """What the lyric sheet asks of the requested duration.
+
+    Pure measurement plus arithmetic. It reports; it never edits, and
+    every field is derived from the user's text exactly as written.
+    """
+
+    duration_seconds: int
+    total_lines: int
+    total_syllables: int
+    section_count: int
+    verse_count: int
+    chorus_count: int
+    verse_lines: int
+    chorus_lines: int
+    #: Hangul syllable blocks specifically — the unit Korean is sung in.
+    hangul_syllables: int
+    #: Seconds of the track expected to carry sung words.
+    singable_seconds: float
+
+    @property
+    def syllables_per_singable_second(self) -> float:
+        return self.total_syllables / self.singable_seconds if self.singable_seconds else 0.0
+
+    @property
+    def seconds_per_section(self) -> float:
+        return self.duration_seconds / self.section_count if self.section_count else 0.0
+
+    @property
+    def is_full_song(self) -> bool:
+        return self.duration_seconds >= FULL_SONG_THRESHOLD_SECONDS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "duration_seconds": self.duration_seconds,
+            "total_lines": self.total_lines,
+            "total_syllables": self.total_syllables,
+            "hangul_syllables": self.hangul_syllables,
+            "section_count": self.section_count,
+            "verse_count": self.verse_count,
+            "chorus_count": self.chorus_count,
+            "verse_lines": self.verse_lines,
+            "chorus_lines": self.chorus_lines,
+            "singable_seconds": round(self.singable_seconds, 1),
+            "syllables_per_singable_second": round(self.syllables_per_singable_second, 2),
+            "seconds_per_section": round(self.seconds_per_section, 1),
+            "is_full_song": self.is_full_song,
+        }
+
+
+def count_hangul_syllables(text: str) -> int:
+    """Hangul syllable blocks, the unit Korean lyrics are sung in.
+
+    Normalised to NFC first so decomposed jamo (which macOS and some
+    IMEs produce) is counted as the composed block it represents.
+    """
+    stripped = unicodedata.normalize("NFC", _strip_non_lyrics(text))
+    return len(_HANGUL_SYLLABLES.findall(stripped))
+
+
+def _content_lines(section: Section) -> int:
+    return sum(1 for line in section.lines if line.strip())
+
+
+def compute_lyric_budget(lyrics: str, duration_seconds: int) -> LyricBudget:
+    """Measure the lyric sheet against the requested duration."""
+    structure = parse_structure(lyrics)
+    body = _strip_non_lyrics(lyrics)
+    total_lines = sum(1 for line in body.splitlines() if line.strip())
+
+    verse_sections = [s for s in structure.sections if s.kind is SectionKind.VERSE]
+    chorus_sections = [s for s in structure.sections if s.kind is SectionKind.CHORUS]
+
+    return LyricBudget(
+        duration_seconds=duration_seconds,
+        total_lines=total_lines,
+        total_syllables=estimate_syllables(lyrics),
+        section_count=len(structure.sections),
+        verse_count=len(verse_sections),
+        chorus_count=len(chorus_sections),
+        verse_lines=sum(_content_lines(s) for s in verse_sections),
+        chorus_lines=sum(_content_lines(s) for s in chorus_sections),
+        hangul_syllables=count_hangul_syllables(lyrics),
+        singable_seconds=max(duration_seconds * SINGABLE_FRACTION, 1.0),
+    )
+
+
+def analyze_lyric_budget(
+    lyrics: str, duration_seconds: int, *, instrumental: bool = False
+) -> list[Advisory]:
+    """Full-song budget advisories. Reports only; never rewrites.
+
+    Complements ``analyze_density``, which judges the track as a whole.
+    This looks at how the words are *distributed* — a song can have a
+    perfectly reasonable overall density and still cram twelve lines
+    into one verse.
+    """
+    if instrumental:
+        return []
+    budget = compute_lyric_budget(lyrics, duration_seconds)
+    if budget.total_syllables == 0:
+        return []
+
+    advisories: list[Advisory] = []
+    detail = budget.to_dict()
+
+    # Total-density ownership mirrors analyze_density: it reports below
+    # the full-song threshold, this reports at or above it.
+    if not budget.is_full_song:
+        pass
+    elif budget.syllables_per_singable_second > MAX_SYLLABLES_PER_SECOND:
+        advisories.append(
+            Advisory(
+                code="TOO_MANY_LYRICS",
+                level=AdvisoryLevel.WARNING,
+                message=(
+                    f"{budget.total_lines} lines (~{budget.total_syllables} syllables) is a lot "
+                    f"for {duration_seconds}s. Expect rushed delivery or dropped lines."
+                ),
+                detail=detail,
+            )
+        )
+    elif budget.syllables_per_singable_second < MIN_SYLLABLES_PER_SECOND:
+        advisories.append(
+            Advisory(
+                code="TOO_FEW_LYRICS",
+                level=AdvisoryLevel.INFO,
+                message=(
+                    f"{budget.total_lines} lines (~{budget.total_syllables} syllables) is sparse "
+                    f"for {duration_seconds}s. The model will improvise the gaps."
+                ),
+                detail=detail,
+            )
+        )
+
+    if budget.section_count and budget.seconds_per_section > MAX_SECONDS_PER_SECTION:
+        advisories.append(
+            Advisory(
+                code="SECTION_OVERLOAD",
+                level=AdvisoryLevel.INFO,
+                message=(
+                    f"{budget.section_count} section(s) across {duration_seconds}s leaves about "
+                    f"{budget.seconds_per_section:.0f}s each. Longer songs usually need more "
+                    f"sections to stay shaped."
+                ),
+                detail=detail,
+            )
+        )
+
+    if budget.verse_count and budget.verse_lines / budget.verse_count > MAX_LINES_PER_VERSE:
+        advisories.append(
+            Advisory(
+                code="VERSE_OVERLOAD",
+                level=AdvisoryLevel.WARNING,
+                message=(
+                    f"Verses average "
+                    f"{budget.verse_lines / budget.verse_count:.1f} lines. Above "
+                    f"{MAX_LINES_PER_VERSE} the model tends to skip or compress lines."
+                ),
+                detail=detail,
+            )
+        )
+
+    if budget.chorus_count and budget.chorus_lines / budget.chorus_count > MAX_LINES_PER_CHORUS:
+        advisories.append(
+            Advisory(
+                code="CHORUS_OVERLOAD",
+                level=AdvisoryLevel.WARNING,
+                message=(
+                    f"Choruses average "
+                    f"{budget.chorus_lines / budget.chorus_count:.1f} lines. A chorus that long "
+                    f"rarely lands as a hook."
+                ),
+                detail=detail,
+            )
+        )
+
     return advisories
 
 
@@ -644,5 +867,50 @@ def preflight(
     return [
         *validate_structure(structure, instrumental=instrumental),
         *analyze_density(lyrics, duration_seconds, instrumental=instrumental),
+        *analyze_lyric_budget(lyrics, duration_seconds, instrumental=instrumental),
         *audit_korean_lyrics(lyrics, language),
     ]
+
+
+# ── Expected lyric-line order (Phase 9 QA) ────────────────────────────
+
+
+@dataclass(frozen=True)
+class ExpectedLine:
+    """One line the model was asked to sing, in submission order.
+
+    This is the left-hand side of lyric-completeness QA: what went in.
+    The right-hand side — what actually came out — cannot be derived
+    from the input and has to come from a listener.
+    """
+
+    index: int
+    section_label: str | None
+    text: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {"index": self.index, "section_label": self.section_label, "text": self.text}
+
+
+def expected_lyric_lines(lyrics: str) -> list[ExpectedLine]:
+    """The sung lines of a lyric sheet, in order, with their section.
+
+    Section tags are structure, not words, so they are excluded; blank
+    lines are spacing, so they are excluded too. Everything else is a
+    line the model was asked to sing, indexed from zero.
+
+    Untagged lyrics are fully supported: their lines carry
+    ``section_label=None`` rather than being dropped.
+    """
+    structure = parse_structure(lyrics)
+    lines: list[ExpectedLine] = []
+
+    for raw in structure.preamble:
+        if raw.strip():
+            lines.append(ExpectedLine(len(lines), None, raw.strip()))
+
+    for section in structure.sections:
+        for raw in section.lines:
+            if raw.strip():
+                lines.append(ExpectedLine(len(lines), section.label, raw.strip()))
+    return lines

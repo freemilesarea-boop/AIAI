@@ -22,10 +22,16 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { AdvancedControls } from "@/components/AdvancedControls";
 import { AdvisoryList } from "@/components/AdvisoryList";
+import { SongPresets } from "@/components/SongPresets";
 import { StructureOutline } from "@/components/StructureOutline";
 import { usePreflight } from "@/hooks/usePreflight";
 import type { CreateGenerationInput, VocalGender } from "@/lib/api";
-import { SECTION_TAG_PALETTE, parseBpmInput } from "@/lib/songcraft";
+import {
+  PRODUCT_DURATIONS,
+  SECTION_TAG_PALETTE,
+  formatDurationLabel,
+  parseBpmInput,
+} from "@/lib/songcraft";
 
 const VOCAL_OPTIONS: { value: VocalGender; label: string }[] = [
   { value: "female", label: "Female" },
@@ -39,16 +45,18 @@ const LANGUAGE_OPTIONS = [
 ];
 
 /**
- * Conservative presets, not the engine ceiling.
+ * The durations validated end to end on this deployment.
  *
- * `luber_schemas.songcraft` defines longer presets, but nothing above
- * 60s has been verified end to end on this deployment — so nothing above
- * 60s is offered. See docs/PHASE8_ADVANCED_CONTROLS.md.
+ * 30/60 came from Phase 3; 120/180/240 were each generated for real
+ * against the pinned engine in the Phase 9 long-form gates. The engine
+ * accepts up to 600s and the API schema up to 360s — neither is offered,
+ * because neither has been validated. See
+ * docs/PHASE9_LONG_FORM_ENGINE_AUDIT.md.
  */
-const DURATION_OPTIONS = [
-  { value: 30, label: "30 seconds" },
-  { value: 60, label: "60 seconds" },
-];
+const DURATION_OPTIONS = PRODUCT_DURATIONS.map((value) => ({
+  value,
+  label: formatDurationLabel(value),
+}));
 
 export const TITLE_MAX = 200;
 export const PROMPT_MAX = 4000;
@@ -295,6 +303,19 @@ export function GenerationForm({
           </p>
         )}
       </div>
+
+      <SongPresets
+        lyrics={lyrics}
+        disabled={disabled}
+        onApplyPreset={(preset, nextLyrics) => {
+          // A preset sets the frame only. Lyrics change solely when the
+          // preset carries a structure and the user accepted applying it.
+          setDuration(preset.duration);
+          setVocalGender(preset.instrumental ? "instrumental" : vocalGender);
+          if (nextLyrics !== null) setLyrics(nextLyrics);
+        }}
+        onApplyTemplate={setLyrics}
+      />
 
       <div>
         <label htmlFor={ids.lyrics} className={labelClass}>

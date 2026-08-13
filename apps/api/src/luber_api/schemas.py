@@ -17,9 +17,12 @@ from luber_schemas import (
     BPM_MIN,
     DURATION_MAX,
     DURATION_MIN,
+    QA_SECTIONS,
     VALID_KEY_SCALES,
     VALID_TIME_SIGNATURE_VALUES,
+    FailureTag,
     GenerationStatus,
+    LineVerdict,
     VocalGender,
 )
 
@@ -224,3 +227,90 @@ class GenerationListResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error_code: str
     message: str
+
+
+class LyricLineQAEntry(BaseModel):
+    """One listener verdict about one submitted lyric line."""
+
+    line_index: int = Field(ge=0)
+    section_label: str | None = Field(default=None, max_length=50)
+    line_text: str
+    verdict: LineVerdict
+    note: str | None = None
+
+
+class GenerationQARequest(BaseModel):
+    """A human review of one generation.
+
+    Every field is optional. A reviewer who only wants to record "this
+    is a 2/10, the vocal sounds trot-like" should not be forced to
+    adjudicate forty lyric lines first.
+    """
+
+    #: 1-10 triage. ``None`` means "not rated", which is a different
+    #: statement from a low score.
+    overall_rating: int | None = Field(default=None, ge=1, le=10)
+    failure_tags: list[FailureTag] = Field(default_factory=list)
+    #: Section name -> free-text verdict, for the full-song view.
+    section_verdicts: dict[str, str] = Field(default_factory=dict)
+    notes: str | None = Field(default=None, max_length=5000)
+    reviewer: str | None = Field(default=None, max_length=100)
+    lyric_lines: list[LyricLineQAEntry] = Field(default_factory=list)
+
+    @field_validator("section_verdicts")
+    @classmethod
+    def _known_sections(cls, value: dict[str, str]) -> dict[str, str]:
+        unknown = set(value) - set(QA_SECTIONS)
+        if unknown:
+            raise ValueError(f"unknown QA section(s): {sorted(unknown)}")
+        return value
+
+
+class ExpectedLineResponse(BaseModel):
+    """A line the model was asked to sing, in submission order."""
+
+    index: int
+    section_label: str | None
+    text: str
+
+
+class GenerationQAResponse(BaseModel):
+    """The QA record, plus the expected lyric lines to judge against.
+
+    ``expected_lines`` is derived from the stored lyrics on every read,
+    so the review form is always anchored to what was actually
+    submitted. ``lyric_lines`` holds the verdicts recorded so far and is
+    empty until somebody reviews.
+    """
+
+    generation_id: uuid.UUID
+    overall_rating: int | None = None
+    failure_tags: list[str] = Field(default_factory=list)
+    section_verdicts: dict[str, str] = Field(default_factory=dict)
+    notes: str | None = None
+    reviewer: str | None = None
+    reviewed: bool = False
+    expected_lines: list[ExpectedLineResponse] = Field(default_factory=list)
+    lyric_lines: list[LyricLineQAEntry] = Field(default_factory=list)
+
+
+class LongFormQAResponse(BaseModel):
+    """Developer-facing technical summary of one generation.
+
+    Deliberately separate from :class:`GenerationResponse`: this is
+    diagnostic clutter that must not reach the normal listener-facing
+    experience.
+    """
+
+    generation_id: uuid.UUID
+    requested_duration: int
+    actual_duration: float | None
+    sections_requested: int
+    lyric_line_count: int
+    bpm_requested: int | None
+    key_requested: str | None
+    time_signature_requested: str | None
+    generation_seconds: float | None
+    real_time_factor: float | None
+    status: str
+    is_full_song: bool

@@ -14,7 +14,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from luber_database.models.generation import AudioAsset, Generation, GenerationJob
+from luber_database.models.generation import (
+    AudioAsset,
+    Generation,
+    GenerationJob,
+    GenerationQA,
+    LyricLineQA,
+)
 
 
 def _utcnow() -> datetime:
@@ -330,3 +336,84 @@ class GenerationRepository:
             .order_by(AudioAsset.created_at.asc())
         )
         return list(result.scalars().all())
+
+    # ── Human QA (Phase 9) ────────────────────────────────────────────
+    #
+    # QA is written by a listener after the fact and is always an
+    # upsert: re-reviewing a track corrects the record rather than
+    # appending a second, conflicting opinion.
+
+    async def get_generation_qa(self, generation_id: UUID) -> GenerationQA | None:
+        result = await self._session.execute(
+            select(GenerationQA).where(GenerationQA.generation_id == generation_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_generation_qa(
+        self,
+        generation_id: UUID,
+        *,
+        overall_rating: int | None = None,
+        failure_tags: str | None = None,
+        section_verdicts: str | None = None,
+        notes: str | None = None,
+        reviewer: str | None = None,
+    ) -> GenerationQA:
+        record = await self.get_generation_qa(generation_id)
+        if record is None:
+            record = GenerationQA(generation_id=generation_id)
+            self._session.add(record)
+        record.overall_rating = overall_rating
+        record.failure_tags = failure_tags
+        record.section_verdicts = section_verdicts
+        record.notes = notes
+        record.reviewer = reviewer
+        record.updated_at = _utcnow()
+        await self._session.commit()
+        await self._session.refresh(record)
+        return record
+
+    async def get_lyric_line_qa(self, generation_id: UUID) -> list[LyricLineQA]:
+        result = await self._session.execute(
+            select(LyricLineQA)
+            .where(LyricLineQA.generation_id == generation_id)
+            .order_by(LyricLineQA.line_index.asc())
+        )
+        return list(result.scalars().all())
+
+    async def replace_lyric_line_qa(
+        self,
+        generation_id: UUID,
+        lines: list[dict[str, object]],
+    ) -> list[LyricLineQA]:
+        """Replace the whole line-QA set for one generation.
+
+        Whole-set replacement rather than per-line patching: a review is
+        a single pass over the track, and a partial write would leave
+        lines from an older pass mixed in with the new one.
+        """
+        existing = {row.line_index: row for row in await self.get_lyric_line_qa(generation_id)}
+        seen: set[int] = set()
+
+        for line in lines:
+            raw_index = line["line_index"]
+            index = int(raw_index) if isinstance(raw_index, (int, str)) else 0
+            seen.add(index)
+            row = existing.get(index)
+            if row is None:
+                row = LyricLineQA(generation_id=generation_id, line_index=index)
+                self._session.add(row)
+            section_label = line.get("section_label")
+            row.section_label = str(section_label) if section_label is not None else None
+            row.line_text = str(line["line_text"])
+            row.verdict = str(line["verdict"])
+            note = line.get("note")
+            row.note = str(note) if note is not None else None
+            row.updated_at = _utcnow()
+
+        for index, row in existing.items():
+            if index not in seen:
+                await self._session.delete(row)
+
+        await self._session.commit()
+        return await self.get_lyric_line_qa(generation_id)

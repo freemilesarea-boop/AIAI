@@ -87,6 +87,13 @@ class Generation(Base):
 
     jobs: Mapped[list[GenerationJob]] = relationship(back_populates="generation")
     audio_assets: Mapped[list[AudioAsset]] = relationship(back_populates="generation")
+    #: Human QA (Phase 9). Absent until somebody listens.
+    qa: Mapped[GenerationQA | None] = relationship(
+        back_populates="generation", uselist=False, cascade="all, delete-orphan"
+    )
+    lyric_line_qa: Mapped[list[LyricLineQA]] = relationship(
+        back_populates="generation", cascade="all, delete-orphan"
+    )
 
 
 class GenerationJob(Base):
@@ -143,3 +150,73 @@ class AudioAsset(Base):
     )
 
     generation: Mapped[Generation] = relationship(back_populates="audio_assets")
+
+
+class GenerationQA(Base):
+    """One human's verdict on one generation.
+
+    Phase 9. Everything the automated stack can measure lives on
+    ``Generation``; this is the part only a listener can supply. The
+    absence of a row means nobody has listened yet — which is different
+    from a bad score and must stay distinguishable from one.
+    """
+
+    __tablename__ = "generation_qa"
+    # One record per generation; re-reviewing updates it in place rather
+    # than accumulating conflicting verdicts.
+    __table_args__ = (UniqueConstraint("generation_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    generation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("generations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: 1-10 triage. NULL = not yet rated.
+    overall_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: JSON list of failure tags, e.g. ["KOREAN_LINE_OMISSION"].
+    failure_tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: JSON object mapping section name to verdict, for the full-song view.
+    section_verdicts: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    generation: Mapped[Generation] = relationship(back_populates="qa")
+
+
+class LyricLineQA(Base):
+    """What a listener heard happen to one submitted lyric line.
+
+    The Korean failure that matters most is whole lines being skipped.
+    No automatic detector exists in this stack, so this records the
+    human answer per line and keeps the submitted text alongside it —
+    snapshotted, so the record stays readable if the generation's lyrics
+    are later edited.
+    """
+
+    __tablename__ = "lyric_line_qa"
+    __table_args__ = (UniqueConstraint("generation_id", "line_index"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    generation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("generations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: Position in the submitted sheet, 0-based, section tags excluded.
+    line_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    section_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    line_text: Mapped[str] = mapped_column(Text, nullable=False)
+    #: COMPLETE | PARTIAL | SKIPPED | DUPLICATED | UNKNOWN
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    generation: Mapped[Generation] = relationship(back_populates="lyric_line_qa")

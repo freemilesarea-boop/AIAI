@@ -81,6 +81,7 @@ select = [
 "**/tests/**" = ["T20"]
 # Developer CLI tools: stdout is their user interface.
 "scripts/**" = ["T20"]
+"benchmarks/*/scripts/*.py" = ["T20"]
 # Embedded HTML/JS template: wrapping would alter the rendered page.
 "benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]
 "**/alembic/**" = ["I"]

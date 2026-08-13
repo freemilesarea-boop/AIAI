@@ -21,13 +21,25 @@ from luber_api.jobs import InlineGenerationRunner
 from luber_api.main import create_app
 from luber_audio_utils import LocalAudioStorage
 from luber_database import Base, create_session_factory
-from luber_database.models.generation import AudioAsset, Generation, GenerationJob
+from luber_database.models.generation import (
+    AudioAsset,
+    Generation,
+    GenerationJob,
+    GenerationQA,
+    LyricLineQA,
+)
 from luber_generation_client import MockGenerationProvider
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_WAV = REPO_ROOT / "tests" / "fixtures" / "mock_generation.wav"
 
-GENERATION_TABLES = [Generation.__table__, GenerationJob.__table__, AudioAsset.__table__]
+GENERATION_TABLES = [
+    Generation.__table__,
+    GenerationJob.__table__,
+    AudioAsset.__table__,
+    GenerationQA.__table__,
+    LyricLineQA.__table__,
+]
 
 
 class _FailingRedis:

@@ -40,7 +40,16 @@ class AceStepProviderConfig:
     api_key: str | None = None
     model: str = "acestep-v15-turbo"
     request_timeout: float = 60.0
+    #: Floor for the generation timeout. Duration-aware scaling can only
+    #: raise the budget above this, never below it.
     generation_timeout: float = 600.0
+    #: Fixed part of the duration-aware budget: model warm-up, text
+    #: encode, queue wait, download — the costs that do not scale with
+    #: requested audio length.
+    timeout_base_seconds: float = 300.0
+    #: Seconds of budget per requested audio-second. Measured wall clock
+    #: is well under 1.0x for long form; 4.0 is a deliberate ~10x margin.
+    timeout_multiplier: float = 4.0
     poll_interval: float = 2.0
     output_dir: Path = Path("data/raw-model-output")
     inference_steps: int = 8
@@ -156,7 +165,16 @@ class AceStepProvider(MusicGenerationProvider):
                 error_code=self._classify_upstream_error(str(exc)),
             ) from exc
 
-        result = await self._poll_until_terminal(handle.task_id)
+        timeout = self.timeout_for(request.duration_seconds)
+        logger.info(
+            "polling ACE-Step task",
+            extra={
+                "task_id": handle.task_id,
+                "duration_seconds": request.duration_seconds,
+                "timeout_seconds": round(timeout),
+            },
+        )
+        result = await self._poll_until_terminal(handle.task_id, timeout)
         if result.status is AceStepTaskStatus.FAILED:
             message = result.error_message or "ACE-Step task failed"
             raise GenerationProviderError(
@@ -190,14 +208,36 @@ class AceStepProvider(MusicGenerationProvider):
             model_version=ACE_STEP_VERSION,
         )
 
-    async def _poll_until_terminal(self, task_id: str) -> AceStepQueryResult:
+    def timeout_for(self, duration_seconds: int) -> float:
+        """How long to wait for *duration_seconds* of audio before giving up.
+
+        A timeout exists to tell "the provider is dead or hung" apart
+        from "this is taking a while". A single flat value cannot do
+        that once requests range from 30s to 240s of audio, so the
+        budget is ``base + per_audio_second x duration``, floored at the
+        configured flat timeout so this can only ever be *more* generous
+        than Phase 8 was — no request that used to fit can start failing.
+
+        The coefficients are deliberately loose. Measured on this
+        deployment (docs/PHASE9_LONG_FORM_ENGINE_AUDIT.md §6), wall clock
+        is roughly flat at 76-96s across 120-240s of audio, so
+        ``timeout_multiplier=4.0`` leaves roughly an order of magnitude
+        of headroom. That is the point: the timeout is a liveness
+        backstop, not a performance budget, and a slow-but-working
+        engine must never be reported as a dead one.
+        """
+        scaled = self._config.timeout_base_seconds + (
+            self._config.timeout_multiplier * max(0, duration_seconds)
+        )
+        return max(self._config.generation_timeout, scaled)
+
+    async def _poll_until_terminal(self, task_id: str, budget_seconds: float) -> AceStepQueryResult:
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + self._config.generation_timeout
+        deadline = loop.time() + budget_seconds
         while True:
             if loop.time() >= deadline:
                 raise GenerationProviderError(
-                    f"ACE-Step generation timed out after "
-                    f"{self._config.generation_timeout:.0f}s (task {task_id})",
+                    f"ACE-Step generation timed out after {budget_seconds:.0f}s (task {task_id})",
                     error_code=ErrorCode.GENERATION_TIMEOUT,
                 )
             try:
