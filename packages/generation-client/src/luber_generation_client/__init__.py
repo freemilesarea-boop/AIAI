@@ -6,6 +6,10 @@ Business logic must never import a concrete model integration
 """
 
 from luber_generation_client.ace_step import AceStepProvider
+from luber_generation_client.audio_to_audio import (
+    AudioToAudioProvider,
+    AudioToAudioRequest,
+)
 from luber_generation_client.editing import (
     AudioEditingProvider,
     AudioEditKind,
@@ -34,6 +38,8 @@ __all__ = [
     "AudioEditKind",
     "AudioEditRequest",
     "AudioEditingProvider",
+    "AudioToAudioProvider",
+    "AudioToAudioRequest",
     "GenerationProviderError",
     "GenerationRequest",
     "GenerationResult",

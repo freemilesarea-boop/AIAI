@@ -32,6 +32,7 @@ from luber_generation_client.ace_step.provider import (
     AceStepProvider,
     AceStepProviderConfig,
 )
+from luber_generation_client.audio_to_audio import AudioToAudioRequest
 from luber_generation_client.editing import AudioEditKind, AudioEditRequest
 from luber_generation_client.errors import GenerationProviderError
 from luber_schemas import VocalGender
@@ -436,3 +437,169 @@ class TestCanvasLength:
             _edit(source_wav, source_duration_seconds=2.0, start_seconds=0.5, end_seconds=1.5)
         )
         assert payload["audio_duration"] == pytest.approx(2.0)
+
+
+# ── source-conditioned generation (Phase 13D-2) ───────────────────────
+#
+# Cover is a third operation, not a variant of repaint. These pin the
+# parts that would silently change its meaning: the engine task, the
+# strength direction, the absence of the MLX-inert control, and the fact
+# that the whole canvas is regenerated rather than partly preserved.
+
+
+def _cover(source: Path, **overrides) -> AudioToAudioRequest:
+    defaults = dict(
+        source_audio=source,
+        source_duration_seconds=2.0,
+        title="Midnight Window",
+        prompt="modern synth pop with glossy production",
+        lyrics="[Verse]\n오늘 밤",
+        vocal_gender=VocalGender.FEMALE,
+        language="ko",
+        source_adherence=1.0,
+    )
+    defaults.update(overrides)
+    return AudioToAudioRequest(**defaults)
+
+
+class TestCoverPayload:
+    def _provider(self) -> AceStepProvider:
+        return AceStepProvider(AceStepProviderConfig(base_url="http://x"))
+
+    def test_the_task_is_cover_not_repaint(self, source_wav: Path):
+        payload = self._provider()._build_cover_payload(_cover(source_wav))
+        assert payload["task_type"] == "cover"
+        assert payload["task_type"] != ACE_STEP_REPAINT_TASK
+
+    def test_adherence_maps_straight_onto_the_engine_dial(self, source_wav: Path):
+        """Both mean "closer to the source", so this is a rename not a flip."""
+        provider = self._provider()
+        high = provider._build_cover_payload(_cover(source_wav, source_adherence=1.0))
+        low = provider._build_cover_payload(_cover(source_wav, source_adherence=0.75))
+        assert high["audio_cover_strength"] == pytest.approx(1.0)
+        assert low["audio_cover_strength"] == pytest.approx(0.75)
+
+    def test_the_mlx_inert_control_is_never_sent(self, source_wav: Path):
+        """cover_noise_strength does nothing on this runtime."""
+        payload = self._provider()._build_cover_payload(_cover(source_wav))
+        assert "cover_noise_strength" not in payload
+
+    def test_no_repaint_or_duration_fields(self, source_wav: Path):
+        """A cover has no range, and the engine sizes it from the source."""
+        payload = self._provider()._build_cover_payload(_cover(source_wav))
+        for field in (
+            "repainting_start",
+            "repainting_end",
+            "repaint_mode",
+            "repaint_strength",
+            "audio_duration",
+            "reference_audio_path",
+        ):
+            assert field not in payload
+
+    def test_the_target_style_is_carried(self, source_wav: Path):
+        payload = self._provider()._build_cover_payload(
+            _cover(source_wav, prompt="warm contemporary R&B")
+        )
+        assert "R&B" in str(payload["prompt"])
+
+
+class TestCoverCapability:
+    def test_turbo_can_cover(self):
+        provider = AceStepProvider(
+            AceStepProviderConfig(base_url="http://x", model="acestep-v15-turbo")
+        )
+        assert provider.supports_audio_to_audio() is True
+
+    def test_an_unknown_model_is_not_claimed(self):
+        provider = AceStepProvider(
+            AceStepProviderConfig(base_url="http://x", model="some-future-checkpoint")
+        )
+        assert provider.supports_audio_to_audio() is False
+
+    def test_the_validated_band_matches_the_calibration(self):
+        provider = AceStepProvider(AceStepProviderConfig(base_url="http://x"))
+        assert provider.validated_adherence_range() == (0.75, 1.0)
+
+    async def test_an_uncalibrated_adherence_is_refused_not_clamped(self, source_wav: Path):
+        """0.50 measured as indistinguishable from an unrelated song.
+
+        Clamping would silently give the user a different setting from the
+        one their label promised.
+        """
+        provider = AceStepProvider(AceStepProviderConfig(base_url="http://x"))
+        with pytest.raises(GenerationProviderError, match="outside the validated range"):
+            await provider.create_from_audio(_cover(source_wav, source_adherence=0.5))
+
+    async def test_a_model_that_cannot_cover_refuses(self, source_wav: Path):
+        provider = AceStepProvider(
+            AceStepProviderConfig(base_url="http://x", model="some-future-checkpoint")
+        )
+        with pytest.raises(GenerationProviderError, match="cannot generate from audio"):
+            await provider.create_from_audio(_cover(source_wav))
+
+
+class TestCoverTrace:
+    def test_carries_no_path_bytes_or_credentials(self, source_wav: Path):
+        provider = AceStepProvider(
+            AceStepProviderConfig(base_url="http://engine.internal:9999", api_key="sekrit")
+        )
+        rendered = str(provider.describe_audio_to_audio(_cover(source_wav)))
+        assert "sekrit" not in rendered
+        assert "engine.internal" not in rendered
+        assert str(source_wav) not in rendered
+        assert source_wav.name not in rendered
+
+    def test_records_the_operation_and_adherence(self, source_wav: Path):
+        provider = AceStepProvider(AceStepProviderConfig(base_url="http://x"))
+        trace = provider.describe_audio_to_audio(_cover(source_wav, source_adherence=0.75))
+        assert trace["operation"] == "cover"
+        assert trace["source_adherence"] == pytest.approx(0.75)
+        assert trace["source_audio_transport"] == "multipart"
+
+
+class TestCoverUpload:
+    async def test_the_source_bytes_are_uploaded(self, source_wav: Path, source_wav_bytes: bytes):
+        captured: dict[str, bytes] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {"status": "ok", "models_initialized": True},
+                        "code": 200,
+                        "error": None,
+                    },
+                )
+            if request.url.path == "/release_task":
+                captured["body"] = request.content
+                return httpx.Response(
+                    200, json={"data": {"task_id": "c-1"}, "code": 200, "error": None}
+                )
+            if request.url.path == "/query_result":
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": [{"task_id": "c-1", "status": 2, "result": "engine said no"}],
+                        "code": 200,
+                        "error": None,
+                    },
+                )
+            return httpx.Response(404)
+
+        client = AceStepClient("http://x", transport=httpx.MockTransport(handler))
+        provider = AceStepProvider(AceStepProviderConfig(base_url="http://x"), client=client)
+        try:
+            # The task is failed deliberately: this test is about what was
+            # uploaded, and stopping there keeps it fast.
+            with pytest.raises(GenerationProviderError):
+                await provider.create_from_audio(_cover(source_wav))
+        finally:
+            await provider.close()
+
+        body = captured["body"]
+        assert b'name="src_audio"' in body
+        assert source_wav_bytes in body
+        assert b"cover" in body
+        assert b"cover_noise_strength" not in body

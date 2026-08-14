@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -225,6 +226,66 @@ class GenerationUpdateRequest(BaseModel):
         return self
 
 
+class CoverStrength(StrEnum):
+    """How much a cover should depart from its source.
+
+    Product vocabulary, and the *inverse* of the engine's dial: the engine
+    parameter measures how closely to follow the source, so more
+    transformation means a lower engine value. That inversion happens once,
+    in ``COVER_STRENGTH_TO_ADHERENCE``, and is asserted by tests — getting
+    it backwards would make both labels lie.
+
+    Two levels, not three. Phase 13D measured four engine settings and only
+    two of them (1.00 and 0.75) sit inside the band where the output is
+    still demonstrably derived from the source. Offering a third would mean
+    shipping a value nobody calibrated.
+    """
+
+    SUBTLE = "subtle"
+    STRONG = "strong"
+
+
+#: Product preset → engine ``source_adherence`` (higher = closer to source).
+#:
+#: Both values are measured, not interpolated:
+#:   1.00 — structure agreement 0.507 against the source (control: 0.27)
+#:   0.75 — structure agreement 0.502
+#: 0.50 was measured at 0.325, i.e. indistinguishable from an unrelated
+#: song, so nothing below 0.75 is reachable from the product at all.
+#: See benchmarks/remix_cover/README.md.
+COVER_STRENGTH_TO_ADHERENCE: dict[CoverStrength, float] = {
+    CoverStrength.SUBTLE: 1.0,
+    CoverStrength.STRONG: 0.75,
+}
+
+
+class CoverGenerationRequest(BaseModel):
+    """Create a new performance of a song in a different style.
+
+    The target description is the real control: across calibration it
+    moved similarity to the source far more than the strength dial did.
+    ``strength`` is a coarse secondary adjustment within the band that
+    still counts as a cover.
+
+    Lyrics are inherited from the source and are not editable here — LUBER
+    has no lyric-to-time alignment, so it cannot honestly offer to place
+    different words.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    prompt: str = Field(min_length=1, max_length=4000)
+    strength: CoverStrength = CoverStrength.SUBTLE
+
+    @field_validator("prompt")
+    @classmethod
+    def _trim_prompt(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("describe the style you want")
+        return trimmed
+
+
 class ReplaceRangeRequest(BaseModel):
     """Regenerate one interior span of a song, keeping the rest.
 
@@ -405,6 +466,9 @@ class GenerationResponse(BaseModel):
     edit_kind: str | None = None
     edit_start_seconds: float | None = None
     edit_end_seconds: float | None = None
+    #: How closely a cover was asked to follow its source, 0-1. ``None``
+    #: for everything that is not a cover.
+    source_adherence: float | None = None
     #: Pre-flight findings recorded at submission. Empty list means
     #: "none found"; these were persisted as JSON.
     advisories: list[AdvisoryResponse] = Field(default_factory=list)

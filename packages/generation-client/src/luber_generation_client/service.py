@@ -32,6 +32,10 @@ from luber_audio_utils import (
 )
 from luber_database import GenerationRepository
 from luber_database.models.generation import Generation
+from luber_generation_client.audio_to_audio import (
+    AudioToAudioProvider,
+    AudioToAudioRequest,
+)
 from luber_generation_client.editing import (
     AudioEditingProvider,
     AudioEditKind,
@@ -161,6 +165,75 @@ class GenerationService:
             time_signature=generation.time_signature,
         )
 
+    async def _to_cover_request(
+        self, generation: Generation, stack: AsyncExitStack
+    ) -> AudioToAudioRequest:
+        """Build the engine-neutral request for a source-conditioned cover.
+
+        The child row already carries the target description the user
+        chose and the adherence the API mapped from their chosen preset,
+        so nothing here reinterprets either. The source duration is
+        measured from the audio actually being uploaded.
+        """
+        if generation.parent_generation_id is None:
+            raise GenerationProviderError(
+                "cover has no source generation",
+                error_code=ErrorCode.UNKNOWN_GENERATION_ERROR,
+            )
+        parent = await self._repository.get_generation(generation.parent_generation_id)
+        if parent is None:
+            raise GenerationProviderError(
+                "source generation no longer exists",
+                error_code=ErrorCode.UNKNOWN_GENERATION_ERROR,
+            )
+
+        source_path = await self._resolve_source_audio(parent, stack)
+        measured = probe_audio(source_path).duration_seconds
+        # The provider validates this against its own measured band, so an
+        # out-of-range value fails rather than being quietly clamped into
+        # a setting nobody calibrated.
+        adherence = generation.source_adherence
+        if adherence is None:
+            raise GenerationProviderError(
+                "cover has no recorded source adherence",
+                error_code=ErrorCode.UNKNOWN_GENERATION_ERROR,
+            )
+
+        return AudioToAudioRequest(
+            source_audio=source_path,
+            source_duration_seconds=measured,
+            title=generation.title,
+            prompt=generation.prompt,
+            lyrics=generation.lyrics,
+            vocal_gender=VocalGender(generation.vocal_gender),
+            language=generation.language,
+            instrumental=generation.instrumental,
+            seed=generation.seed,
+            bpm=generation.bpm,
+            key_scale=generation.key_scale,
+            time_signature=generation.time_signature,
+            source_adherence=adherence,
+        )
+
+    async def _record_cover_trace(self, generation_id: UUID, request: AudioToAudioRequest) -> None:
+        """Persist what the cover provider is about to send. Best-effort."""
+        try:
+            provider = self._provider
+            if not isinstance(provider, AudioToAudioProvider):
+                return
+            trace = provider.describe_audio_to_audio(request)
+            if not trace:
+                return
+            await self._repository.record_request_trace(
+                generation_id, trace=json.dumps(trace, ensure_ascii=False)
+            )
+        except Exception:
+            logger.warning(
+                "could not record provider cover trace",
+                extra={"generation_id": str(generation_id)},
+                exc_info=True,
+            )
+
     def _to_provider_request(self, generation: Generation) -> GenerationRequest:
         return GenerationRequest(
             title=generation.title,
@@ -240,7 +313,23 @@ class GenerationService:
             await repo.mark_started(generation_id, status=GenerationStatus.STARTING.value)
 
             async with AsyncExitStack() as stack:
-                if generation.edit_kind is not None:
+                if generation.edit_kind == EditKind.COVER.value:
+                    # A cover is source-conditioned generation, not an
+                    # edit. Routing it through edit() would claim repaint's
+                    # preservation guarantee, and routing it through
+                    # generate() would drop the source entirely. Neither
+                    # is a legal fallback: if this provider cannot do it,
+                    # the run fails.
+                    if not isinstance(self._provider, AudioToAudioProvider):
+                        raise GenerationProviderError(
+                            "configured provider cannot generate from audio",
+                            error_code=ErrorCode.MODEL_LOAD_FAILED,
+                        )
+                    cover_request = await self._to_cover_request(generation, stack)
+                    await self._record_cover_trace(generation_id, cover_request)
+                    await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
+                    result = await self._provider.create_from_audio(cover_request)
+                elif generation.edit_kind is not None:
                     # An audio edit must reach an editing provider or fail.
                     # Falling back to generate() would quietly hand the
                     # user a new, unrelated song in place of the edit they

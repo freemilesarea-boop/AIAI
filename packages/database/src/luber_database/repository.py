@@ -56,6 +56,7 @@ class GenerationRepository:
         edit_kind: str | None = None,
         edit_start_seconds: float | None = None,
         edit_end_seconds: float | None = None,
+        source_adherence: float | None = None,
         user_id: UUID | None = None,
         idempotency_key: str | None = None,
     ) -> Generation:
@@ -84,6 +85,7 @@ class GenerationRepository:
             edit_kind=edit_kind,
             edit_start_seconds=edit_start_seconds,
             edit_end_seconds=edit_end_seconds,
+            source_adherence=source_adherence,
             status=status,
             user_id=user_id,
             idempotency_key=idempotency_key,

@@ -67,6 +67,7 @@ export function generation(overrides: Partial<Generation> = {}): Generation {
     edit_kind: null,
     edit_start_seconds: null,
     edit_end_seconds: null,
+    source_adherence: null,
     advisories: [],
     request_trace: null,
     status: "COMPLETED",

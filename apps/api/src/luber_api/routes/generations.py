@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from luber_api.dependencies import get_audio_storage, get_enqueuer, get_repository
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
+    COVER_STRENGTH_TO_ADHERENCE,
     ENGINE_LATENT_FRAME_SECONDS,
     EXTENSION_TOTAL_MAX_SECONDS,
     MIN_PRESERVED_SECONDS,
@@ -30,6 +31,7 @@ from luber_api.schemas import (
     BulkIdsRequest,
     BulkProjectRequest,
     BulkResultResponse,
+    CoverGenerationRequest,
     CreatedGeneration,
     ExpectedLineResponse,
     ExtendGenerationRequest,
@@ -616,6 +618,64 @@ async def _editable_parent(
     if source_seconds <= 0:
         raise HTTPException(status_code=409, detail="this song's audio is unavailable")
     return parent, source_seconds
+
+
+@router.post(
+    "/{generation_id}/cover",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=GenerationCreateResponse,
+)
+async def cover_generation(
+    generation_id: uuid.UUID,
+    payload: CoverGenerationRequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+    enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
+    storage: Annotated[AudioStorage, Depends(get_audio_storage)],
+    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
+) -> GenerationCreateResponse:
+    """Create a new performance of a song in a different style.
+
+    The engine regenerates the whole performance, steered by a semantic
+    sketch of the source — it does not keep the original recording, which
+    is why this is a cover and not a remix. Calibration measured the
+    result as demonstrably derived from the source (structure agreement
+    0.50 against 0.27 for an unrelated song) at the two settings the
+    product offers, and at nothing below them.
+
+    Lyrics and musical metadata are inherited; the target style is what
+    the user supplies. No engine vocabulary appears in this contract.
+    """
+    parent, source_seconds = await _editable_parent(
+        generation_id, repository, storage, caller, verb="covered"
+    )
+    adherence = COVER_STRENGTH_TO_ADHERENCE[payload.strength]
+
+    child = await repository.create_generation(
+        title=parent.title,
+        # The target style is the point of the operation, so it replaces
+        # the parent's brief rather than being appended to it.
+        prompt=payload.prompt,
+        # Inherited verbatim: LUBER has no lyric-to-time alignment and so
+        # cannot honestly offer to change the words.
+        lyrics=parent.lyrics,
+        vocal_gender=parent.vocal_gender,
+        # The engine uses the source as its canvas, so the result keeps
+        # the source's length.
+        duration_requested=math.ceil(source_seconds),
+        seed=None,
+        language=parent.language,
+        instrumental=parent.instrumental,
+        bpm=parent.bpm,
+        key_scale=parent.key_scale,
+        time_signature=parent.time_signature,
+        parent_generation_id=parent.id,
+        generation_group_id=uuid.uuid4(),
+        edit_kind=EditKind.COVER.value,
+        # No time range: a cover regenerates everything.
+        source_adherence=adherence,
+        status=GenerationStatus.QUEUED.value,
+    )
+    return await _queue_edit_child(child, parent, repository, enqueuer)
 
 
 @router.post(

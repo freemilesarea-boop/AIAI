@@ -176,6 +176,18 @@ here lets LUBER claim a lyric lands at a particular moment.
 5. Cover shares no code with repaint's preservation guarantee. Nothing
    about Phases 13B/13C transfers to it.
 
+## Product outcome (Phase 13D-2)
+
+Classified **COVER_ONLY** and shipped as **Create Cover** after the
+product owner's listening pass confirmed the results are musically usable.
+That verdict is subjective and is recorded, with its limits, in
+`benchmarks/remix_cover/README.md` — it is not a benchmark against any
+other system.
+
+The product exposes two strengths mapped onto the two calibrated engine
+values (1.00 and 0.75) with the direction inverted, since more
+transformation means less adherence. `cover_noise_strength` is never sent.
+
 ## Does the engine expose explicit source preservation?
 
 Not in the sense repaint does. There is no mask, no step injection, and no

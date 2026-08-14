@@ -48,7 +48,7 @@ class AssetType(StrEnum):
 
 
 class EditKind(StrEnum):
-    """How a generation was produced from another generation's audio.
+    """How a generation was derived from another generation's audio.
 
     A *product* vocabulary, not the engine's. Both kinds reach ACE-Step
     as the same primitive — regenerate this time range, preserve the rest
@@ -69,8 +69,25 @@ class EditKind(StrEnum):
     guesswork.
     """
 
+    #: ``COVER`` is a third case and not an edit at all: the engine
+    #: regenerates the whole performance steered by a semantic sketch of
+    #: the source, preserving none of the recording. It shares this column
+    #: because the question the column answers — "how did this come from
+    #: its parent?" — is the same one. It carries no time range.
     EXTEND = "EXTEND"
     REPLACE_RANGE = "REPLACE_RANGE"
+    COVER = "COVER"
+
+    @property
+    def preserves_source_audio(self) -> bool:
+        """Whether the parent's recording survives into the result.
+
+        True for the repaint-backed edits, where the engine re-imposes the
+        source outside the edited range. False for a cover, which
+        regenerates everything. The UI uses this to avoid promising
+        preservation it does not get.
+        """
+        return self in (EditKind.EXTEND, EditKind.REPLACE_RANGE)
 
 
 class ErrorCode(StrEnum):

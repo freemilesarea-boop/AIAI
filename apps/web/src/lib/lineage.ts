@@ -10,7 +10,7 @@
 
 import type { Generation } from "@/lib/api";
 
-export type RelationKind = "generated-again" | "extended" | "replaced";
+export type RelationKind = "generated-again" | "extended" | "replaced" | "cover";
 
 export interface Relation {
   kind: RelationKind;
@@ -44,6 +44,17 @@ export function describeRelation(generation: Generation): Relation | null {
       kind: "extended",
       label: added === null ? "Extended" : `Extended +${added}s`,
       detail: "The original recording is kept and new music continues from its end.",
+    };
+  }
+
+  if (generation.edit_kind === "COVER") {
+    return {
+      kind: "cover",
+      label: "Cover",
+      // No claim that the recording or the voice survives — calibration
+      // showed neither does.
+      detail:
+        "A new performance in a different style, guided by this song's musical structure.",
     };
   }
 

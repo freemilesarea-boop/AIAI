@@ -113,6 +113,16 @@ class Generation(Base):
     edit_start_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     edit_end_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    #: Phase 13D. How closely a COVER was asked to follow its source,
+    #: 0-1, higher being closer. NULL for every other kind of generation.
+    #:
+    #: Its own column rather than a reuse of ``edit_start_seconds``: that
+    #: field is documented as seconds into the source, and storing a ratio
+    #: in it would make the recorded provenance untrue. The worker routes
+    #: on this value, so it also cannot live in ``request_trace``, which is
+    #: best-effort diagnostics and may legitimately be absent.
+    source_adherence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

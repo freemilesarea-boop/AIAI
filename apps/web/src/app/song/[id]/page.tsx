@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { CreateCover } from "@/components/CreateCover";
 import { ExtendSong } from "@/components/ExtendSong";
 import { ReplaceSection } from "@/components/ReplaceSection";
 import { trackFromGeneration, usePlayer } from "@/components/player/PlayerProvider";
@@ -147,6 +148,10 @@ export default function SongDetailPage() {
             <ReplaceSection
               generation={generation}
               onReplaced={(id) => router.push(`/song/${id}`)}
+            />
+            <CreateCover
+              generation={generation}
+              onCovered={(id) => router.push(`/song/${id}`)}
             />
           </div>
         )}

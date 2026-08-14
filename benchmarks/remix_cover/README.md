@@ -8,10 +8,41 @@ Engine contract: `docs/ACE_STEP_COVER_AUDIT.md`.
 Engine: ACE-Step `6d467e4b`, model `acestep-v15-turbo`, 8 steps, MLX,
 LM disabled.
 
-**Conclusion: WEAK_AUDIO_CONDITIONING. No product feature was built.**
-The source demonstrably influences the output, but not strongly enough to
-claim the song is recognisable without a listener saying so, and the
-influence collapses below `audio_cover_strength = 0.75`.
+**Outcome: COVER_ONLY. Shipped as "Create Cover" (Phase 13D-2).**
+
+The measurements alone stopped short of a product decision — they showed
+real but modest source influence and could not establish that the song is
+*recognisable*, which is a listening judgement. The product owner has
+since listened and supplied it; see "Human listening verdict" below. The
+classification moved from WEAK_AUDIO_CONDITIONING to COVER_ONLY on that
+evidence, and the feature ships under the name the engine's behaviour
+supports.
+
+## Human listening verdict
+
+Recorded 2026-08-14 from the product owner, after listening to the package
+in `~/Desktop/LUBER_PHASE13D_LISTENING/`:
+
+- The source-conditioned results are musically usable enough to justify
+  exposing the capability.
+- Subjectively, and given that no project-specific fine-tuning or training
+  has been done, overall generation quality feels roughly comparable to an
+  early-generation Suno v2-era system.
+- The operation behaves more truthfully as a **cover** — source-conditioned
+  regeneration — than as a preservation-based remix.
+
+Two limits on how that verdict may be used:
+
+1. It is a **subjective product-owner assessment, not a measured
+   benchmark**. LUBER has run no comparison against Suno, and nothing in
+   this repository may state or imply that LUBER objectively matches Suno
+   v2. The remark is recorded because it is the reason the gate opened,
+   not as a performance claim.
+2. It concerns usability, not preservation. The measurements below still
+   stand: the recording is not retained, and no product copy may say it is.
+
+The engine findings are unchanged: the source demonstrably influences the
+output, and that influence collapses below `audio_cover_strength = 0.75`.
 
 ## Contents
 
@@ -143,23 +174,44 @@ Time-varying musical structure:
   and was replaced by the time-varying pass rather than reported as a
   finding.
 
-## Why no product feature was built
+## How the classification was reached
 
 The gate for shipping was REMIX_READY or COVER_ONLY.
 
-- Not REMIX_READY: a remix keeps the recording. This does not — the
-  performance and voice are fully regenerated.
-- COVER_ONLY requires that "song composition is recognisable". That is a
-  listening judgement. The measurements are consistent with it but do not
-  establish it, and asserting it from a 0.34 correlation would be exactly
-  the kind of claim the rest of this project refuses to make.
+- **Not REMIX_READY.** A remix keeps the recording. This does not — the
+  performance and voice are fully regenerated, and −20.5 dB SI-SDR is
+  nowhere near repaint's 26–78 dB on genuinely preserved audio.
+- **COVER_ONLY**, on the combination of the measurements above and the
+  listening verdict. The measurements establish that the output is
+  derived from the source rather than from the prompt alone; the listener
+  established that the derivation is musically usable. Neither alone was
+  sufficient, which is why the calibration phase deliberately stopped and
+  waited.
 
-So the classification is **WEAK_AUDIO_CONDITIONING**, and per the phase
-rule the work stops at calibration. If a listener confirms the song is
-recognisable in `01_BASELINE` and `05_STYLE_KPOP`, the classification
-becomes COVER_ONLY and the feature should ship as **"Create cover"** —
-never "Remix" — with the product strength range mapped onto the
-calibrated engine band **0.75–1.00** and nothing below it offered.
+## What shipped, and the constraints it inherited
+
+Phase 13D-2 exposes this as **Create Cover**. Never "Remix": the name has
+to match what the engine does to the audio.
+
+| Product preset | Engine `audio_cover_strength` | Measured |
+|---|---|---|
+| Closer to the original (`subtle`) | 1.00 | structure 0.507 |
+| More transformed (`strong`) | 0.75 | structure 0.502 |
+
+Two presets, not three. Only two engine values sit inside the calibrated
+band, so a third would be a setting nobody measured. The mapping is
+**inverted** — more transformation means *lower* adherence — and that
+inversion is asserted by a test, because getting it backwards would leave
+both labels lying while everything still appeared to work.
+
+Nothing below 0.75 is reachable from the product, and the provider refuses
+an out-of-band value rather than clamping it.
+
+The UI copy is bounded by the same evidence: it says a cover is "a new
+performance inspired by this song's musical structure", and states that
+the original recording and vocal are not kept. It does not claim melody,
+performance or voice preservation, because none of those were measured or
+observed.
 
 ## Reproducing
 

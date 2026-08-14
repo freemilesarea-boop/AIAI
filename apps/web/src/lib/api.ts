@@ -105,6 +105,8 @@ export interface Generation {
   edit_kind: string | null;
   edit_start_seconds: number | null;
   edit_end_seconds: number | null;
+  /** How closely a cover was asked to follow its source. `null` otherwise. */
+  source_adherence: number | null;
   /** Shared by songs produced by the same CREATE. */
   generation_group_id: string | null;
   /**
@@ -351,6 +353,40 @@ export const MIN_REPLACE_SECONDS = 1;
 
 /** A replacement must leave this much of the original behind. */
 export const MIN_PRESERVED_SECONDS = 1;
+
+/**
+ * How much a cover should depart from its source.
+ *
+ * Two levels, because calibration only validated two engine settings.
+ * The server maps these onto the measured band; the browser never sees
+ * an engine value.
+ */
+export type CoverStrength = "subtle" | "strong";
+
+export const COVER_STRENGTHS: { value: CoverStrength; label: string; hint: string }[] = [
+  { value: "subtle", label: "Closer to the original", hint: "Follows the source most closely" },
+  { value: "strong", label: "More transformed", hint: "Leans further into the new style" },
+];
+
+/**
+ * Create a new performance of a song in a different style.
+ *
+ * The engine regenerates the whole performance steered by the source — it
+ * does not keep the original recording. That is why this is a cover.
+ */
+export async function coverGeneration(
+  generationId: string,
+  options: { prompt: string; strength: CoverStrength },
+): Promise<CreateGenerationResponse> {
+  return request<CreateGenerationResponse>(
+    `/v1/generations/${encodeURIComponent(generationId)}/cover`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: options.prompt, strength: options.strength }),
+    },
+  );
+}
 
 /**
  * Regenerate one interior span of a song, keeping the rest.
