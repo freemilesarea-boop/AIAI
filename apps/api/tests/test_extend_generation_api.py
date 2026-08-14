@@ -68,7 +68,10 @@ async def test_the_child_is_identifiable_as_an_audio_edit(client):
     ).json()["generation_id"]
 
     child = (await client.get(f"/v1/generations/{child_id}")).json()
-    assert child["edit_kind"] == "REGENERATE_RANGE"
+    # Phase 13C renamed this from the engine primitive's name to the
+    # product operation, because a second operation now maps to the same
+    # primitive and the worker anchors the two differently.
+    assert child["edit_kind"] == "EXTEND"
     assert parent["edit_kind"] is None
 
 

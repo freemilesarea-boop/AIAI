@@ -61,6 +61,30 @@ EXTENSION_TOTAL_MAX_SECONDS = DURATION_MAX
 #: machine, not from documentation.
 ENGINE_TOTAL_MAX_SECONDS = 600
 
+#: Seconds per latent frame in the pinned engine: 1920 samples at 48 kHz
+#: (``conditioning_masks.py`` computes ``sample_rate // 1920``). Edit
+#: boundaries snap to this grid, so nothing finer can be promised.
+ENGINE_LATENT_FRAME_SECONDS = 1920 / 48_000  # 0.04
+
+#: Default repaint crossfade, in latent frames, on *each* side of the
+#: replaced span (``repaint_latent_crossfade_frames = 10``). The ramp
+#: extends into the preserved audio, so 0.4s on either side of the range
+#: is a blend rather than untouched source.
+ENGINE_REPAINT_CROSSFADE_SECONDS = 10 * ENGINE_LATENT_FRAME_SECONDS  # 0.4
+
+#: Shortest span worth replacing. The engine floor is a single latent
+#: frame (0.04s), but with 0.4s of crossfade ramping in from each side a
+#: span below ~0.8s would be entirely blend and contain no genuinely
+#: regenerated audio. One second is the smallest range that actually
+#: replaces something.
+MIN_REPLACE_SECONDS = 1.0
+
+#: A replacement must leave real source audio behind, on at least one
+#: side and in total. Below this the "preserved" audio is nothing but
+#: crossfade, and the operation is a full regeneration wearing the wrong
+#: name — which is the substitution this whole line of work rules out.
+MIN_PRESERVED_SECONDS = 1.0
+
 
 class GenerationCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -198,6 +222,51 @@ class GenerationUpdateRequest(BaseModel):
     def _at_least_one_change(self) -> GenerationUpdateRequest:
         if self.title is None and self.favorite is None:
             raise ValueError("nothing to update")
+        return self
+
+
+class ReplaceRangeRequest(BaseModel):
+    """Regenerate one interior span of a song, keeping the rest.
+
+    Times are seconds from the start of the song, which is the only unit
+    the product knows. LUBER does not know where a verse or a chorus
+    begins, so it does not offer to replace one.
+
+    ``prompt`` optionally re-describes the music for this span only. It
+    conditions the whole request — the engine has no way to apply a
+    description to part of a canvas — so it is best read as "steer the
+    regenerated part", and the parent's own brief is used when it is
+    omitted. Lyrics are deliberately not editable here: LUBER has no
+    lyric-to-time alignment, so a per-section lyric change would be a
+    promise it cannot keep.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    start_seconds: float = Field(ge=0.0)
+    end_seconds: float = Field(gt=0.0)
+    prompt: str | None = Field(default=None, min_length=1, max_length=4000)
+
+    @field_validator("start_seconds", "end_seconds")
+    @classmethod
+    def _finite(cls, value: float) -> float:
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError("times must be finite")
+        return value
+
+    @field_validator("prompt")
+    @classmethod
+    def _trim_prompt(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @model_validator(mode="after")
+    def _range_is_usable(self) -> ReplaceRangeRequest:
+        span = self.end_seconds - self.start_seconds
+        if span < MIN_REPLACE_SECONDS:
+            raise ValueError(f"a replaced section must be at least {MIN_REPLACE_SECONDS}s long")
         return self
 
 

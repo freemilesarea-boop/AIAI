@@ -61,6 +61,9 @@ def source_wav_bytes(source_wav: Path) -> bytes:
 def _edit(source: Path, **overrides) -> AudioEditRequest:
     defaults = dict(
         source_audio=source,
+        # The fixture is 2.0s; the default range extends past it, which is
+        # what Phase 13B's tests are about. Interior cases override both.
+        source_duration_seconds=2.0,
         start_seconds=30.0,
         end_seconds=45.0,
         title="Midnight Window",
@@ -397,3 +400,39 @@ def test_the_edit_kind_is_not_engine_vocabulary():
     """The domain must not speak ACE-Step."""
     for member in AudioEditKind:
         assert "repaint" not in member.value.lower()
+
+
+# ── canvas length: Phase 13C ──────────────────────────────────────────
+
+
+class TestCanvasLength:
+    """What the engine is told to return, for each shape of edit."""
+
+    def test_an_interior_range_keeps_the_source_length(self, source_wav: Path):
+        edit = _edit(source_wav, source_duration_seconds=30.0, start_seconds=10.0, end_seconds=20.0)
+        # Not 20.0: the song is 30s and stays 30s.
+        assert edit.total_seconds == pytest.approx(30.0)
+        assert edit.extends_source is False
+
+    def test_a_range_past_the_end_lengthens_the_canvas(self, source_wav: Path):
+        edit = _edit(source_wav, source_duration_seconds=30.0, start_seconds=30.0, end_seconds=45.0)
+        assert edit.total_seconds == pytest.approx(45.0)
+        assert edit.extends_source is True
+
+    def test_the_payload_asks_for_the_full_source_on_a_replacement(self, source_wav: Path):
+        provider = AceStepProvider(AceStepProviderConfig(base_url="http://x"))
+        payload = provider._build_edit_payload(
+            _edit(source_wav, source_duration_seconds=30.0, start_seconds=10.0, end_seconds=20.0)
+        )
+        assert payload["audio_duration"] == pytest.approx(30.0)
+        assert payload["repainting_start"] == pytest.approx(10.0)
+        assert payload["repainting_end"] == pytest.approx(20.0)
+        assert payload["task_type"] == "repaint"
+
+    def test_a_short_interior_edit_does_not_trip_the_generation_floor(self, source_wav: Path):
+        """An edit's canvas may be shorter than a generation may request."""
+        provider = AceStepProvider(AceStepProviderConfig(base_url="http://x"))
+        payload = provider._build_edit_payload(
+            _edit(source_wav, source_duration_seconds=2.0, start_seconds=0.5, end_seconds=1.5)
+        )
+        assert payload["audio_duration"] == pytest.approx(2.0)

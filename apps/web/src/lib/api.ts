@@ -344,6 +344,39 @@ export const MAX_SONG_SECONDS = 360;
 export const EXTENSION_CHOICES = [15, 30, 60] as const;
 
 /**
+ * Shortest span worth replacing, mirroring `MIN_REPLACE_SECONDS`.
+ * Below this the engine's boundary crossfade consumes the whole range.
+ */
+export const MIN_REPLACE_SECONDS = 1;
+
+/** A replacement must leave this much of the original behind. */
+export const MIN_PRESERVED_SECONDS = 1;
+
+/**
+ * Regenerate one interior span of a song, keeping the rest.
+ *
+ * Real inpainting on the server: the audio outside the span is the
+ * original recording, preserved by the model. The client sends times.
+ */
+export async function replaceGenerationRange(
+  generationId: string,
+  range: { startSeconds: number; endSeconds: number; prompt?: string },
+): Promise<CreateGenerationResponse> {
+  return request<CreateGenerationResponse>(
+    `/v1/generations/${encodeURIComponent(generationId)}/replace-range`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        start_seconds: range.startSeconds,
+        end_seconds: range.endSeconds,
+        ...(range.prompt ? { prompt: range.prompt } : {}),
+      }),
+    },
+  );
+}
+
+/**
  * Append newly generated music to the end of a song.
  *
  * The backend performs a real audio edit — the parent's master

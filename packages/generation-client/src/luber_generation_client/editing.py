@@ -70,12 +70,17 @@ class AudioEditRequest(BaseModel):
     kind: AudioEditKind = AudioEditKind.REGENERATE_RANGE
     source_audio: Path
 
-    #: Range to regenerate, in seconds from the start of the source.
-    #: Phase 13B only produces ranges that start at the source's end, but
-    #: the contract permits any interior range because that is what the
-    #: engine primitive actually does.
+    #: Range to regenerate, in seconds from the start of the source. An
+    #: interior range replaces that span; a range reaching past the end of
+    #: the source extends it, because the engine pads and generates into
+    #: the padding.
     start_seconds: float = Field(ge=0.0)
     end_seconds: float = Field(gt=0.0)
+
+    #: Measured length of ``source_audio``. Supplied by the caller, which
+    #: has already probed the file, so the contract does not decode audio
+    #: to work out how long its own canvas is.
+    source_duration_seconds: float = Field(gt=0.0)
 
     #: Conditioning, inherited from the source generation.
     title: str = Field(min_length=1, max_length=200)
@@ -141,8 +146,20 @@ class AudioEditRequest(BaseModel):
 
     @property
     def total_seconds(self) -> float:
-        """Length of the canvas the engine is expected to return."""
-        return self.end_seconds
+        """Length of the canvas the engine is expected to return.
+
+        The source's own length, unless the range runs past it — in which
+        case the engine pads and the result is longer. Returning
+        ``end_seconds`` unconditionally would tell the engine that a
+        replacement of 10s-20s inside a 30s song produces a 20s canvas,
+        which is a third of the song thrown away.
+        """
+        return max(self.source_duration_seconds, self.end_seconds)
+
+    @property
+    def extends_source(self) -> bool:
+        """Whether this edit makes the audio longer than it was."""
+        return self.end_seconds > self.source_duration_seconds
 
 
 class AudioEditingProvider(ABC):

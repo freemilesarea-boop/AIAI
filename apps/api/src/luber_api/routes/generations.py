@@ -23,7 +23,9 @@ from sqlalchemy.exc import IntegrityError
 from luber_api.dependencies import get_audio_storage, get_enqueuer, get_repository
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
+    ENGINE_LATENT_FRAME_SECONDS,
     EXTENSION_TOTAL_MAX_SECONDS,
+    MIN_PRESERVED_SECONDS,
     AdvisoryResponse,
     BulkIdsRequest,
     BulkProjectRequest,
@@ -43,16 +45,18 @@ from luber_api.schemas import (
     LyricLineQAEntry,
     PreflightRequest,
     PreflightResponse,
+    ReplaceRangeRequest,
     SectionSummary,
 )
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationRepository
 from luber_database.models.generation import Generation, GenerationQA, LyricLineQA
-from luber_generation_client import GENERATION_QUEUE_NAME, AudioEditKind
+from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
     FULL_SONG_THRESHOLD_SECONDS,
     Advisory,
     AssetType,
+    EditKind,
     ErrorCode,
     GenerationStatus,
     LineVerdict,
@@ -575,6 +579,121 @@ async def list_generations(
     )
 
 
+async def _editable_parent(
+    generation_id: uuid.UUID,
+    repository: GenerationRepository,
+    storage: AudioStorage,
+    caller: uuid.UUID | None,
+    *,
+    verb: str,
+) -> tuple[Generation, float]:
+    """Resolve a generation that may serve as the source of an audio edit.
+
+    Shared by every editing route so the preconditions cannot drift apart:
+    an edit needs a readable master, and finding out after the user has
+    queued and waited is a worse experience than a 409 now.
+
+    Returns the parent and its recorded master duration. That duration is
+    a *screening* value only — the boundary the engine receives is
+    measured from the audio itself in the worker.
+    """
+    parent = await repository.get_generation(generation_id)
+    # Same answer for "no such generation" and "not yours", matching the
+    # rule this module already applies to audio reads and lineage.
+    if parent is None or not caller_may_access(parent, caller):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    if parent.status != GenerationStatus.COMPLETED.value:
+        raise HTTPException(status_code=409, detail=f"only a completed song can be {verb}")
+
+    master = next((a for a in parent.audio_assets if a.asset_type == AssetType.MASTER.value), None)
+    if master is None:
+        raise HTTPException(status_code=409, detail="this song has no master audio")
+    if not await storage.exists(master.storage_key):
+        raise HTTPException(status_code=409, detail="this song's audio is unavailable")
+
+    source_seconds = float(master.duration or parent.duration_actual or 0.0)
+    if source_seconds <= 0:
+        raise HTTPException(status_code=409, detail="this song's audio is unavailable")
+    return parent, source_seconds
+
+
+@router.post(
+    "/{generation_id}/replace-range",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=GenerationCreateResponse,
+)
+async def replace_generation_range(
+    generation_id: uuid.UUID,
+    payload: ReplaceRangeRequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+    enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
+    storage: Annotated[AudioStorage, Depends(get_audio_storage)],
+    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
+) -> GenerationCreateResponse:
+    """Regenerate one interior span of a song and keep the rest.
+
+    Real inpainting: the worker uploads the parent's master and the engine
+    re-imposes the source outside the chosen span at every diffusion step,
+    so the audio before and after it is the original recording. The song
+    keeps its length.
+
+    Boundaries land on the engine's 0.04s latent grid, so the span is
+    approximate to within a frame. Nothing here is described to the client
+    in the engine's terms.
+    """
+    parent, source_seconds = await _editable_parent(
+        generation_id, repository, storage, caller, verb="edited"
+    )
+
+    if payload.end_seconds > source_seconds + ENGINE_LATENT_FRAME_SECONDS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"the range ends after the song does "
+                f"({payload.end_seconds:.2f}s > {source_seconds:.2f}s)"
+            ),
+        )
+    end_seconds = min(payload.end_seconds, source_seconds)
+    preserved = source_seconds - (end_seconds - payload.start_seconds)
+    if preserved < MIN_PRESERVED_SECONDS:
+        # Replacing (almost) everything is a regeneration, not an edit.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"a replacement must leave at least {MIN_PRESERVED_SECONDS}s of the original song"
+            ),
+        )
+
+    child = await repository.create_generation(
+        title=parent.title,
+        # An optional re-description steers the regenerated span. The
+        # parent's own brief is the default, because it is what produced
+        # the audio being kept on either side.
+        prompt=payload.prompt or parent.prompt,
+        # Lyrics are inherited verbatim: LUBER has no lyric-to-time
+        # alignment, so it cannot honestly offer to change the words of
+        # one section.
+        lyrics=parent.lyrics,
+        vocal_gender=parent.vocal_gender,
+        # The song keeps its length.
+        duration_requested=math.ceil(source_seconds),
+        seed=None,
+        language=parent.language,
+        instrumental=parent.instrumental,
+        bpm=parent.bpm,
+        key_scale=parent.key_scale,
+        time_signature=parent.time_signature,
+        parent_generation_id=parent.id,
+        generation_group_id=uuid.uuid4(),
+        edit_kind=EditKind.REPLACE_RANGE.value,
+        edit_start_seconds=payload.start_seconds,
+        edit_end_seconds=end_seconds,
+        status=GenerationStatus.QUEUED.value,
+    )
+    return await _queue_edit_child(child, parent, repository, enqueuer)
+
+
 @router.post(
     "/{generation_id}/extend",
     status_code=status.HTTP_202_ACCEPTED,
@@ -601,29 +720,9 @@ async def extend_generation(
     longer would be a worse product for no gain, and the inherited values
     are exactly what conditioned the audio being continued.
     """
-    parent = await repository.get_generation(generation_id)
-    # Same answer for "no such generation" and "not yours", matching the
-    # rule this module already applies to audio reads and lineage.
-    if parent is None or not caller_may_access(parent, caller):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
-
-    if parent.status != GenerationStatus.COMPLETED.value:
-        raise HTTPException(status_code=409, detail="only a completed song can be extended")
-
-    master = next((a for a in parent.audio_assets if a.asset_type == AssetType.MASTER.value), None)
-    if master is None:
-        raise HTTPException(status_code=409, detail="this song has no master audio")
-    # The bytes must be there now, not merely recorded: an edit whose
-    # source has gone missing should fail here rather than after the user
-    # has waited for a worker slot.
-    if not await storage.exists(master.storage_key):
-        raise HTTPException(status_code=409, detail="this song's audio is unavailable")
-
-    # The parent's own recorded duration is the best estimate available
-    # without reading the file, and it is only used to reject obviously
-    # over-long requests early. The boundary the engine actually receives
-    # is measured from the audio in the worker.
-    source_seconds = float(master.duration or parent.duration_actual or 0.0)
+    parent, source_seconds = await _editable_parent(
+        generation_id, repository, storage, caller, verb="extended"
+    )
     total_seconds = source_seconds + payload.seconds
     if total_seconds > EXTENSION_TOTAL_MAX_SECONDS:
         raise HTTPException(
@@ -654,22 +753,37 @@ async def extend_generation(
         # and an extension is a different action. Lineage is what ties it
         # to the parent.
         generation_group_id=uuid.uuid4(),
-        edit_kind=AudioEditKind.REGENERATE_RANGE.value,
+        edit_kind=EditKind.EXTEND.value,
         edit_start_seconds=source_seconds,
         edit_end_seconds=total_seconds,
         status=GenerationStatus.QUEUED.value,
     )
+    return await _queue_edit_child(child, parent, repository, enqueuer)
+
+
+async def _queue_edit_child(
+    child: Generation,
+    parent: Generation,
+    repository: GenerationRepository,
+    enqueuer: GenerationEnqueuer,
+) -> GenerationCreateResponse:
+    """Create the job, enqueue it, and answer like any other submission.
+
+    Shared by every editing route: an edit that cannot be queued must be
+    marked failed rather than left QUEUED forever, and the client should
+    see the same shape a CREATE returns so the existing queue UI needs no
+    special case.
+    """
     await repository.create_job(
         child.id,
         queue_name=GENERATION_QUEUE_NAME,
         status=GenerationStatus.QUEUED.value,
     )
-
     try:
         await enqueuer.enqueue(child.id)
     except Exception as exc:
         logger.exception(
-            "failed to enqueue extension",
+            "failed to enqueue audio edit",
             extra={"generation_id": str(child.id), "parent_id": str(parent.id)},
         )
         await repository.mark_failed(

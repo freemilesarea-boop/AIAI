@@ -3,6 +3,7 @@
 from luber_schemas.enums import (
     QA_SECTIONS,
     AssetType,
+    EditKind,
     ErrorCode,
     FailureTag,
     GenerationStatus,
@@ -81,6 +82,7 @@ __all__ = [
     "Advisory",
     "AdvisoryLevel",
     "AssetType",
+    "EditKind",
     "ErrorCode",
     "ExpectedLine",
     "FailureTag",

@@ -47,6 +47,32 @@ class AssetType(StrEnum):
     STEM = "STEM"
 
 
+class EditKind(StrEnum):
+    """How a generation was produced from another generation's audio.
+
+    A *product* vocabulary, not the engine's. Both kinds reach ACE-Step
+    as the same primitive — regenerate this time range, preserve the rest
+    — and the difference is what the range means:
+
+    ``EXTEND``
+        The range begins at the end of the source, so the engine pads the
+        source and generates into the padding. The song gets longer.
+
+    ``REPLACE_RANGE``
+        The range is interior. The song keeps its length and only that
+        span is regenerated.
+
+    The worker needs the distinction because it anchors the two
+    differently: an extension is re-anchored to the *measured* end of the
+    audio being uploaded, while a replacement uses the absolute times the
+    user chose. Storing one value for both would make that routing
+    guesswork.
+    """
+
+    EXTEND = "EXTEND"
+    REPLACE_RANGE = "REPLACE_RANGE"
+
+
 class ErrorCode(StrEnum):
     """Standard machine-readable error codes returned to the frontend.
 

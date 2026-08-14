@@ -40,7 +40,7 @@ from luber_generation_client.editing import (
 from luber_generation_client.errors import GenerationProviderError
 from luber_generation_client.postprocess import produce_delivery_assets
 from luber_generation_client.provider import GenerationRequest, MusicGenerationProvider
-from luber_schemas import AssetType, ErrorCode, GenerationStatus, VocalGender
+from luber_schemas import AssetType, EditKind, ErrorCode, GenerationStatus, VocalGender
 
 logger = logging.getLogger(__name__)
 
@@ -109,22 +109,43 @@ class GenerationService:
 
         source_path = await self._resolve_source_audio(parent, stack)
         measured = probe_audio(source_path).duration_seconds
-        # The requested total was computed from a measurement taken at
-        # submission time. Re-measuring here keeps the range anchored to
-        # the bytes actually being uploaded, and the recorded extension
-        # length is what the user asked for.
-        extension = (generation.edit_end_seconds or 0.0) - (generation.edit_start_seconds or 0.0)
-        if extension <= 0:
+        stored_start = generation.edit_start_seconds or 0.0
+        stored_end = generation.edit_end_seconds or 0.0
+        if stored_end <= stored_start:
             raise GenerationProviderError(
                 "audio edit has an empty range",
                 error_code=ErrorCode.UNKNOWN_GENERATION_ERROR,
             )
 
+        kind = EditKind(generation.edit_kind or EditKind.EXTEND.value)
+        if kind is EditKind.EXTEND:
+            # The stored start came from a duration measured at submission
+            # time. Re-anchoring to the audio actually being uploaded is
+            # what keeps the seam at the true end of the recording; a
+            # drifted stored value would move it.
+            start_seconds = measured
+            end_seconds = measured + (stored_end - stored_start)
+        else:
+            # An interior range is the user's own choice of times, so it
+            # is used as given. Only the far edge is re-checked against
+            # the real audio, since a range past the end of the file
+            # would silently become an extension.
+            start_seconds = stored_start
+            end_seconds = min(stored_end, measured)
+            if end_seconds <= start_seconds:
+                raise GenerationProviderError(
+                    "replacement range falls outside the source audio",
+                    error_code=ErrorCode.UNKNOWN_GENERATION_ERROR,
+                )
+
         return AudioEditRequest(
-            kind=AudioEditKind(generation.edit_kind or AudioEditKind.REGENERATE_RANGE.value),
+            # One engine primitive serves both: regenerate this range,
+            # preserve the rest. The product-level difference stays here.
+            kind=AudioEditKind.REGENERATE_RANGE,
             source_audio=source_path,
-            start_seconds=measured,
-            end_seconds=measured + extension,
+            source_duration_seconds=measured,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
             # Conditioning is inherited from the child row, which the API
             # populated from the parent — so an edit is described by the
             # same prompt and lyrics that produced the source.

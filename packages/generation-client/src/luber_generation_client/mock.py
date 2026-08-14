@@ -49,6 +49,9 @@ class MockGenerationProvider(MusicGenerationProvider, AudioEditingProvider):
         self.edits: list[AudioEditRequest] = []
 
     async def generate(self, request: GenerationRequest) -> GenerationResult:
+        return self._fixture_result(seed=request.seed)
+
+    def _fixture_result(self, *, seed: int | None) -> GenerationResult:
         path = self._fixture_path
         if not path.is_file():
             raise GenerationProviderError(
@@ -73,7 +76,7 @@ class MockGenerationProvider(MusicGenerationProvider, AudioEditingProvider):
             audio_path=path,
             duration_seconds=frames / sample_rate,
             sample_rate=sample_rate,
-            seed_used=request.seed,
+            seed_used=seed,
             provider=MOCK_PROVIDER_NAME,
             model_name=MOCK_MODEL_NAME,
             model_version=MOCK_MODEL_VERSION,
@@ -101,19 +104,8 @@ class MockGenerationProvider(MusicGenerationProvider, AudioEditingProvider):
         parent's real audio, and the measured range, reached the provider.
         """
         self.edits.append(request)
-        result = await self.generate(
-            GenerationRequest(
-                title=request.title,
-                prompt=request.prompt,
-                lyrics=request.lyrics,
-                vocal_gender=request.vocal_gender,
-                duration_seconds=round(request.total_seconds),
-                seed=request.seed,
-                language=request.language,
-                instrumental=request.instrumental,
-                bpm=request.bpm,
-                key_scale=request.key_scale,
-                time_signature=request.time_signature,
-            )
-        )
-        return result
+        # Deliberately not routed through ``generate``: an edit's canvas
+        # can be shorter than ``DURATION_MIN``, and borrowing the
+        # text-to-music request model would impose a bound that does not
+        # apply to editing.
+        return self._fixture_result(seed=request.seed)

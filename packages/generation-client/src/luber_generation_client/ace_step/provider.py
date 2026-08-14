@@ -32,7 +32,7 @@ from luber_generation_client.provider import (
     GenerationResult,
     MusicGenerationProvider,
 )
-from luber_schemas import ErrorCode
+from luber_schemas import DURATION_MIN, ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +272,12 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider):
                 prompt=request.prompt,
                 lyrics=request.lyrics,
                 vocal_gender=request.vocal_gender,
-                duration_seconds=round(request.total_seconds),
+                # Only prompt/lyrics/vocal/language are read by the
+                # compiler; the duration is carried for shape and clamped
+                # to the text-to-music floor because an edit's canvas may
+                # legitimately be shorter than a generation is allowed to
+                # request.
+                duration_seconds=max(DURATION_MIN, round(request.total_seconds)),
                 seed=request.seed,
                 language=request.language,
                 instrumental=request.instrumental,

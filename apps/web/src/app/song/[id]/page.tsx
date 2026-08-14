@@ -15,6 +15,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { ExtendSong } from "@/components/ExtendSong";
+import { ReplaceSection } from "@/components/ReplaceSection";
 import { trackFromGeneration, usePlayer } from "@/components/player/PlayerProvider";
 import { SongActions } from "@/components/SongActions";
 import { SongCard } from "@/components/SongCard";
@@ -28,6 +29,7 @@ import {
   type Project,
 } from "@/lib/api";
 import { describeGenerationFailure } from "@/lib/errors";
+import { describeRelation } from "@/lib/lineage";
 
 function Detail({ label, value }: { label: string; value: string | number | null }) {
   if (value === null || value === "") return null;
@@ -142,6 +144,10 @@ export default function SongDetailPage() {
               generation={generation}
               onExtended={(id) => router.push(`/song/${id}`)}
             />
+            <ReplaceSection
+              generation={generation}
+              onReplaced={(id) => router.push(`/song/${id}`)}
+            />
           </div>
         )}
         {/* Rename, favourite, duplicate, downloads, project and delete —
@@ -195,16 +201,34 @@ export default function SongDetailPage() {
                 thing: a re-generation shares only settings, an extension
                 is built on this song's actual audio. Saying "no audio was
                 reused" would be false for the second. */}
-            Tracks related to this one. A re-generation reuses the settings only; an extension
-            keeps this song&rsquo;s recording and continues it.
+            Tracks related to this one. Each is labelled with what actually happened to the
+            audio, which is not the same for all of them.
           </p>
           <div className="mt-3 flex flex-col gap-3">
-            {lineage.parent && <SongCard generation={lineage.parent} />}
-            {lineage.children.map((child) => (
-              <div key={child.id} className="sm:pl-6">
-                <SongCard generation={child} />
+            {lineage.parent && (
+              <div>
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
+                  Came from
+                </p>
+                <SongCard generation={lineage.parent} />
               </div>
-            ))}
+            )}
+            {lineage.children.map((child) => {
+              const relation = describeRelation(child);
+              return (
+                <div key={child.id} className="sm:pl-6">
+                  {relation && (
+                    <p
+                      className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-muted)]"
+                      title={relation.detail}
+                    >
+                      {relation.label}
+                    </p>
+                  )}
+                  <SongCard generation={child} />
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
