@@ -1,0 +1,19 @@
+{
+  "note": "LUBER-generated instrumentals, created for this calibration. Project-owned; no commercial recordings were used.",
+  "references": [
+    {
+      "file": "REFERENCE_A_electronic.wav",
+      "generation_id": "2e771ac7-9290-45b8-85b5-1afdae61b3ce",
+      "prompt": "Hard electronic dance instrumental, driving four-on-the-floor kick, bright aggressive saw synth leads, heavy sidechain pumping",
+      "spectral_centroid_hz": 2794,
+      "spectral_rolloff85_hz": 5772
+    },
+    {
+      "file": "REFERENCE_B_acoustic.wav",
+      "generation_id": "2d2aadf0-b1db-4499-ad92-f2a3b2be55bd",
+      "prompt": "Sparse intimate solo acoustic guitar instrumental, gentle fingerpicking, no drums, natural room sound",
+      "spectral_centroid_hz": 665,
+      "spectral_rolloff85_hz": 821
+    }
+  ]
+}

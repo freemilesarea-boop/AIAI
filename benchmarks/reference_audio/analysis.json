@@ -1,0 +1,190 @@
+{
+  "descriptors": {
+    "00_PROMPT_ONLY": {
+      "spectral_centroid_hz": 1390.604726834522,
+      "spectral_rolloff85_hz": 2990.0292586329656,
+      "spectral_flatness": 0.02962862890757264,
+      "rms": 0.1443147778061639,
+      "tempo_bpm": 80.35714285714286,
+      "duration_seconds": 30.0
+    },
+    "01_REFERENCE_A": {
+      "spectral_centroid_hz": 2180.055394422577,
+      "spectral_rolloff85_hz": 4684.729886080456,
+      "spectral_flatness": 0.04962916002995589,
+      "rms": 0.14382445460719132,
+      "tempo_bpm": 63.20224719101124,
+      "duration_seconds": 30.0
+    },
+    "02_REFERENCE_B": {
+      "spectral_centroid_hz": 1261.7331600896885,
+      "spectral_rolloff85_hz": 2361.180024029904,
+      "spectral_flatness": 0.03251837395191898,
+      "rms": 0.12240440207001387,
+      "tempo_bpm": 122.28260869565217,
+      "duration_seconds": 30.0
+    },
+    "03_REFERENCE_A_CONTRADICTORY_PROMPT": {
+      "spectral_centroid_hz": 1134.530857522932,
+      "spectral_rolloff85_hz": 2029.5423193307226,
+      "spectral_flatness": 0.03705885440270855,
+      "rms": 0.14466518977509515,
+      "tempo_bpm": 63.20224719101124,
+      "duration_seconds": 30.0
+    },
+    "04_CONTRADICTORY_PROMPT_ONLY": {
+      "spectral_centroid_hz": 803.2262290688655,
+      "spectral_rolloff85_hz": 1077.2989720541118,
+      "spectral_flatness": 0.02623962840569794,
+      "rms": 0.12823112252482452,
+      "tempo_bpm": 160.71428571428572,
+      "duration_seconds": 30.0
+    },
+    "05_REFERENCE_A_DIFFERENT_SEED": {
+      "spectral_centroid_hz": 2219.3464448640125,
+      "spectral_rolloff85_hz": 4552.181603773585,
+      "spectral_flatness": 0.05519985617396406,
+      "rms": 0.12628129262778914,
+      "tempo_bpm": 85.22727272727273,
+      "duration_seconds": 30.0
+    },
+    "REFERENCE_A_electronic": {
+      "spectral_centroid_hz": 2793.9744088254156,
+      "spectral_rolloff85_hz": 5771.532351370594,
+      "spectral_flatness": 0.07597649106556449,
+      "rms": 0.10464271519341588,
+      "tempo_bpm": 62.5,
+      "duration_seconds": 30.0
+    },
+    "REFERENCE_B_acoustic": {
+      "spectral_centroid_hz": 664.8898280289433,
+      "spectral_rolloff85_hz": 820.5461240655037,
+      "spectral_flatness": 0.02642324071435815,
+      "rms": 0.1051524770980447,
+      "tempo_bpm": 79.22535211267606,
+      "duration_seconds": 30.0
+    }
+  },
+  "comparisons": {
+    "REFERENCE_A_electronic -> 01_REFERENCE_A": {
+      "waveform_correlation": 0.002715874515084004,
+      "si_sdr_db": -51.321773969915874,
+      "mfcc_cosine": 0.9795762894314815,
+      "centroid_ratio": 0.780270351631127,
+      "centroid_delta_hz": -613.9190144028385,
+      "rolloff_delta_hz": -1086.8024652901386,
+      "chroma_sequence_similarity": 0.8231208367778202,
+      "onset_correlation": 0.008867635819922453
+    },
+    "REFERENCE_B_acoustic -> 02_REFERENCE_B": {
+      "waveform_correlation": -0.01773363253074391,
+      "si_sdr_db": -35.02267990953033,
+      "mfcc_cosine": 0.9979440036909907,
+      "centroid_ratio": 1.8976574868502336,
+      "centroid_delta_hz": 596.8433320607452,
+      "rolloff_delta_hz": 1540.6338999644004,
+      "chroma_sequence_similarity": 0.7814314330625564,
+      "onset_correlation": 0.0209690378071115
+    },
+    "REFERENCE_A_electronic -> 03_CONTRADICTORY": {
+      "waveform_correlation": 0.007893546953792347,
+      "si_sdr_db": -42.054285457827774,
+      "mfcc_cosine": 0.9674891028110868,
+      "centroid_ratio": 0.4060634392137785,
+      "centroid_delta_hz": -1659.4435513024837,
+      "rolloff_delta_hz": -3741.990032039872,
+      "chroma_sequence_similarity": 0.7619792273825845,
+      "onset_correlation": 0.09696652588320887
+    },
+    "REFERENCE_A_electronic -> 02_REFERENCE_B (cross)": {
+      "waveform_correlation": -0.0013723272114052813,
+      "si_sdr_db": -57.25083832296457,
+      "mfcc_cosine": 0.985487138002453,
+      "centroid_ratio": 0.45159080774119187,
+      "centroid_delta_hz": -1532.2412487357271,
+      "rolloff_delta_hz": -3410.3523273406904,
+      "chroma_sequence_similarity": 0.8032286777452814,
+      "onset_correlation": -0.001658436403002067
+    },
+    "REFERENCE_B_acoustic -> 01_REFERENCE_A (cross)": {
+      "waveform_correlation": 0.0032806950273299136,
+      "si_sdr_db": -49.680636049901125,
+      "mfcc_cosine": 0.9881948170759977,
+      "centroid_ratio": 3.278821998052401,
+      "centroid_delta_hz": 1515.165566393634,
+      "rolloff_delta_hz": 3864.183762014952,
+      "chroma_sequence_similarity": 0.767136378309537,
+      "onset_correlation": 0.04239731313360614
+    },
+    "00_PROMPT_ONLY vs 01_REFERENCE_A": {
+      "waveform_correlation": 0.11192950427457934,
+      "si_sdr_db": -18.96635535235926,
+      "mfcc_cosine": 0.9834214394159676,
+      "centroid_ratio": 1.5677031383210578,
+      "centroid_delta_hz": 789.4506675880552,
+      "rolloff_delta_hz": 1694.7006274474902,
+      "chroma_sequence_similarity": 0.8458396494207125,
+      "onset_correlation": 0.1140929845838198
+    },
+    "00_PROMPT_ONLY vs 02_REFERENCE_B": {
+      "waveform_correlation": 0.18390810902251234,
+      "si_sdr_db": -14.5585529992814,
+      "mfcc_cosine": 0.9911967606879789,
+      "centroid_ratio": 0.9073269605244418,
+      "centroid_delta_hz": -128.87156674483344,
+      "rolloff_delta_hz": -628.8492346030616,
+      "chroma_sequence_similarity": 0.8545142750468161,
+      "onset_correlation": 0.18431636114811858
+    },
+    "01_REFERENCE_A vs 02_REFERENCE_B": {
+      "waveform_correlation": 0.08669720994112798,
+      "si_sdr_db": -21.207130936263717,
+      "mfcc_cosine": 0.9923155199820706,
+      "centroid_ratio": 0.5787619724332183,
+      "centroid_delta_hz": -918.3222343328887,
+      "rolloff_delta_hz": -2323.549862050552,
+      "chroma_sequence_similarity": 0.8239464481785028,
+      "onset_correlation": 0.13845813713787994
+    },
+    "01_REFERENCE_A vs 05_DIFFERENT_SEED": {
+      "waveform_correlation": -0.003545460874914861,
+      "si_sdr_db": -49.00649146388575,
+      "mfcc_cosine": 0.9480071586828092,
+      "centroid_ratio": 1.0180229596651338,
+      "centroid_delta_hz": 39.291050441435345,
+      "rolloff_delta_hz": -132.54828230687053,
+      "chroma_sequence_similarity": 0.7736054832566885,
+      "onset_correlation": 0.10880612068296204
+    },
+    "00_PROMPT_ONLY vs 04_CONTRADICTORY_ONLY": {
+      "waveform_correlation": 0.21986674040682685,
+      "si_sdr_db": -12.941621083063207,
+      "mfcc_cosine": 0.9788812839348026,
+      "centroid_ratio": 0.5776093044766755,
+      "centroid_delta_hz": -587.3784977656564,
+      "rolloff_delta_hz": -1912.7302865788538,
+      "chroma_sequence_similarity": 0.8351123094314374,
+      "onset_correlation": 0.22775292850945247
+    },
+    "03_CONTRADICTORY vs 04_CONTRADICTORY_ONLY": {
+      "waveform_correlation": 0.16871846189261422,
+      "si_sdr_db": -15.331328248141244,
+      "mfcc_cosine": 0.999209591505144,
+      "centroid_ratio": 0.707980945377354,
+      "centroid_delta_hz": -331.30462845406646,
+      "rolloff_delta_hz": -952.2433472766108,
+      "chroma_sequence_similarity": 0.7590618018068818,
+      "onset_correlation": 0.09501440449020943
+    },
+    "01_REFERENCE_A vs 03_CONTRADICTORY": {
+      "waveform_correlation": 0.19204079035390526,
+      "si_sdr_db": -14.168935831082866,
+      "mfcc_cosine": 0.981393542838256,
+      "centroid_ratio": 0.5204137750010847,
+      "centroid_delta_hz": -1045.5245368996452,
+      "rolloff_delta_hz": -2655.1875667497334,
+      "chroma_sequence_similarity": 0.8108847831169418,
+      "onset_correlation": 0.3649357531334791
+    }
+  }
+}

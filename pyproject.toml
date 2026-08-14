@@ -46,6 +46,7 @@ testpaths = [
     "packages/audio-utils/tests",
     "packages/dataset/tests",
     "benchmarks/music_quality/tests",
+    "benchmarks/reference_audio/tests",
 ]
 
 [tool.ruff]
@@ -63,6 +64,7 @@ src = [
     "packages/dataset/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
+    "benchmarks/reference_audio/scripts",
 ]
 
 [tool.ruff.lint]
@@ -106,6 +108,7 @@ mypy_path = [
     "packages/dataset/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
+    "benchmarks/reference_audio/scripts",
 ]
 
 [[tool.mypy.overrides]]
