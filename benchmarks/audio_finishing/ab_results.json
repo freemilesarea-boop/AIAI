@@ -1,0 +1,2140 @@
+{
+  "pairs": [
+    {
+      "comparison": {
+        "band_energy_db": {
+          "air": {
+            "after_db": 19.51923654226343,
+            "before_db": 16.893155653841795,
+            "delta_db": 2.6260808884216367
+          },
+          "bass": {
+            "after_db": 39.75603442581333,
+            "before_db": 39.8560217305762,
+            "delta_db": -0.09998730476286966
+          },
+          "brilliance": {
+            "after_db": 21.294426472323146,
+            "before_db": 19.836344117533308,
+            "delta_db": 1.4580823547898376
+          },
+          "low_mid": {
+            "after_db": 42.15095391995366,
+            "before_db": 42.25085345100403,
+            "delta_db": -0.09989953105037586
+          },
+          "mid": {
+            "after_db": 40.9145239521371,
+            "before_db": 41.01351346860031,
+            "delta_db": -0.09898951646320597
+          },
+          "presence": {
+            "after_db": 25.04462003678533,
+            "before_db": 25.027612887686004,
+            "delta_db": 0.017007149099324437
+          },
+          "sub": {
+            "after_db": 26.961346324043657,
+            "before_db": 27.06134029475759,
+            "delta_db": -0.0999939707139319
+          },
+          "ultra_high": {
+            "after_db": 1.7806411284501755,
+            "before_db": -1.1033719780977855,
+            "delta_db": 2.884013106547961
+          }
+        },
+        "difference": {
+          "difference_rms_dbfs": -47.538350157759446,
+          "frames_compared": 1440000.0,
+          "null_depth_db": 29.469939444286467
+        },
+        "level_stage": {
+          "loudness_match_gain_db": -0.09999999999999964,
+          "output_gain_db": -0.09999999999999998,
+          "peak_safety_reduction_db": -3.3306690738754696e-16
+        },
+        "metrics": {
+          "air_ratio_db": {
+            "after": -32.868526356954995,
+            "before": -35.634123957867246,
+            "delta": 2.765597600912251
+          },
+          "crest_factor_db": {
+            "after": 17.107689908536596,
+            "before": 17.068258809653617,
+            "delta": 0.03943109888297869
+          },
+          "integrated_lufs": {
+            "after": -14.5,
+            "before": -14.5,
+            "delta": 0.0
+          },
+          "low_band_correlation": {
+            "after": 0.9466490828414343,
+            "before": 0.9466490020040383,
+            "delta": 8.083739599928919e-08
+          },
+          "low_mid_ratio_db": {
+            "after": 4.468833380952525,
+            "before": 4.46929767737171,
+            "delta": -0.00046429641918521725
+          },
+          "lr_balance_db": {
+            "after": -0.15551780941062532,
+            "before": -0.15587717786377198,
+            "delta": 0.0003593684531466579
+          },
+          "peak_dbfs": {
+            "after": -1.0464485521004927,
+            "before": -1.000151903819357,
+            "delta": -0.04629664828113578
+          },
+          "presence_ratio_db": {
+            "after": -19.209518305074184,
+            "before": -19.35223404644268,
+            "delta": 0.14271574136849452
+          },
+          "rms_dbfs": {
+            "after": -18.15413846063709,
+            "before": -18.068410713472975,
+            "delta": -0.08572774716411402
+          },
+          "sibilance_ratio_p90_db": {
+            "after": -14.030410568677866,
+            "before": -15.972558562099731,
+            "delta": 1.942147993421866
+          },
+          "spectral_centroid_hz": {
+            "after": 1321.6896740806887,
+            "before": 1185.1693411695032,
+            "delta": 136.5203329111855
+          },
+          "spectral_slope_db_per_octave": {
+            "after": -6.075827171564897,
+            "before": -6.907235109570208,
+            "delta": 0.8314079380053112
+          },
+          "stereo_correlation": {
+            "after": 0.6274926974242879,
+            "before": 0.6289698161668633,
+            "delta": -0.0014771187425753896
+          },
+          "stereo_width": {
+            "after": 0.2082463565442371,
+            "before": 0.20748898360156098,
+            "delta": 0.00075737294267611
+          },
+          "true_peak_dbfs": {
+            "after": -1.0,
+            "before": -1.0,
+            "delta": 0.0
+          }
+        },
+        "safety": {
+          "channels_after": 2,
+          "channels_before": 2,
+          "clipped_samples_after": 0,
+          "clipped_samples_before": 0,
+          "duration_after_s": 30.0,
+          "duration_before_s": 30.0,
+          "duration_delta_s": 0.0,
+          "sample_rate_after": 48000,
+          "sample_rate_before": 48000
+        }
+      },
+      "filter_graph": "highshelf=f=7000.00:width_type=q:width=0.7000:g=3.0000,volume=-0.1000dB",
+      "finishing_version": "p14-v1",
+      "label": "c6fbbb4e-3733-42ae-975c-96381361d893",
+      "pair": "01",
+      "plan": {
+        "actions": [
+          {
+            "ceiling_db": 3.0,
+            "clamped": true,
+            "frequency_hz": 7000.0,
+            "gain_db": 3.0,
+            "kind": "HIGH_SHELF_LIFT",
+            "measured_value": -35.634123957867246,
+            "metric": "frequency.air_ratio_db.p50",
+            "notes": [
+              "shelf corner at 7000 Hz"
+            ],
+            "q": 0.7,
+            "reason": "high frequencies sit below the body of the mix",
+            "requested_gain_db": 3.4536495831468983,
+            "threshold": -27.0,
+            "trigger": "HIGH_FREQUENCY_DEFICIT"
+          }
+        ],
+        "deferred": [
+          {
+            "area": "dynamic harshness control",
+            "reason": "measured, not assumed: ffmpeg's adynamicequalizer was run over a sibilant baseline track at detection thresholds from 0.0005 to 0.1 and in adaptive mode. Where it acted at all it moved the 6-9 kHz median and the 90th percentile by the same amount, leaving peak excess at 21.05-21.23 dB against an untreated 21.21 dB. That is a static cut wearing a dynamic label, and a static scoop is exactly what a de-esser must not be. Harshness and sibilance instead lower the high-shelf ceiling, which needs no new filter to be safe."
+          },
+          {
+            "area": "transient shaping",
+            "reason": "no measured need and no verified bounded implementation. The 40-track baseline sits at 7.0-9.3 dB of 50 ms crest factor against a flatness threshold of 6.5 dB, so nothing in the corpus asks for it, and a transient shaper applied without a need would attack sustained pads and reverb tails as readily as drums."
+          },
+          {
+            "area": "spatial and reverb",
+            "reason": "the spatial measurements are proxies with known confounds \u2014 a held pad and a reverb tail decay alike, a wide synth and a room read alike \u2014 so no threshold among them can distinguish a dry mix from a deliberately dry one. Adding ambience to every master would be an aesthetic decision presented as a correction."
+          }
+        ],
+        "finishing_version": "p14-v1",
+        "match_source_loudness": true,
+        "no_action": false,
+        "output_ceiling_dbfs": -1.0,
+        "risks": [
+          {
+            "detail": "spectrum falls -6.91 dB/octave with the air band -35.6 dB below the body of the mix",
+            "flag": "HIGH_FREQUENCY_DEFICIT",
+            "metric": "frequency.spectral_slope_db_per_octave",
+            "threshold": -6.5,
+            "value": -6.907235109570208
+          },
+          {
+            "detail": "10-16 kHz sits -35.6 dB below the 300 Hz-3 kHz body",
+            "flag": "AIR_DEFICIT",
+            "metric": "frequency.air_ratio_db.p50",
+            "threshold": -30.0,
+            "value": -35.634123957867246
+          }
+        ]
+      },
+      "source_analysis": {
+        "absent_bands": [],
+        "frequency": {
+          "air_ratio_db": {
+            "mean": -33.002127154545015,
+            "p10": -48.6956377427716,
+            "p50": -35.634123957867246,
+            "p90": -12.444473426276634
+          },
+          "bands": [
+            {
+              "energy_db": 27.06134029475759,
+              "high_hz": 60.0,
+              "low_hz": 20.0,
+              "name": "sub",
+              "share": 0.01268688528656099,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 39.8560217305762,
+              "high_hz": 150.0,
+              "low_hz": 60.0,
+              "name": "bass",
+              "share": 0.24144774664476654,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 42.25085345100403,
+              "high_hz": 400.0,
+              "low_hz": 150.0,
+              "name": "low_mid",
+              "share": 0.4190890644481487,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 41.01351346860031,
+              "high_hz": 2000.0,
+              "low_hz": 400.0,
+              "name": "mid",
+              "share": 0.3151899275731219,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 25.027612887686004,
+              "high_hz": 5000.0,
+              "low_hz": 2000.0,
+              "name": "presence",
+              "share": 0.007942958113361556,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 19.836344117533308,
+              "high_hz": 10000.0,
+              "low_hz": 5000.0,
+              "name": "brilliance",
+              "share": 0.0024035623656121384,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 16.893155653841795,
+              "high_hz": 16000.0,
+              "low_hz": 10000.0,
+              "name": "air",
+              "share": 0.0012204965298289099,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": -1.1033719780977855,
+              "high_hz": 20000.0,
+              "low_hz": 16000.0,
+              "name": "ultra_high",
+              "share": 1.935903859944403e-05,
+              "truncated_by_nyquist": false
+            }
+          ],
+          "low_mid_peak_hz": 375.0,
+          "low_mid_ratio_db": {
+            "mean": 3.6519706909403356,
+            "p10": -6.527168229617704,
+            "p50": 4.46929767737171,
+            "p90": 12.622970026989483
+          },
+          "presence_ratio_db": {
+            "mean": -20.674733030518922,
+            "p10": -32.0653403549199,
+            "p50": -19.35223404644268,
+            "p90": -12.333124320683869
+          },
+          "spectral_bandwidth_hz": {
+            "mean": 2626.960725969367,
+            "p10": 1333.346761131505,
+            "p50": 2218.478513589433,
+            "p90": 4513.195472182837
+          },
+          "spectral_centroid_hz": {
+            "mean": 1700.7059819014257,
+            "p10": 618.0533340961206,
+            "p50": 1185.1693411695032,
+            "p90": 3425.59020490444
+          },
+          "spectral_flatness": {
+            "mean": 3.668134285553985e-05,
+            "p10": 1.068050107975672e-06,
+            "p50": 6.9456751524721225e-06,
+            "p90": 7.604715039648297e-05
+          },
+          "spectral_rolloff85_hz": {
+            "mean": 3847.8526144524235,
+            "p10": 667.96875,
+            "p50": 2050.78125,
+            "p90": 10106.250000000002
+          },
+          "spectral_slope_db_per_octave": -6.907235109570208
+        },
+        "level": {
+          "clipped_samples": 0,
+          "crest_factor_db": 17.068258809653617,
+          "dc_offset": 0.001012412240770128,
+          "near_clipped_samples": 0,
+          "peak_dbfs": -1.000151903819357,
+          "rms_dbfs": -18.068410713472975,
+          "short_window_crest_db": {
+            "mean": 8.243985445715898,
+            "p10": 6.941241033177825,
+            "p50": 8.081760760885754,
+            "p90": 9.622900636645353
+          },
+          "silence_ratio": 0.18500000000000005
+        },
+        "loudness": {
+          "integrated_lufs": -14.5,
+          "loudness_range_lu": 8.4,
+          "short_term_p10_lufs": -25.299999999999997,
+          "short_term_p50_lufs": -15.4,
+          "short_term_p90_lufs": -11.940000000000001,
+          "true_peak_dbfs": -1.0
+        },
+        "path": "master.wav",
+        "sibilance": {
+          "harshness_peak_excess_db": 6.9574550301070275,
+          "harshness_ratio_db": {
+            "mean": -22.716412926843187,
+            "p10": -35.5723423053284,
+            "p50": -21.36545026309166,
+            "p90": -14.407995232984632
+          },
+          "sibilance_peak_excess_db": 15.131866806809459,
+          "sibilance_ratio_db": {
+            "mean": -31.117137787223157,
+            "p10": -46.12521806996428,
+            "p50": -31.10442536890919,
+            "p90": -15.972558562099731
+          }
+        },
+        "spatial": {
+          "drives_no_processing": true,
+          "envelope_decay_db_per_second": 6.890917807067414,
+          "high_band_decorrelation": 0.772388746989395,
+          "stereo_decorrelation": 0.3710301838331367
+        },
+        "stereo": {
+          "correlation": 0.6289698161668633,
+          "full_band_width": 0.18557094840749833,
+          "high_band_side_to_mid_db": -1.999719815754169,
+          "is_stereo": true,
+          "low_band_correlation": 0.9466490020040383,
+          "low_band_side_to_mid_db": -15.488662380141754,
+          "lr_balance_db": -0.15587717786377198,
+          "mid_energy_db": 74.49116131404267,
+          "side_energy_db": 68.06772861692144,
+          "side_to_mid_db": -6.423432697121228,
+          "width": 0.20748898360156098
+        },
+        "technical": {
+          "bit_depth": 24,
+          "channels": 2,
+          "duration_seconds": 30.0,
+          "frames": 1440000,
+          "sample_rate": 48000
+        },
+        "transient": {
+          "onset_rate_per_second": 1.4333333333333333,
+          "spectral_flux": {
+            "mean": 0.1655554619744435,
+            "p10": 0.052693463322243034,
+            "p50": 0.11960462636391586,
+            "p90": 0.3495227530399073
+          },
+          "transient_density": 0.118491921005386
+        }
+      }
+    },
+    {
+      "comparison": {
+        "band_energy_db": {
+          "air": {
+            "after_db": 21.631782197157115,
+            "before_db": 21.227074695359036,
+            "delta_db": 0.4047075017980788
+          },
+          "bass": {
+            "after_db": 44.588002683056594,
+            "before_db": 45.15054635617482,
+            "delta_db": -0.5625436731182276
+          },
+          "brilliance": {
+            "after_db": 26.22526160464762,
+            "before_db": 25.820112549812517,
+            "delta_db": 0.40514905483510333
+          },
+          "low_mid": {
+            "after_db": 43.521894986361296,
+            "before_db": 44.99959453536698,
+            "delta_db": -1.4776995490056848
+          },
+          "mid": {
+            "after_db": 39.46703063964979,
+            "before_db": 39.40131614463819,
+            "delta_db": 0.06571449501160487
+          },
+          "presence": {
+            "after_db": 28.373113308403997,
+            "before_db": 27.988113763603867,
+            "delta_db": 0.3849995448001309
+          },
+          "sub": {
+            "after_db": 40.8004985882496,
+            "before_db": 40.653843734914226,
+            "delta_db": 0.1466548533353773
+          },
+          "ultra_high": {
+            "after_db": 3.6809370254707376,
+            "before_db": 3.289553170867336,
+            "delta_db": 0.39138385460340164
+          }
+        },
+        "difference": {
+          "difference_rms_dbfs": -23.703757019351507,
+          "frames_compared": 8640000.0,
+          "null_depth_db": 8.377649642767507
+        },
+        "level_stage": {
+          "loudness_match_gain_db": 1.1000000000000014,
+          "output_gain_db": 0.4039103240681965,
+          "peak_safety_reduction_db": -0.6960896759318049
+        },
+        "metrics": {
+          "air_ratio_db": {
+            "after": -21.932564527811458,
+            "before": -22.331929219420967,
+            "delta": 0.3993646916095095
+          },
+          "crest_factor_db": {
+            "after": 14.744889318420014,
+            "before": 14.32595547276464,
+            "delta": 0.41893384565537417
+          },
+          "integrated_lufs": {
+            "after": -13.9,
+            "before": -13.2,
+            "delta": -0.7000000000000011
+          },
+          "low_band_correlation": {
+            "after": 0.9957862423535716,
+            "before": 0.963827157023603,
+            "delta": 0.031959085329968606
+          },
+          "low_mid_ratio_db": {
+            "after": 10.78088374607631,
+            "before": 12.283761252025588,
+            "delta": -1.5028775059492787
+          },
+          "lr_balance_db": {
+            "after": -7.705987314921003e-07,
+            "before": 0.7741717087906732,
+            "delta": -0.7741724793894047
+          },
+          "peak_dbfs": {
+            "after": -1.3031996221068636,
+            "before": -1.000151903819357,
+            "delta": -0.30304771828750665
+          },
+          "presence_ratio_db": {
+            "after": -11.777061179002285,
+            "before": -12.151174891903622,
+            "delta": 0.37411371290133744
+          },
+          "rms_dbfs": {
+            "after": -16.048088940526878,
+            "before": -15.326107376583998,
+            "delta": -0.7219815639428795
+          },
+          "sibilance_ratio_p90_db": {
+            "after": -7.851007529571649,
+            "before": -8.172791254189978,
+            "delta": 0.3217837246183288
+          },
+          "spectral_centroid_hz": {
+            "after": 1738.538900472419,
+            "before": 1590.7655544910363,
+            "delta": 147.77334598138282
+          },
+          "spectral_slope_db_per_octave": {
+            "after": -5.924330604414373,
+            "before": -6.0055079295504825,
+            "delta": 0.08117732513610942
+          },
+          "stereo_correlation": {
+            "after": 0.8792086055120041,
+            "before": 0.8645176999600274,
+            "delta": 0.014690905551976718
+          },
+          "stereo_width": {
+            "after": 0.11188960202283896,
+            "before": 0.10748517748150332,
+            "delta": 0.004404424541335633
+          },
+          "true_peak_dbfs": {
+            "after": -1.2,
+            "before": -1.0,
+            "delta": -0.19999999999999996
+          }
+        },
+        "safety": {
+          "channels_after": 2,
+          "channels_before": 2,
+          "clipped_samples_after": 0,
+          "clipped_samples_before": 0,
+          "duration_after_s": 180.0,
+          "duration_before_s": 180.0,
+          "duration_delta_s": 0.0,
+          "sample_rate_after": 48000,
+          "sample_rate_before": 48000
+        }
+      },
+      "filter_graph": "[0:a]equalizer=f=187.50:width_type=q:width=0.9000:g=-2.5000,asplit=2[ms_a][ms_b];[ms_a]pan=mono|c0=0.5*c0+0.5*c1[mid];[ms_b]pan=mono|c0=0.5*c0-0.5*c1,highpass=f=120.00:poles=2,highpass=f=120.00:poles=2,volume=1.3090dB[side];[mid][side]amerge=inputs=2,pan=stereo|c0=c0+c1|c1=c0-c1,pan=stereo|c0=1.022832*c0|c1=0.977677*c1,volume=0.4039dB[out]",
+      "finishing_version": "p14-v1",
+      "label": "d8f32bc1-650d-4a24-b5f9-8fa809ed0d7b",
+      "pair": "02",
+      "plan": {
+        "actions": [
+          {
+            "ceiling_db": 2.5,
+            "clamped": true,
+            "frequency_hz": 187.5,
+            "gain_db": -2.5,
+            "kind": "LOW_MID_CUT",
+            "measured_value": 12.283761252025588,
+            "metric": "frequency.low_mid_ratio_db.p50",
+            "notes": [
+              "centred on the track's own low-mid peak at 188 Hz"
+            ],
+            "q": 0.9,
+            "reason": "150-400 Hz sits above the body of the mix",
+            "requested_gain_db": -3.391880626012794,
+            "threshold": 5.5,
+            "trigger": "LOW_MID_MUD"
+          },
+          {
+            "ceiling_db": 1.5,
+            "clamped": false,
+            "frequency_hz": null,
+            "gain_db": 1.308964439536611,
+            "kind": "STEREO_WIDTH",
+            "measured_value": 0.10748517748150332,
+            "metric": "stereo.width",
+            "notes": [
+              "applied to the side channel only"
+            ],
+            "q": null,
+            "reason": "stereo image is narrow",
+            "requested_gain_db": 1.308964439536611,
+            "threshold": 0.11,
+            "trigger": "STEREO_TOO_NARROW"
+          },
+          {
+            "ceiling_db": null,
+            "clamped": false,
+            "frequency_hz": 120.0,
+            "gain_db": null,
+            "kind": "LOW_FREQUENCY_MONO",
+            "measured_value": 0.963827157023603,
+            "metric": "stereo.low_band_correlation",
+            "notes": [
+              "Linkwitz-Riley crossover; the two bands sum flat"
+            ],
+            "q": null,
+            "reason": "bass must not be widened along with the rest of the image",
+            "requested_gain_db": null,
+            "threshold": null,
+            "trigger": null
+          }
+        ],
+        "deferred": [
+          {
+            "area": "dynamic harshness control",
+            "reason": "measured, not assumed: ffmpeg's adynamicequalizer was run over a sibilant baseline track at detection thresholds from 0.0005 to 0.1 and in adaptive mode. Where it acted at all it moved the 6-9 kHz median and the 90th percentile by the same amount, leaving peak excess at 21.05-21.23 dB against an untreated 21.21 dB. That is a static cut wearing a dynamic label, and a static scoop is exactly what a de-esser must not be. Harshness and sibilance instead lower the high-shelf ceiling, which needs no new filter to be safe."
+          },
+          {
+            "area": "transient shaping",
+            "reason": "no measured need and no verified bounded implementation. The 40-track baseline sits at 7.0-9.3 dB of 50 ms crest factor against a flatness threshold of 6.5 dB, so nothing in the corpus asks for it, and a transient shaper applied without a need would attack sustained pads and reverb tails as readily as drums."
+          },
+          {
+            "area": "spatial and reverb",
+            "reason": "the spatial measurements are proxies with known confounds \u2014 a held pad and a reverb tail decay alike, a wide synth and a room read alike \u2014 so no threshold among them can distinguish a dry mix from a deliberately dry one. Adding ambience to every master would be an aesthetic decision presented as a correction."
+          }
+        ],
+        "finishing_version": "p14-v1",
+        "match_source_loudness": true,
+        "no_action": false,
+        "output_ceiling_dbfs": -1.0,
+        "risks": [
+          {
+            "detail": "150-400 Hz sits 12.3 dB above the body of the mix",
+            "flag": "LOW_MID_MUD",
+            "metric": "frequency.low_mid_ratio_db.p50",
+            "threshold": 5.5,
+            "value": 12.283761252025588
+          },
+          {
+            "detail": "side energy is 11% of the image",
+            "flag": "STEREO_TOO_NARROW",
+            "metric": "stereo.width",
+            "threshold": 0.11,
+            "value": 0.10748517748150332
+          }
+        ]
+      },
+      "source_analysis": {
+        "absent_bands": [],
+        "frequency": {
+          "air_ratio_db": {
+            "mean": -22.60781499966317,
+            "p10": -38.300973731914254,
+            "p50": -22.331929219420967,
+            "p90": -8.707569681118546
+          },
+          "bands": [
+            {
+              "energy_db": 40.653843734914226,
+              "high_hz": 60.0,
+              "low_hz": 20.0,
+              "name": "sub",
+              "share": 0.13542207490006705,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 45.15054635617482,
+              "high_hz": 150.0,
+              "low_hz": 60.0,
+              "name": "bass",
+              "share": 0.3813815906743216,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 44.99959453536698,
+              "high_hz": 400.0,
+              "low_hz": 150.0,
+              "name": "low_mid",
+              "share": 0.36835328196598827,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 39.40131614463819,
+              "high_hz": 2000.0,
+              "low_hz": 400.0,
+              "name": "mid",
+              "share": 0.10149314366569781,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 27.988113763603867,
+              "high_hz": 5000.0,
+              "low_hz": 2000.0,
+              "name": "presence",
+              "share": 0.0073302108403715885,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 25.820112549812517,
+              "high_hz": 10000.0,
+              "low_hz": 5000.0,
+              "name": "brilliance",
+              "share": 0.004449552600331141,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 21.227074695359036,
+              "high_hz": 16000.0,
+              "low_hz": 10000.0,
+              "name": "air",
+              "share": 0.001545299128594148,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 3.289553170867336,
+              "high_hz": 20000.0,
+              "low_hz": 16000.0,
+              "name": "ultra_high",
+              "share": 2.484622462836764e-05,
+              "truncated_by_nyquist": false
+            }
+          ],
+          "low_mid_peak_hz": 187.5,
+          "low_mid_ratio_db": {
+            "mean": 11.219015157966627,
+            "p10": -0.35707279027117,
+            "p50": 12.283761252025588,
+            "p90": 22.29457206580154
+          },
+          "presence_ratio_db": {
+            "mean": -12.519696280366244,
+            "p10": -23.91057661478447,
+            "p50": -12.151174891903622,
+            "p90": -1.6559520523383426
+          },
+          "spectral_bandwidth_hz": {
+            "mean": 2936.271196672493,
+            "p10": 1559.2616563074766,
+            "p50": 2926.678827917002,
+            "p90": 4242.223064538333
+          },
+          "spectral_centroid_hz": {
+            "mean": 1904.9464343306352,
+            "p10": 592.0187070576337,
+            "p50": 1590.7655544910363,
+            "p90": 3537.2820171136555
+          },
+          "spectral_flatness": {
+            "mean": 0.00012453207869092967,
+            "p10": 1.2826898106791513e-06,
+            "p50": 1.2018033784427198e-05,
+            "p90": 0.00013034033220870326
+          },
+          "spectral_rolloff85_hz": {
+            "mean": 4161.594169150521,
+            "p10": 445.3125,
+            "p50": 3328.125,
+            "p90": 9410.15625
+          },
+          "spectral_slope_db_per_octave": -6.0055079295504825
+        },
+        "level": {
+          "clipped_samples": 0,
+          "crest_factor_db": 14.32595547276464,
+          "dc_offset": 0.0013038300055044669,
+          "near_clipped_samples": 0,
+          "peak_dbfs": -1.000151903819357,
+          "rms_dbfs": -15.326107376583998,
+          "short_window_crest_db": {
+            "mean": 7.465396529269894,
+            "p10": 5.613290682924461,
+            "p50": 7.295102151924564,
+            "p90": 9.355607630962766
+          },
+          "silence_ratio": 0.030000000000000027
+        },
+        "loudness": {
+          "integrated_lufs": -13.2,
+          "loudness_range_lu": 7.5,
+          "short_term_p10_lufs": -19.7,
+          "short_term_p50_lufs": -13.1,
+          "short_term_p90_lufs": -12.0,
+          "true_peak_dbfs": -1.0
+        },
+        "path": "master.wav",
+        "sibilance": {
+          "harshness_peak_excess_db": 10.309759656821898,
+          "harshness_ratio_db": {
+            "mean": -13.816666119005617,
+            "p10": -25.45524332801246,
+            "p50": -13.476944849207857,
+            "p90": -3.16718519238596
+          },
+          "sibilance_peak_excess_db": 12.928949522272465,
+          "sibilance_ratio_db": {
+            "mean": -21.01228371195953,
+            "p10": -34.765294846110194,
+            "p50": -21.101740776462442,
+            "p90": -8.172791254189978
+          }
+        },
+        "spatial": {
+          "drives_no_processing": true,
+          "envelope_decay_db_per_second": 12.310599274619882,
+          "high_band_decorrelation": 0.19149846327989795,
+          "stereo_decorrelation": 0.13548230003997264
+        },
+        "stereo": {
+          "correlation": 0.8645176999600274,
+          "full_band_width": 0.0694454994198471,
+          "high_band_side_to_mid_db": -9.727096671720254,
+          "is_stereo": true,
+          "low_band_correlation": 0.963827157023603,
+          "low_band_side_to_mid_db": -17.311259898903316,
+          "lr_balance_db": 0.7741717087906732,
+          "mid_energy_db": 85.58698513156162,
+          "side_energy_db": 74.31600804751247,
+          "side_to_mid_db": -11.27097708404915,
+          "width": 0.10748517748150332
+        },
+        "technical": {
+          "bit_depth": 24,
+          "channels": 2,
+          "duration_seconds": 180.0,
+          "frames": 8640000,
+          "sample_rate": 48000
+        },
+        "transient": {
+          "onset_rate_per_second": 2.7111111111111112,
+          "spectral_flux": {
+            "mean": 0.22290306531849702,
+            "p10": 0.05087142666081845,
+            "p50": 0.14118659183836857,
+            "p90": 0.5457251082961986
+          },
+          "transient_density": 0.1522603079980129
+        }
+      }
+    },
+    {
+      "comparison": {
+        "band_energy_db": {
+          "air": {
+            "after_db": 14.119892227032055,
+            "before_db": 13.039341726558533,
+            "delta_db": 1.0805505004735227
+          },
+          "bass": {
+            "after_db": 44.4498239061679,
+            "before_db": 44.74622700284333,
+            "delta_db": -0.2964030966754265
+          },
+          "brilliance": {
+            "after_db": 24.038198653713803,
+            "before_db": 23.485080858190507,
+            "delta_db": 0.5531177955232955
+          },
+          "low_mid": {
+            "after_db": 40.93790864837018,
+            "before_db": 41.24231366504888,
+            "delta_db": -0.30440501667870024
+          },
+          "mid": {
+            "after_db": 38.1373506191898,
+            "before_db": 38.08269228481632,
+            "delta_db": 0.05465833437348522
+          },
+          "presence": {
+            "after_db": 28.365942491995135,
+            "before_db": 28.147943652897226,
+            "delta_db": 0.21799883909790907
+          },
+          "sub": {
+            "after_db": 44.765411392330556,
+            "before_db": 45.109452193771006,
+            "delta_db": -0.3440408014404497
+          },
+          "ultra_high": {
+            "after_db": -6.621014284608694,
+            "before_db": -7.7838033767811465,
+            "delta_db": 1.1627890921724529
+          }
+        },
+        "difference": {
+          "difference_rms_dbfs": -42.398421754076594,
+          "frames_compared": 1440000.0,
+          "null_depth_db": 26.90773140262081
+        },
+        "level_stage": {
+          "loudness_match_gain_db": 0.40000000000000036,
+          "output_gain_db": 0.16453884204473757,
+          "peak_safety_reduction_db": -0.2354611579552628
+        },
+        "metrics": {
+          "air_ratio_db": {
+            "after": -32.41138764439141,
+            "before": -33.501565557319374,
+            "delta": 1.0901779129279632
+          },
+          "crest_factor_db": {
+            "after": 14.56209583625972,
+            "before": 14.490538447636428,
+            "delta": 0.07155738862329208
+          },
+          "integrated_lufs": {
+            "after": -14.3,
+            "before": -14.1,
+            "delta": -0.20000000000000107
+          },
+          "low_band_correlation": {
+            "after": 0.9951525873306168,
+            "before": 0.9951746214545014,
+            "delta": -2.2034123884573376e-05
+          },
+          "low_mid_ratio_db": {
+            "after": 6.399311460329152,
+            "before": 6.725800090522822,
+            "delta": -0.32648863019367
+          },
+          "lr_balance_db": {
+            "after": -6.22837544899113e-05,
+            "before": 0.282139528360986,
+            "delta": -0.2822018121154759
+          },
+          "peak_dbfs": {
+            "after": -1.2028776405912243,
+            "before": -1.000151903819357,
+            "delta": -0.20272573677186734
+          },
+          "presence_ratio_db": {
+            "after": -25.733449013431475,
+            "before": -25.977566524577327,
+            "delta": 0.244117511145852
+          },
+          "rms_dbfs": {
+            "after": -15.764973476850944,
+            "before": -15.490690351455784,
+            "delta": -0.27428312539515964
+          },
+          "sibilance_ratio_p90_db": {
+            "after": -11.353173880315635,
+            "before": -12.200998275485775,
+            "delta": 0.8478243951701394
+          },
+          "spectral_centroid_hz": {
+            "after": 798.2599461054543,
+            "before": 742.5706042866334,
+            "delta": 55.689341818820935
+          },
+          "spectral_slope_db_per_octave": {
+            "after": -7.8334571430388715,
+            "before": -8.134274700655372,
+            "delta": 0.3008175576165
+          },
+          "stereo_correlation": {
+            "after": 0.8654360343688863,
+            "before": 0.868749183206592,
+            "delta": -0.003313148837705726
+          },
+          "stereo_width": {
+            "after": 0.17103585776643646,
+            "before": 0.1700505865377231,
+            "delta": 0.0009852712287133636
+          },
+          "true_peak_dbfs": {
+            "after": -1.0,
+            "before": -1.0,
+            "delta": 0.0
+          }
+        },
+        "safety": {
+          "channels_after": 2,
+          "channels_before": 2,
+          "clipped_samples_after": 0,
+          "clipped_samples_before": 0,
+          "duration_after_s": 30.0,
+          "duration_before_s": 30.0,
+          "duration_delta_s": 0.0,
+          "sample_rate_after": 48000,
+          "sample_rate_before": 48000
+        }
+      },
+      "filter_graph": "lowshelf=f=90.00:width_type=q:width=0.7000:g=-0.5103,equalizer=f=199.22:width_type=q:width=0.9000:g=-0.6129,highshelf=f=7000.00:width_type=q:width=0.7000:g=1.0000,pan=stereo|c0=0.984525*c0|c1=1.015718*c1,volume=0.1645dB",
+      "finishing_version": "p14-v1",
+      "label": "4cfb7985-d668-4b2a-a88a-014f90da9dce",
+      "pair": "03",
+      "plan": {
+        "actions": [
+          {
+            "ceiling_db": 1.5,
+            "clamped": false,
+            "frequency_hz": 90.0,
+            "gain_db": -0.5103021025429433,
+            "kind": "LOW_SHELF_CUT",
+            "measured_value": 0.7510302102542943,
+            "metric": "frequency.bands.sub+bass.share",
+            "notes": [
+              "kept small: the low end carries the weight of the track"
+            ],
+            "q": 0.7,
+            "reason": "energy below 150 Hz dominates the spectrum",
+            "requested_gain_db": -0.5103021025429433,
+            "threshold": 0.7,
+            "trigger": "LOW_END_EXCESS"
+          },
+          {
+            "ceiling_db": 2.5,
+            "clamped": false,
+            "frequency_hz": 199.21875,
+            "gain_db": -0.6129000452614108,
+            "kind": "LOW_MID_CUT",
+            "measured_value": 6.725800090522822,
+            "metric": "frequency.low_mid_ratio_db.p50",
+            "notes": [
+              "centred on the track's own low-mid peak at 199 Hz"
+            ],
+            "q": 0.9,
+            "reason": "150-400 Hz sits above the body of the mix",
+            "requested_gain_db": -0.6129000452614108,
+            "threshold": 5.5,
+            "trigger": "LOW_MID_MUD"
+          },
+          {
+            "ceiling_db": 1.0,
+            "clamped": true,
+            "frequency_hz": 7000.0,
+            "gain_db": 1.0,
+            "kind": "HIGH_SHELF_LIFT",
+            "measured_value": -33.501565557319374,
+            "metric": "frequency.air_ratio_db.p50",
+            "notes": [
+              "ceiling lowered because 6-9 kHz already spikes",
+              "ceiling lowered because 2.5-5 kHz already spikes",
+              "shelf corner at 7000 Hz"
+            ],
+            "q": 0.7,
+            "reason": "high frequencies sit below the body of the mix",
+            "requested_gain_db": 2.6006262229277497,
+            "threshold": -27.0,
+            "trigger": "HIGH_FREQUENCY_DEFICIT"
+          }
+        ],
+        "deferred": [
+          {
+            "area": "dynamic harshness control",
+            "reason": "measured, not assumed: ffmpeg's adynamicequalizer was run over a sibilant baseline track at detection thresholds from 0.0005 to 0.1 and in adaptive mode. Where it acted at all it moved the 6-9 kHz median and the 90th percentile by the same amount, leaving peak excess at 21.05-21.23 dB against an untreated 21.21 dB. That is a static cut wearing a dynamic label, and a static scoop is exactly what a de-esser must not be. Harshness and sibilance instead lower the high-shelf ceiling, which needs no new filter to be safe."
+          },
+          {
+            "area": "transient shaping",
+            "reason": "no measured need and no verified bounded implementation. The 40-track baseline sits at 7.0-9.3 dB of 50 ms crest factor against a flatness threshold of 6.5 dB, so nothing in the corpus asks for it, and a transient shaper applied without a need would attack sustained pads and reverb tails as readily as drums."
+          },
+          {
+            "area": "spatial and reverb",
+            "reason": "the spatial measurements are proxies with known confounds \u2014 a held pad and a reverb tail decay alike, a wide synth and a room read alike \u2014 so no threshold among them can distinguish a dry mix from a deliberately dry one. Adding ambience to every master would be an aesthetic decision presented as a correction."
+          }
+        ],
+        "finishing_version": "p14-v1",
+        "match_source_loudness": true,
+        "no_action": false,
+        "output_ceiling_dbfs": -1.0,
+        "risks": [
+          {
+            "detail": "spectrum falls -8.13 dB/octave with the air band -33.5 dB below the body of the mix",
+            "flag": "HIGH_FREQUENCY_DEFICIT",
+            "metric": "frequency.spectral_slope_db_per_octave",
+            "threshold": -6.5,
+            "value": -8.134274700655372
+          },
+          {
+            "detail": "10-16 kHz sits -33.5 dB below the 300 Hz-3 kHz body",
+            "flag": "AIR_DEFICIT",
+            "metric": "frequency.air_ratio_db.p50",
+            "threshold": -30.0,
+            "value": -33.501565557319374
+          },
+          {
+            "detail": "2-5 kHz sits -26.0 dB below the body of the mix",
+            "flag": "PRESENCE_DEFICIT",
+            "metric": "frequency.presence_ratio_db.p50",
+            "threshold": -21.0,
+            "value": -25.977566524577327
+          },
+          {
+            "detail": "150-400 Hz sits 6.7 dB above the body of the mix",
+            "flag": "LOW_MID_MUD",
+            "metric": "frequency.low_mid_ratio_db.p50",
+            "threshold": 5.5,
+            "value": 6.725800090522822
+          },
+          {
+            "detail": "75% of banded energy sits below 150 Hz",
+            "flag": "LOW_END_EXCESS",
+            "metric": "frequency.bands.sub+bass.share",
+            "threshold": 0.7,
+            "value": 0.7510302102542943
+          },
+          {
+            "detail": "2.5-5 kHz spikes 22.2 dB above its own median, peaking at -5.1 dB",
+            "flag": "HARSHNESS_RISK",
+            "metric": "sibilance.harshness_peak_excess_db",
+            "threshold": 14.0,
+            "value": 22.230911422818316
+          },
+          {
+            "detail": "6-9 kHz spikes 20.0 dB above its own median, peaking at -12.2 dB",
+            "flag": "SIBILANCE_RISK",
+            "metric": "sibilance.sibilance_peak_excess_db",
+            "threshold": 17.0,
+            "value": 19.976670224384264
+          }
+        ]
+      },
+      "source_analysis": {
+        "absent_bands": [],
+        "frequency": {
+          "air_ratio_db": {
+            "mean": -32.77455102614749,
+            "p10": -49.6970983138693,
+            "p50": -33.501565557319374,
+            "p90": -15.877216355382512
+          },
+          "bands": [
+            {
+              "energy_db": 45.109452193771006,
+              "high_hz": 60.0,
+              "low_hz": 20.0,
+              "name": "sub",
+              "share": 0.3912091905922985,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 44.74622700284333,
+              "high_hz": 150.0,
+              "low_hz": 60.0,
+              "name": "bass",
+              "share": 0.35982101966199576,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 41.24231366504888,
+              "high_hz": 400.0,
+              "low_hz": 150.0,
+              "name": "low_mid",
+              "share": 0.1605813838176668,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 38.08269228481632,
+              "high_hz": 2000.0,
+              "low_hz": 400.0,
+              "name": "mid",
+              "share": 0.07757701379894724,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 28.147943652897226,
+              "high_hz": 5000.0,
+              "low_hz": 2000.0,
+              "name": "presence",
+              "share": 0.00787513839974515,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 23.485080858190507,
+              "high_hz": 10000.0,
+              "low_hz": 5000.0,
+              "name": "brilliance",
+              "share": 0.002691360755975999,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 13.039341726558533,
+              "high_hz": 16000.0,
+              "low_hz": 10000.0,
+              "name": "air",
+              "share": 0.00024288349427802628,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": -7.7838033767811465,
+              "high_hz": 20000.0,
+              "low_hz": 16000.0,
+              "name": "ultra_high",
+              "share": 2.009479092519307e-06,
+              "truncated_by_nyquist": false
+            }
+          ],
+          "low_mid_peak_hz": 199.21875,
+          "low_mid_ratio_db": {
+            "mean": 6.125906958723499,
+            "p10": -5.214331565749073,
+            "p50": 6.725800090522822,
+            "p90": 17.432903496196364
+          },
+          "presence_ratio_db": {
+            "mean": -23.767398933039317,
+            "p10": -40.33527127682028,
+            "p50": -25.977566524577327,
+            "p90": -4.499749018086745
+          },
+          "spectral_bandwidth_hz": {
+            "mean": 2120.2161647120192,
+            "p10": 1178.8922947071185,
+            "p50": 1926.5832560000053,
+            "p90": 3447.806993893908
+          },
+          "spectral_centroid_hz": {
+            "mean": 1308.3555909382092,
+            "p10": 418.17648113021676,
+            "p50": 742.5706042866334,
+            "p90": 3330.464370837994
+          },
+          "spectral_flatness": {
+            "mean": 0.0001198514928593365,
+            "p10": 5.036552139189915e-07,
+            "p50": 2.158694861460622e-06,
+            "p90": 0.00026488774709103254
+          },
+          "spectral_rolloff85_hz": {
+            "mean": 2199.5584239130435,
+            "p10": 386.71875,
+            "p50": 656.25,
+            "p90": 6959.765625000003
+          },
+          "spectral_slope_db_per_octave": -8.134274700655372
+        },
+        "level": {
+          "clipped_samples": 0,
+          "crest_factor_db": 14.490538447636428,
+          "dc_offset": 0.0012254248513115778,
+          "near_clipped_samples": 0,
+          "peak_dbfs": -1.000151903819357,
+          "rms_dbfs": -15.490690351455784,
+          "short_window_crest_db": {
+            "mean": 8.250521099266512,
+            "p10": 5.765332639455794,
+            "p50": 7.735105734385005,
+            "p90": 11.630935947893649
+          },
+          "silence_ratio": 0.08499999999999996
+        },
+        "loudness": {
+          "integrated_lufs": -14.1,
+          "loudness_range_lu": 3.8,
+          "short_term_p10_lufs": -17.0,
+          "short_term_p50_lufs": -14.1,
+          "short_term_p90_lufs": -13.5,
+          "true_peak_dbfs": -1.0
+        },
+        "path": "master.wav",
+        "sibilance": {
+          "harshness_peak_excess_db": 22.230911422818316,
+          "harshness_ratio_db": {
+            "mean": -25.38490304417097,
+            "p10": -44.23327195882798,
+            "p50": -27.349596920282707,
+            "p90": -5.11868549746439
+          },
+          "sibilance_peak_excess_db": 19.976670224384264,
+          "sibilance_ratio_db": {
+            "mean": -29.975546115713048,
+            "p10": -47.55482733308296,
+            "p50": -32.17766849987004,
+            "p90": -12.200998275485775
+          }
+        },
+        "spatial": {
+          "drives_no_processing": true,
+          "envelope_decay_db_per_second": 6.782994204665815,
+          "high_band_decorrelation": 0.07782863342175683,
+          "stereo_decorrelation": 0.131250816793408
+        },
+        "stereo": {
+          "correlation": 0.868749183206592,
+          "full_band_width": 0.06585874970938067,
+          "high_band_side_to_mid_db": -13.876112917602278,
+          "is_stereo": true,
+          "low_band_correlation": 0.9951746214545014,
+          "low_band_side_to_mid_db": -25.914020255844832,
+          "lr_balance_db": 0.282139528360986,
+          "mid_energy_db": 77.64873282919152,
+          "side_energy_db": 66.13074214238924,
+          "side_to_mid_db": -11.517990686802278,
+          "width": 0.1700505865377231
+        },
+        "technical": {
+          "bit_depth": 24,
+          "channels": 2,
+          "duration_seconds": 30.0,
+          "frames": 1440000,
+          "sample_rate": 48000
+        },
+        "transient": {
+          "onset_rate_per_second": 2.2333333333333334,
+          "spectral_flux": {
+            "mean": 0.2145721296276055,
+            "p10": 0.042251476688426125,
+            "p50": 0.09339505595336893,
+            "p90": 0.6818687431163061
+          },
+          "transient_density": 0.1705685618729097
+        }
+      }
+    },
+    {
+      "comparison": {
+        "band_energy_db": {
+          "air": {
+            "after_db": 17.380385117973606,
+            "before_db": 15.279244355083435,
+            "delta_db": 2.1011407628901715
+          },
+          "bass": {
+            "after_db": 35.35170689535774,
+            "before_db": 35.848893541630915,
+            "delta_db": -0.4971866462731782
+          },
+          "brilliance": {
+            "after_db": 21.554799472881434,
+            "before_db": 20.060644306911254,
+            "delta_db": 1.4941551659701808
+          },
+          "low_mid": {
+            "after_db": 39.58177481462409,
+            "before_db": 40.05885710191735,
+            "delta_db": -0.47708228729325697
+          },
+          "mid": {
+            "after_db": 41.044718227502955,
+            "before_db": 41.373129824179316,
+            "delta_db": -0.3284115966763608
+          },
+          "presence": {
+            "after_db": 25.236782713372715,
+            "before_db": 24.217709547653982,
+            "delta_db": 1.0190731657187335
+          },
+          "sub": {
+            "after_db": 20.2936915015113,
+            "before_db": 20.792429696464723,
+            "delta_db": -0.49873819495342175
+          },
+          "ultra_high": {
+            "after_db": 5.895807019619081,
+            "before_db": 3.685937198700036,
+            "delta_db": 2.209869820919045
+          }
+        },
+        "difference": {
+          "difference_rms_dbfs": -41.75282631449164,
+          "frames_compared": 1440000.0,
+          "null_depth_db": 22.189679796065448
+        },
+        "level_stage": {
+          "loudness_match_gain_db": -0.1999999999999993,
+          "output_gain_db": -0.5,
+          "peak_safety_reduction_db": -0.3000000000000007
+        },
+        "metrics": {
+          "air_ratio_db": {
+            "after": -31.259637705143113,
+            "before": -33.7383904593723,
+            "delta": 2.478752754229184
+          },
+          "crest_factor_db": {
+            "after": 18.75174331211794,
+            "before": 18.562994614606836,
+            "delta": 0.18874869751110523
+          },
+          "integrated_lufs": {
+            "after": -15.9,
+            "before": -15.6,
+            "delta": -0.3000000000000007
+          },
+          "low_band_correlation": {
+            "after": 0.9743459582501315,
+            "before": 0.974346894365258,
+            "delta": -9.361151265263601e-07
+          },
+          "low_mid_ratio_db": {
+            "after": -2.5452165571096304,
+            "before": -2.446203869166413,
+            "delta": -0.09901268794321716
+          },
+          "lr_balance_db": {
+            "after": 0.031494069142283365,
+            "before": 0.03158248454605328,
+            "delta": -8.841540376991475e-05
+          },
+          "peak_dbfs": {
+            "after": -1.1883620612896764,
+            "before": -1.000151903819357,
+            "delta": -0.18821015747031944
+          },
+          "presence_ratio_db": {
+            "after": -23.57392304358676,
+            "before": -24.916228233108647,
+            "delta": 1.3423051895218876
+          },
+          "rms_dbfs": {
+            "after": -19.94010537340762,
+            "before": -19.563146518426194,
+            "delta": -0.37695885498142445
+          },
+          "sibilance_ratio_p90_db": {
+            "after": -16.135711904910707,
+            "before": -17.99523638194398,
+            "delta": 1.859524477033272
+          },
+          "spectral_centroid_hz": {
+            "after": 1728.8382481896024,
+            "before": 1511.0843034675152,
+            "delta": 217.75394472208723
+          },
+          "spectral_slope_db_per_octave": {
+            "after": -6.100137087537426,
+            "before": -6.680735126651132,
+            "delta": 0.5805980391137053
+          },
+          "stereo_correlation": {
+            "after": 0.6190629905507279,
+            "before": 0.6193155791475355,
+            "delta": -0.0002525885968076569
+          },
+          "stereo_width": {
+            "after": 0.20795761260749993,
+            "before": 0.20836275991449651,
+            "delta": -0.0004051473069965894
+          },
+          "true_peak_dbfs": {
+            "after": -1.0,
+            "before": -0.9,
+            "delta": -0.09999999999999998
+          }
+        },
+        "safety": {
+          "channels_after": 2,
+          "channels_before": 2,
+          "clipped_samples_after": 0,
+          "clipped_samples_before": 0,
+          "duration_after_s": 30.0,
+          "duration_before_s": 30.0,
+          "duration_delta_s": 0.0,
+          "sample_rate_after": 48000,
+          "sample_rate_before": 48000
+        }
+      },
+      "filter_graph": "equalizer=f=3200.00:width_type=q:width=0.8000:g=1.5665,highshelf=f=7000.00:width_type=q:width=0.7000:g=2.6954,volume=-0.5000dB",
+      "finishing_version": "p14-v1",
+      "label": "468025b5-ad99-44fe-b16c-d646e119c873",
+      "pair": "04",
+      "plan": {
+        "actions": [
+          {
+            "ceiling_db": 2.0,
+            "clamped": false,
+            "frequency_hz": 3200.0,
+            "gain_db": 1.566491293243459,
+            "kind": "PRESENCE_LIFT",
+            "measured_value": -24.916228233108647,
+            "metric": "frequency.presence_ratio_db.p50",
+            "notes": [],
+            "q": 0.8,
+            "reason": "2-5 kHz sits below the body of the mix",
+            "requested_gain_db": 1.566491293243459,
+            "threshold": -21.0,
+            "trigger": "PRESENCE_DEFICIT"
+          },
+          {
+            "ceiling_db": 3.0,
+            "clamped": false,
+            "frequency_hz": 7000.0,
+            "gain_db": 2.695356183748919,
+            "kind": "HIGH_SHELF_LIFT",
+            "measured_value": -33.7383904593723,
+            "metric": "frequency.air_ratio_db.p50",
+            "notes": [
+              "shelf corner at 7000 Hz"
+            ],
+            "q": 0.7,
+            "reason": "high frequencies sit below the body of the mix",
+            "requested_gain_db": 2.695356183748919,
+            "threshold": -27.0,
+            "trigger": "HIGH_FREQUENCY_DEFICIT"
+          }
+        ],
+        "deferred": [
+          {
+            "area": "dynamic harshness control",
+            "reason": "measured, not assumed: ffmpeg's adynamicequalizer was run over a sibilant baseline track at detection thresholds from 0.0005 to 0.1 and in adaptive mode. Where it acted at all it moved the 6-9 kHz median and the 90th percentile by the same amount, leaving peak excess at 21.05-21.23 dB against an untreated 21.21 dB. That is a static cut wearing a dynamic label, and a static scoop is exactly what a de-esser must not be. Harshness and sibilance instead lower the high-shelf ceiling, which needs no new filter to be safe."
+          },
+          {
+            "area": "transient shaping",
+            "reason": "no measured need and no verified bounded implementation. The 40-track baseline sits at 7.0-9.3 dB of 50 ms crest factor against a flatness threshold of 6.5 dB, so nothing in the corpus asks for it, and a transient shaper applied without a need would attack sustained pads and reverb tails as readily as drums."
+          },
+          {
+            "area": "spatial and reverb",
+            "reason": "the spatial measurements are proxies with known confounds \u2014 a held pad and a reverb tail decay alike, a wide synth and a room read alike \u2014 so no threshold among them can distinguish a dry mix from a deliberately dry one. Adding ambience to every master would be an aesthetic decision presented as a correction."
+          }
+        ],
+        "finishing_version": "p14-v1",
+        "match_source_loudness": true,
+        "no_action": false,
+        "output_ceiling_dbfs": -1.0,
+        "risks": [
+          {
+            "detail": "spectrum falls -6.68 dB/octave with the air band -33.7 dB below the body of the mix",
+            "flag": "HIGH_FREQUENCY_DEFICIT",
+            "metric": "frequency.spectral_slope_db_per_octave",
+            "threshold": -6.5,
+            "value": -6.680735126651132
+          },
+          {
+            "detail": "10-16 kHz sits -33.7 dB below the 300 Hz-3 kHz body",
+            "flag": "AIR_DEFICIT",
+            "metric": "frequency.air_ratio_db.p50",
+            "threshold": -30.0,
+            "value": -33.7383904593723
+          },
+          {
+            "detail": "2-5 kHz sits -24.9 dB below the body of the mix",
+            "flag": "PRESENCE_DEFICIT",
+            "metric": "frequency.presence_ratio_db.p50",
+            "threshold": -21.0,
+            "value": -24.916228233108647
+          }
+        ]
+      },
+      "source_analysis": {
+        "absent_bands": [],
+        "frequency": {
+          "air_ratio_db": {
+            "mean": -37.16701924010303,
+            "p10": -54.99958191068228,
+            "p50": -33.7383904593723,
+            "p90": -21.437956866289188
+          },
+          "bands": [
+            {
+              "energy_db": 20.792429696464723,
+              "high_hz": 60.0,
+              "low_hz": 20.0,
+              "name": "sub",
+              "share": 0.004252656194674109,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 35.848893541630915,
+              "high_hz": 150.0,
+              "low_hz": 60.0,
+              "name": "bass",
+              "share": 0.1362406346958667,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 40.05885710191735,
+              "high_hz": 400.0,
+              "low_hz": 150.0,
+              "name": "low_mid",
+              "share": 0.35917244760497874,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 41.373129824179316,
+              "high_hz": 2000.0,
+              "low_hz": 400.0,
+              "name": "mid",
+              "share": 0.4861052219036613,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 24.217709547653982,
+              "high_hz": 5000.0,
+              "low_hz": 2000.0,
+              "name": "presence",
+              "share": 0.00935811243442091,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 20.060644306911254,
+              "high_hz": 10000.0,
+              "low_hz": 5000.0,
+              "name": "brilliance",
+              "share": 0.0035932028436483246,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 15.279244355083435,
+              "high_hz": 16000.0,
+              "low_hz": 10000.0,
+              "name": "air",
+              "share": 0.001194928004750287,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 3.685937198700036,
+              "high_hz": 20000.0,
+              "low_hz": 16000.0,
+              "name": "ultra_high",
+              "share": 8.279631799978565e-05,
+              "truncated_by_nyquist": false
+            }
+          ],
+          "low_mid_peak_hz": 363.28125,
+          "low_mid_ratio_db": {
+            "mean": -2.081184670017991,
+            "p10": -14.005681401433584,
+            "p50": -2.446203869166413,
+            "p90": 12.571731171398342
+          },
+          "presence_ratio_db": {
+            "mean": -24.638746311595096,
+            "p10": -35.606885738474006,
+            "p50": -24.916228233108647,
+            "p90": -12.752615770845422
+          },
+          "spectral_bandwidth_hz": {
+            "mean": 2719.150615281677,
+            "p10": 1207.1657617321255,
+            "p50": 2863.012823153557,
+            "p90": 4265.792412518963
+          },
+          "spectral_centroid_hz": {
+            "mean": 1731.2724551508657,
+            "p10": 664.4229471089565,
+            "p50": 1511.0843034675152,
+            "p90": 3302.855892659651
+          },
+          "spectral_flatness": {
+            "mean": 4.551224685280633e-05,
+            "p10": 1.2706400783621875e-06,
+            "p50": 1.1370693202350113e-05,
+            "p90": 9.783874833490455e-05
+          },
+          "spectral_rolloff85_hz": {
+            "mean": 3505.7341312824956,
+            "p10": 738.28125,
+            "p50": 1851.5625,
+            "p90": 8660.15625
+          },
+          "spectral_slope_db_per_octave": -6.680735126651132
+        },
+        "level": {
+          "clipped_samples": 0,
+          "crest_factor_db": 18.562994614606836,
+          "dc_offset": 0.0006987976921929254,
+          "near_clipped_samples": 0,
+          "peak_dbfs": -1.000151903819357,
+          "rms_dbfs": -19.563146518426194,
+          "short_window_crest_db": {
+            "mean": 7.9039979890294765,
+            "p10": 6.541898418889794,
+            "p50": 7.7897792330385265,
+            "p90": 9.338480001499612
+          },
+          "silence_ratio": 0.17000000000000004
+        },
+        "loudness": {
+          "integrated_lufs": -15.6,
+          "loudness_range_lu": 10.8,
+          "short_term_p10_lufs": -27.9,
+          "short_term_p50_lufs": -19.8,
+          "short_term_p90_lufs": -12.6,
+          "true_peak_dbfs": -0.9
+        },
+        "path": "master.wav",
+        "sibilance": {
+          "harshness_peak_excess_db": 13.885255849072262,
+          "harshness_ratio_db": {
+            "mean": -27.15200930621253,
+            "p10": -40.21316954497732,
+            "p50": -27.039705081139573,
+            "p90": -13.15444923206731
+          },
+          "sibilance_peak_excess_db": 16.410399266692455,
+          "sibilance_ratio_db": {
+            "mean": -36.76264826196667,
+            "p10": -54.0665909798127,
+            "p50": -34.405635648636434,
+            "p90": -17.99523638194398
+          }
+        },
+        "spatial": {
+          "drives_no_processing": true,
+          "envelope_decay_db_per_second": 6.586245156307191,
+          "high_band_decorrelation": 0.47097028831536525,
+          "stereo_decorrelation": 0.38068442085246446
+        },
+        "stereo": {
+          "correlation": 0.6193155791475355,
+          "full_band_width": 0.19034354810171278,
+          "high_band_side_to_mid_db": -5.104097816961783,
+          "is_stereo": true,
+          "low_band_correlation": 0.974346894365258,
+          "low_band_side_to_mid_db": -18.43967757190584,
+          "lr_balance_db": 0.03158248454605328,
+          "mid_energy_db": 72.96919808820972,
+          "side_energy_db": 66.68157188360186,
+          "side_to_mid_db": -6.287626204607861,
+          "width": 0.20836275991449651
+        },
+        "technical": {
+          "bit_depth": 16,
+          "channels": 2,
+          "duration_seconds": 30.0,
+          "frames": 1440000,
+          "sample_rate": 48000
+        },
+        "transient": {
+          "onset_rate_per_second": 1.6333333333333333,
+          "spectral_flux": {
+            "mean": 0.16855443905664472,
+            "p10": 0.05497789011711296,
+            "p50": 0.12791078853076668,
+            "p90": 0.3585254307357769
+          },
+          "transient_density": 0.1265164644714038
+        }
+      }
+    },
+    {
+      "comparison": {
+        "band_energy_db": {
+          "air": {
+            "after_db": 19.07514054843561,
+            "before_db": 18.772406413938015,
+            "delta_db": 0.30273413449759445
+          },
+          "bass": {
+            "after_db": 38.820305583275186,
+            "before_db": 38.684787228734294,
+            "delta_db": 0.135518354540892
+          },
+          "brilliance": {
+            "after_db": 17.753928823805254,
+            "before_db": 17.27799991690667,
+            "delta_db": 0.47592890689858436
+          },
+          "low_mid": {
+            "after_db": 43.949585392456314,
+            "before_db": 44.01820563449963,
+            "delta_db": -0.06862024204331618
+          },
+          "mid": {
+            "after_db": 41.93460656101708,
+            "before_db": 41.815634384548616,
+            "delta_db": 0.11897217646846059
+          },
+          "presence": {
+            "after_db": 20.570761212511105,
+            "before_db": 19.411667361812626,
+            "delta_db": 1.1590938506984791
+          },
+          "sub": {
+            "after_db": 24.644298286356403,
+            "before_db": 24.46055847514114,
+            "delta_db": 0.18373981121526128
+          },
+          "ultra_high": {
+            "after_db": -0.6329624331605805,
+            "before_db": -0.8548413806702782,
+            "delta_db": 0.2218789475096976
+          }
+        },
+        "difference": {
+          "difference_rms_dbfs": -23.684403934919285,
+          "frames_compared": 1440000.0,
+          "null_depth_db": 6.369784422911415
+        },
+        "level_stage": {
+          "loudness_match_gain_db": 0.20000000000000107,
+          "output_gain_db": 0.20000000000000107,
+          "peak_safety_reduction_db": 0.0
+        },
+        "metrics": {
+          "air_ratio_db": {
+            "after": -29.02513193667638,
+            "before": -29.10292499623843,
+            "delta": 0.07779305956204752
+          },
+          "crest_factor_db": {
+            "after": 15.507187831416843,
+            "before": 16.314765024327773,
+            "delta": -0.8075771929109301
+          },
+          "integrated_lufs": {
+            "after": -14.6,
+            "before": -14.6,
+            "delta": 0.0
+          },
+          "low_band_correlation": {
+            "after": 0.9624978500290425,
+            "before": 0.8035193364008535,
+            "delta": 0.15897851362818904
+          },
+          "low_mid_ratio_db": {
+            "after": 5.998470352764771,
+            "before": 6.179850019667212,
+            "delta": -0.18137966690244056
+          },
+          "lr_balance_db": {
+            "after": -0.15214967751419195,
+            "before": 0.14708067534502334,
+            "delta": -0.2992303528592153
+          },
+          "peak_dbfs": {
+            "after": -1.9063031893286366,
+            "before": -0.9998544876801003,
+            "delta": -0.9064487016485363
+          },
+          "presence_ratio_db": {
+            "after": -22.78341035578041,
+            "before": -23.994069814048444,
+            "delta": 1.210659458268033
+          },
+          "rms_dbfs": {
+            "after": -17.41349102074548,
+            "before": -17.314619512007873,
+            "delta": -0.09887150873760575
+          },
+          "sibilance_ratio_p90_db": {
+            "after": -14.007967272009976,
+            "before": -14.140073753832837,
+            "delta": 0.132106481822861
+          },
+          "spectral_centroid_hz": {
+            "after": 1357.8034582361447,
+            "before": 1304.9316182731259,
+            "delta": 52.87183996301883
+          },
+          "spectral_slope_db_per_octave": {
+            "after": -6.53681920153844,
+            "before": -6.4322786329349535,
+            "delta": -0.10454056860348615
+          },
+          "stereo_correlation": {
+            "after": 0.7054273066983655,
+            "before": 0.6562650146106519,
+            "delta": 0.04916229208771361
+          },
+          "stereo_width": {
+            "after": 0.1578577031601326,
+            "before": 0.1771638518100681,
+            "delta": -0.019306148649935517
+          },
+          "true_peak_dbfs": {
+            "after": -1.9,
+            "before": -1.0,
+            "delta": -0.8999999999999999
+          }
+        },
+        "safety": {
+          "channels_after": 2,
+          "channels_before": 2,
+          "clipped_samples_after": 0,
+          "clipped_samples_before": 0,
+          "duration_after_s": 30.0,
+          "duration_before_s": 30.0,
+          "duration_delta_s": 0.0,
+          "sample_rate_after": 48000,
+          "sample_rate_before": 48000
+        }
+      },
+      "filter_graph": "[0:a]equalizer=f=316.41:width_type=q:width=0.9000:g=-0.3399,equalizer=f=3200.00:width_type=q:width=0.8000:g=1.1976,asplit=2[ms_a][ms_b];[ms_a]pan=mono|c0=0.5*c0+0.5*c1[mid];[ms_b]pan=mono|c0=0.5*c0-0.5*c1,highpass=f=120.00:poles=2,highpass=f=120.00:poles=2[side];[mid][side]amerge=inputs=2,pan=stereo|c0=c0+c1|c1=c0-c1,volume=0.2000dB[out]",
+      "finishing_version": "p14-v1",
+      "label": "a64ab1fc-f439-4b05-81ed-570ad4901295",
+      "pair": "05",
+      "plan": {
+        "actions": [
+          {
+            "ceiling_db": 2.5,
+            "clamped": false,
+            "frequency_hz": 316.40625,
+            "gain_db": -0.33992500983360596,
+            "kind": "LOW_MID_CUT",
+            "measured_value": 6.179850019667212,
+            "metric": "frequency.low_mid_ratio_db.p50",
+            "notes": [
+              "centred on the track's own low-mid peak at 316 Hz"
+            ],
+            "q": 0.9,
+            "reason": "150-400 Hz sits above the body of the mix",
+            "requested_gain_db": -0.33992500983360596,
+            "threshold": 5.5,
+            "trigger": "LOW_MID_MUD"
+          },
+          {
+            "ceiling_db": 2.0,
+            "clamped": false,
+            "frequency_hz": 3200.0,
+            "gain_db": 1.1976279256193778,
+            "kind": "PRESENCE_LIFT",
+            "measured_value": -23.994069814048444,
+            "metric": "frequency.presence_ratio_db.p50",
+            "notes": [],
+            "q": 0.8,
+            "reason": "2-5 kHz sits below the body of the mix",
+            "requested_gain_db": 1.1976279256193778,
+            "threshold": -21.0,
+            "trigger": "PRESENCE_DEFICIT"
+          },
+          {
+            "ceiling_db": null,
+            "clamped": false,
+            "frequency_hz": 120.0,
+            "gain_db": null,
+            "kind": "LOW_FREQUENCY_MONO",
+            "measured_value": 0.8035193364008535,
+            "metric": "stereo.low_band_correlation",
+            "notes": [
+              "Linkwitz-Riley crossover; the two bands sum flat"
+            ],
+            "q": null,
+            "reason": "channels disagree below 120 Hz",
+            "requested_gain_db": null,
+            "threshold": 0.9,
+            "trigger": "LOW_END_PHASE_RISK"
+          }
+        ],
+        "deferred": [
+          {
+            "area": "dynamic harshness control",
+            "reason": "measured, not assumed: ffmpeg's adynamicequalizer was run over a sibilant baseline track at detection thresholds from 0.0005 to 0.1 and in adaptive mode. Where it acted at all it moved the 6-9 kHz median and the 90th percentile by the same amount, leaving peak excess at 21.05-21.23 dB against an untreated 21.21 dB. That is a static cut wearing a dynamic label, and a static scoop is exactly what a de-esser must not be. Harshness and sibilance instead lower the high-shelf ceiling, which needs no new filter to be safe."
+          },
+          {
+            "area": "transient shaping",
+            "reason": "no measured need and no verified bounded implementation. The 40-track baseline sits at 7.0-9.3 dB of 50 ms crest factor against a flatness threshold of 6.5 dB, so nothing in the corpus asks for it, and a transient shaper applied without a need would attack sustained pads and reverb tails as readily as drums."
+          },
+          {
+            "area": "spatial and reverb",
+            "reason": "the spatial measurements are proxies with known confounds \u2014 a held pad and a reverb tail decay alike, a wide synth and a room read alike \u2014 so no threshold among them can distinguish a dry mix from a deliberately dry one. Adding ambience to every master would be an aesthetic decision presented as a correction."
+          }
+        ],
+        "finishing_version": "p14-v1",
+        "match_source_loudness": true,
+        "no_action": false,
+        "output_ceiling_dbfs": -1.0,
+        "risks": [
+          {
+            "detail": "2-5 kHz sits -24.0 dB below the body of the mix",
+            "flag": "PRESENCE_DEFICIT",
+            "metric": "frequency.presence_ratio_db.p50",
+            "threshold": -21.0,
+            "value": -23.994069814048444
+          },
+          {
+            "detail": "150-400 Hz sits 6.2 dB above the body of the mix",
+            "flag": "LOW_MID_MUD",
+            "metric": "frequency.low_mid_ratio_db.p50",
+            "threshold": 5.5,
+            "value": 6.179850019667212
+          },
+          {
+            "detail": "channels correlate at 0.80 below 120 Hz, so bass partially cancels in mono",
+            "flag": "LOW_END_PHASE_RISK",
+            "metric": "stereo.low_band_correlation",
+            "threshold": 0.9,
+            "value": 0.8035193364008535
+          }
+        ]
+      },
+      "source_analysis": {
+        "absent_bands": [],
+        "frequency": {
+          "air_ratio_db": {
+            "mean": -29.738366306096143,
+            "p10": -47.863346570888794,
+            "p50": -29.10292499623843,
+            "p90": -14.207775037222717
+          },
+          "bands": [
+            {
+              "energy_db": 24.46055847514114,
+              "high_hz": 60.0,
+              "low_hz": 20.0,
+              "name": "sub",
+              "share": 0.0057826455818427575,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 38.684787228734294,
+              "high_hz": 150.0,
+              "low_hz": 60.0,
+              "name": "bass",
+              "share": 0.1529499891751701,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 44.01820563449963,
+              "high_hz": 400.0,
+              "low_hz": 150.0,
+              "name": "low_mid",
+              "share": 0.5222654436664397,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 41.815634384548616,
+              "high_hz": 2000.0,
+              "low_hz": 400.0,
+              "name": "mid",
+              "share": 0.31450978821783204,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 19.411667361812626,
+              "high_hz": 5000.0,
+              "low_hz": 2000.0,
+              "name": "presence",
+              "share": 0.0018081625243512164,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 17.27799991690667,
+              "high_hz": 10000.0,
+              "low_hz": 5000.0,
+              "name": "brilliance",
+              "share": 0.0011062944137010262,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": 18.772406413938015,
+              "high_hz": 16000.0,
+              "low_hz": 10000.0,
+              "name": "air",
+              "share": 0.0015606710309297692,
+              "truncated_by_nyquist": false
+            },
+            {
+              "energy_db": -0.8548413806702782,
+              "high_hz": 20000.0,
+              "low_hz": 16000.0,
+              "name": "ultra_high",
+              "share": 1.7005389733433582e-05,
+              "truncated_by_nyquist": false
+            }
+          ],
+          "low_mid_peak_hz": 316.40625,
+          "low_mid_ratio_db": {
+            "mean": 6.122754519358446,
+            "p10": -9.45763553799457,
+            "p50": 6.179850019667212,
+            "p90": 21.411585291889796
+          },
+          "presence_ratio_db": {
+            "mean": -23.588322682711187,
+            "p10": -36.27807037699098,
+            "p50": -23.994069814048444,
+            "p90": -11.736280554502535
+          },
+          "spectral_bandwidth_hz": {
+            "mean": 2821.228343585985,
+            "p10": 1278.795972348884,
+            "p50": 2770.6999826995398,
+            "p90": 4405.373102159692
+          },
+          "spectral_centroid_hz": {
+            "mean": 1666.7329761618284,
+            "p10": 543.7864987935602,
+            "p50": 1304.9316182731259,
+            "p90": 3307.4253358342903
+          },
+          "spectral_flatness": {
+            "mean": 3.7569947340461216e-05,
+            "p10": 8.480645861012708e-07,
+            "p50": 7.464595013487606e-06,
+            "p90": 4.185120865498393e-05
+          },
+          "spectral_rolloff85_hz": {
+            "mean": 3685.188850596125,
+            "p10": 527.34375,
+            "p50": 1664.0625,
+            "p90": 9410.15625
+          },
+          "spectral_slope_db_per_octave": -6.4322786329349535
+        },
+        "level": {
+          "clipped_samples": 0,
+          "crest_factor_db": 16.314765024327773,
+          "dc_offset": 0.0008697334925333659,
+          "near_clipped_samples": 0,
+          "peak_dbfs": -0.9998544876801003,
+          "rms_dbfs": -17.314619512007873,
+          "short_window_crest_db": {
+            "mean": 7.44204974729905,
+            "p10": 5.328964985984221,
+            "p50": 7.57345175687173,
+            "p90": 9.095250580362062
+          },
+          "silence_ratio": 0.04166666666666663
+        },
+        "loudness": {
+          "integrated_lufs": -14.6,
+          "loudness_range_lu": 6.6,
+          "short_term_p10_lufs": -19.1,
+          "short_term_p50_lufs": -14.7,
+          "short_term_p90_lufs": -13.0,
+          "true_peak_dbfs": -1.0
+        },
+        "path": "master.wav",
+        "sibilance": {
+          "harshness_peak_excess_db": 12.822418557782516,
+          "harshness_ratio_db": {
+            "mean": -24.920259191160053,
+            "p10": -37.78792083458154,
+            "p50": -25.27121780000194,
+            "p90": -12.448799242219422
+          },
+          "sibilance_peak_excess_db": 15.155940348347023,
+          "sibilance_ratio_db": {
+            "mean": -30.034234794921904,
+            "p10": -48.34780851575442,
+            "p50": -29.29601410217986,
+            "p90": -14.140073753832837
+          }
+        },
+        "spatial": {
+          "drives_no_processing": true,
+          "envelope_decay_db_per_second": 9.20681704388251,
+          "high_band_decorrelation": 0.3392743418511921,
+          "stereo_decorrelation": 0.3437349853893481
+        },
+        "stereo": {
+          "correlation": 0.6562650146106519,
+          "full_band_width": 0.17191349104873396,
+          "high_band_side_to_mid_db": -6.895618653579099,
+          "is_stereo": true,
+          "low_band_correlation": 0.8035193364008535,
+          "low_band_side_to_mid_db": -9.014963006083619,
+          "lr_balance_db": 0.14708067534502334,
+          "mid_energy_db": 75.30266385084889,
+          "side_energy_db": 68.47500635470386,
+          "side_to_mid_db": -6.827657496145022,
+          "width": 0.1771638518100681
+        },
+        "technical": {
+          "bit_depth": 24,
+          "channels": 2,
+          "duration_seconds": 30.0,
+          "frames": 1440000,
+          "sample_rate": 48000
+        },
+        "transient": {
+          "onset_rate_per_second": 1.8,
+          "spectral_flux": {
+            "mean": 0.1703507145975237,
+            "p10": 0.05418415897678551,
+            "p50": 0.12680613206622976,
+            "p90": 0.36949405874660085
+          },
+          "transient_density": 0.13114754098360656
+        }
+      }
+    }
+  ]
+}

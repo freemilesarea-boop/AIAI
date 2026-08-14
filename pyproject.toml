@@ -19,6 +19,7 @@ members = [
     "packages/generation-client",
     "packages/audio-utils",
     "packages/dataset",
+    "packages/audio-finishing",
 ]
 
 [dependency-groups]
@@ -31,7 +32,14 @@ dev = [
     "fakeredis>=2.26",
     "aiosqlite>=0.20",
     "numpy>=2.1",
+    # Phase 14A proves the finishing engine before integrating it, so no
+    # service depends on it yet. It is installed here so its tests run
+    # with the rest of the suite.
+    "luber-audio-finishing",
 ]
+
+[tool.uv.sources]
+luber-audio-finishing = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -47,6 +55,8 @@ testpaths = [
     "packages/dataset/tests",
     "benchmarks/music_quality/tests",
     "benchmarks/reference_audio/tests",
+    "benchmarks/audio_finishing/tests",
+    "packages/audio-finishing/tests",
 ]
 
 [tool.ruff]
@@ -62,9 +72,11 @@ src = [
     "packages/generation-client/src",
     "packages/audio-utils/src",
     "packages/dataset/src",
+    "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
     "benchmarks/reference_audio/scripts",
+    "benchmarks/audio_finishing/scripts",
 ]
 
 [tool.ruff.lint]
@@ -106,9 +118,11 @@ mypy_path = [
     "packages/generation-client/src",
     "packages/audio-utils/src",
     "packages/dataset/src",
+    "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
     "benchmarks/reference_audio/scripts",
+    "benchmarks/audio_finishing/scripts",
 ]
 
 [[tool.mypy.overrides]]
