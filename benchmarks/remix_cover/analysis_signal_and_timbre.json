@@ -1,0 +1,204 @@
+{
+  "source": {
+    "path": "master.wav",
+    "duration_seconds": 30.0,
+    "sample_rate": 48000,
+    "spectral_centroid_hz": 1714.707406487853,
+    "spectral_rolloff85_hz": 3233.073380206479,
+    "tempo_bpm": 160.71428571428572
+  },
+  "outputs": {
+    "01_BASELINE_strength_1.00": {
+      "signal_preservation": {
+        "waveform_correlation": 0.09437033262434902,
+        "si_sdr_db": -20.464439806778643,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.11317294356756899,
+        "peak_output": 0.75244140625
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.984155516175502,
+        "envelope_correlation": 0.33343016191488684,
+        "onset_flux_correlation": 0.14086590425463041,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 152.02702702702703
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1859.5743879926217,
+        "spectral_rolloff85_hz": 3907.746306514774
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.0051534722222222225
+      }
+    },
+    "02_STRENGTH_0.75": {
+      "signal_preservation": {
+        "waveform_correlation": 0.0772812328869233,
+        "si_sdr_db": -22.2125036419246,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.12092043710197478,
+        "peak_output": 0.81634521484375
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.98400881766562,
+        "envelope_correlation": 0.3257623452689768,
+        "onset_flux_correlation": 0.1391919316965679,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 156.25
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1917.7935607247853,
+        "spectral_rolloff85_hz": 3773.1454699181204
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.004989583333333334
+      }
+    },
+    "03_STRENGTH_0.50": {
+      "signal_preservation": {
+        "waveform_correlation": 0.016999419544215313,
+        "si_sdr_db": -35.39006294577348,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.12420856028107574,
+        "peak_output": 0.845855712890625
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.9766546014668294,
+        "envelope_correlation": 0.38250983305578257,
+        "onset_flux_correlation": 0.17800694972643766,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 79.22535211267606
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1800.009668105052,
+        "spectral_rolloff85_hz": 3326.1391954432183
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.0052125
+      }
+    },
+    "04_STRENGTH_0.25": {
+      "signal_preservation": {
+        "waveform_correlation": 0.01596087976119111,
+        "si_sdr_db": -35.93775697687316,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.12036694540728567,
+        "peak_output": 0.89007568359375
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.9705835905673165,
+        "envelope_correlation": 0.33423192948641317,
+        "onset_flux_correlation": 0.13959027327773663,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 79.22535211267606
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1678.9186716465908,
+        "spectral_rolloff85_hz": 3469.5343093627625
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.0024694444444444442
+      }
+    },
+    "05_STYLE_KPOP": {
+      "signal_preservation": {
+        "waveform_correlation": 0.08299863129933914,
+        "si_sdr_db": -21.58856030371471,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.10204371433793875,
+        "peak_output": 0.7841796875
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.958841298377453,
+        "envelope_correlation": 0.37614084403917086,
+        "onset_flux_correlation": 0.1276778406389189,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 200.89285714285714
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1722.6611349471107,
+        "spectral_rolloff85_hz": 3889.0897561409756
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.003895138888888889
+      }
+    },
+    "06_STYLE_RNB": {
+      "signal_preservation": {
+        "waveform_correlation": 0.05892274387266466,
+        "si_sdr_db": -24.579236287511126,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.1112393684011132,
+        "peak_output": 0.853759765625
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.9746903100888176,
+        "envelope_correlation": 0.2795693146048541,
+        "onset_flux_correlation": 0.09951607162520303,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 152.02702702702703
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1753.6647594793642,
+        "spectral_rolloff85_hz": 3675.4822668209326
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.003392361111111111
+      }
+    },
+    "07_STYLE_INDIE_POP": {
+      "signal_preservation": {
+        "waveform_correlation": 0.06730637853459855,
+        "si_sdr_db": -23.419156642591766,
+        "rms_source": 0.06664492213099735,
+        "rms_output": 0.10365677792780693,
+        "peak_output": 0.7813873291015625
+      },
+      "musical_preservation": {
+        "chroma_cosine": 0.9667230894818806,
+        "envelope_correlation": 0.36445491795555773,
+        "onset_flux_correlation": 0.12865986668085755,
+        "tempo_source_bpm": 160.71428571428572,
+        "tempo_output_bpm": 148.02631578947367
+      },
+      "timbre": {
+        "spectral_centroid_hz": 1512.273088504373,
+        "spectral_rolloff85_hz": 3244.312366500534
+      },
+      "integrity": {
+        "duration_seconds": 30.0,
+        "silent_fraction": 0.0030958333333333332
+      }
+    }
+  },
+  "control_unrelated_generation": {
+    "signal_preservation": {
+      "waveform_correlation": 0.003908048770711792,
+      "si_sdr_db": -48.160734172716175,
+      "rms_source": 0.06664492213099735,
+      "rms_output": 0.08914737143475689,
+      "peak_output": 0.59228515625
+    },
+    "musical_preservation": {
+      "chroma_cosine": 0.9914888565287763,
+      "envelope_correlation": 0.3667798057944919,
+      "onset_flux_correlation": 0.12849068506776556,
+      "tempo_source_bpm": 160.71428571428572,
+      "tempo_output_bpm": 86.53846153846153
+    },
+    "timbre": {
+      "spectral_centroid_hz": 2142.6149740936035,
+      "spectral_rolloff85_hz": 4328.962152901388
+    },
+    "integrity": {
+      "duration_seconds": 30.0,
+      "silent_fraction": 0.0046298611111111115
+    }
+  }
+}

@@ -62,6 +62,7 @@ src = [
     "packages/audio-utils/src",
     "packages/dataset/src",
     "benchmarks/music_quality/scripts",
+    "benchmarks/remix_cover/scripts",
 ]
 
 [tool.ruff.lint]
@@ -104,6 +105,7 @@ mypy_path = [
     "packages/audio-utils/src",
     "packages/dataset/src",
     "benchmarks/music_quality/scripts",
+    "benchmarks/remix_cover/scripts",
 ]
 
 [[tool.mypy.overrides]]
