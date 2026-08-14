@@ -96,6 +96,23 @@ class Generation(Base):
     #: A fabricated URL here would be worse than nothing.
     cover_art_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    #: Phase 13B. NULL means an ordinary text-to-music generation; a
+    #: value means this row was produced by editing its parent's audio.
+    #:
+    #: Deliberately *not* folded into ``variation_label``: that field is
+    #: client-settable free text, so a caller could label a plain
+    #: generation "extend" and make the two indistinguishable. The worker
+    #: routes on this column, so it must not be forgeable from the API.
+    edit_kind: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+    #: The source range this edit regenerated, in seconds from the start
+    #: of the parent's master. Measured from the audio itself, not copied
+    #: from any requested duration. Stored because the request trace is
+    #: explicitly best-effort diagnostics and may be absent, while "what
+    #: range was edited" must stay answerable for any edited row.
+    edit_start_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    edit_end_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

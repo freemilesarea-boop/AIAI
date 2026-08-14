@@ -21,6 +21,11 @@ from luber_generation_client.ace_step.client import AceStepApiError, AceStepClie
 from luber_generation_client.ace_step.compiler import AceStepPromptCompiler
 from luber_generation_client.ace_step.types import AceStepQueryResult, AceStepTaskStatus
 from luber_generation_client.ace_step.version import ACE_STEP_VERSION
+from luber_generation_client.editing import (
+    AudioEditingProvider,
+    AudioEditKind,
+    AudioEditRequest,
+)
 from luber_generation_client.errors import GenerationProviderError
 from luber_generation_client.provider import (
     GenerationRequest,
@@ -32,6 +37,16 @@ from luber_schemas import ErrorCode
 logger = logging.getLogger(__name__)
 
 ACE_STEP_PROVIDER_NAME = "ace_step"
+
+#: Upstream's task name for masked regeneration.
+ACE_STEP_REPAINT_TASK = "repaint"
+
+#: Checkpoints whose task list includes ``repaint``. Read from
+#: ``TASK_TYPES_TURBO`` / ``TASK_TYPES_BASE`` in the pinned build: every
+#: shipped checkpoint supports repaint, but extract/lego/complete are
+#: base-only, so this set exists to be *narrowed* honestly if a
+#: repaint-incapable model is ever configured.
+REPAINT_CAPABLE_MODELS = frozenset({"acestep-v15-turbo"})
 
 
 @dataclass(frozen=True)
@@ -56,7 +71,7 @@ class AceStepProviderConfig:
     thinking: bool = False
 
 
-class AceStepProvider(MusicGenerationProvider):
+class AceStepProvider(MusicGenerationProvider, AudioEditingProvider):
     name = ACE_STEP_PROVIDER_NAME
 
     def __init__(
@@ -142,7 +157,7 @@ class AceStepProvider(MusicGenerationProvider):
             "payload": payload,
         }
 
-    async def generate(self, request: GenerationRequest) -> GenerationResult:
+    async def _require_healthy_server(self) -> None:
         try:
             health = await self._client.health()
         except (AceStepApiError, httpx.HTTPError) as exc:
@@ -156,25 +171,29 @@ class AceStepProvider(MusicGenerationProvider):
                 error_code=ErrorCode.MODEL_LOAD_FAILED,
             )
 
-        payload = self._build_payload(request)
-        try:
-            handle = await self._client.submit_generation(payload)
-        except (AceStepApiError, httpx.HTTPError) as exc:
-            raise GenerationProviderError(
-                f"ACE-Step task submission failed: {exc}",
-                error_code=self._classify_upstream_error(str(exc)),
-            ) from exc
+    async def _collect_result(
+        self,
+        task_id: str,
+        *,
+        duration_seconds: float,
+        fallback_seed: int | None,
+    ) -> GenerationResult:
+        """Poll one submitted task to a terminal state and fetch its audio.
 
-        timeout = self.timeout_for(request.duration_seconds)
+        Shared by generation and editing: everything after submission is
+        identical, and duplicating it would let the two paths drift in
+        timeout, error translation or WAV handling.
+        """
+        timeout = self.timeout_for(duration_seconds)
         logger.info(
             "polling ACE-Step task",
             extra={
-                "task_id": handle.task_id,
-                "duration_seconds": request.duration_seconds,
+                "task_id": task_id,
+                "duration_seconds": duration_seconds,
                 "timeout_seconds": round(timeout),
             },
         )
-        result = await self._poll_until_terminal(handle.task_id, timeout)
+        result = await self._poll_until_terminal(task_id, timeout)
         if result.status is AceStepTaskStatus.FAILED:
             message = result.error_message or "ACE-Step task failed"
             raise GenerationProviderError(
@@ -188,7 +207,7 @@ class AceStepProvider(MusicGenerationProvider):
             )
 
         track = result.tracks[0]
-        destination = self._config.output_dir / f"{handle.task_id}.wav"
+        destination = self._config.output_dir / f"{task_id}.wav"
         try:
             await self._client.download_audio(track.file_url, destination)
         except (AceStepApiError, httpx.HTTPError) as exc:
@@ -197,18 +216,156 @@ class AceStepProvider(MusicGenerationProvider):
                 error_code=ErrorCode.INVALID_AUDIO,
             ) from exc
 
-        duration_seconds, sample_rate = self._read_wav_header(destination)
+        actual_duration, sample_rate = self._read_wav_header(destination)
         return GenerationResult(
             audio_path=destination,
-            duration_seconds=duration_seconds,
+            duration_seconds=actual_duration,
             sample_rate=sample_rate,
-            seed_used=track.first_seed() if track.first_seed() is not None else request.seed,
+            seed_used=track.first_seed() if track.first_seed() is not None else fallback_seed,
             provider=ACE_STEP_PROVIDER_NAME,
             model_name=track.dit_model or self._config.model,
             model_version=ACE_STEP_VERSION,
         )
 
-    def timeout_for(self, duration_seconds: int) -> float:
+    async def generate(self, request: GenerationRequest) -> GenerationResult:
+        await self._require_healthy_server()
+
+        payload = self._build_payload(request)
+        try:
+            handle = await self._client.submit_generation(payload)
+        except (AceStepApiError, httpx.HTTPError) as exc:
+            raise GenerationProviderError(
+                f"ACE-Step task submission failed: {exc}",
+                error_code=self._classify_upstream_error(str(exc)),
+            ) from exc
+
+        return await self._collect_result(
+            handle.task_id,
+            duration_seconds=request.duration_seconds,
+            fallback_seed=request.seed,
+        )
+
+    # ── audio editing (Phase 13B) ──────────────────────────────────
+    #
+    # ACE-Step's repaint task regenerates a masked time range while
+    # re-imposing the VAE-encoded source outside it at every diffusion
+    # step. A range that runs past the end of the source makes upstream
+    # pad the source and generate into the padding, which is how an
+    # extension is expressed — there is no separate "extend" task.
+
+    def supports_edit(self, kind: AudioEditKind) -> bool:
+        """Only range regeneration, and only on a model that can repaint.
+
+        Answered from the configured checkpoint rather than from
+        ACE-Step's feature list: extract/lego/complete exist in the code
+        but are base-model only, and the HTTP API accepts them against a
+        turbo model without complaint, returning undefined audio.
+        """
+        if kind is not AudioEditKind.REGENERATE_RANGE:
+            return False
+        return self._config.model in REPAINT_CAPABLE_MODELS
+
+    def _build_edit_payload(self, request: AudioEditRequest) -> dict[str, object]:
+        compiled = self._compiler.compile(
+            GenerationRequest(
+                title=request.title,
+                prompt=request.prompt,
+                lyrics=request.lyrics,
+                vocal_gender=request.vocal_gender,
+                duration_seconds=round(request.total_seconds),
+                seed=request.seed,
+                language=request.language,
+                instrumental=request.instrumental,
+                bpm=request.bpm,
+                key_scale=request.key_scale,
+                time_signature=request.time_signature,
+            )
+        )
+        payload: dict[str, object] = {
+            "task_type": ACE_STEP_REPAINT_TASK,
+            "prompt": compiled.prompt,
+            "lyrics": compiled.lyrics,
+            "vocal_language": compiled.vocal_language,
+            # The canvas upstream must return: the source plus whatever
+            # the edit range adds beyond it.
+            "audio_duration": float(request.total_seconds),
+            # Engine words, and they stop here. The domain says
+            # start/end seconds; only this module knows they are called
+            # repainting_start/repainting_end on the wire.
+            "repainting_start": float(request.start_seconds),
+            "repainting_end": float(request.end_seconds),
+            # "balanced" is the only mode whose strength dial is read;
+            # conservative and aggressive ignore it.
+            "repaint_mode": "balanced",
+            "repaint_strength": float(1.0 - request.preservation),
+            "audio_format": "wav",
+            "model": self._config.model,
+            "inference_steps": self._config.inference_steps,
+            "thinking": self._config.thinking,
+            "batch_size": 1,
+        }
+        if not self._config.thinking:
+            payload["use_cot_caption"] = False
+            payload["use_cot_language"] = False
+        if request.seed is not None:
+            payload["use_random_seed"] = False
+            payload["seed"] = request.seed
+        if request.bpm is not None:
+            payload["bpm"] = request.bpm
+        if request.key_scale:
+            payload["key_scale"] = request.key_scale
+        if request.time_signature:
+            payload["time_signature"] = request.time_signature
+        return payload
+
+    def describe_edit(self, request: AudioEditRequest) -> dict[str, object]:
+        """Sanitized trace of the edit. No base_url, no api_key, no paths.
+
+        The source is described by size and format only: its path is a
+        transient worker detail and its bytes are not diagnostics.
+        """
+        payload = self._build_edit_payload(request)
+        return {
+            "provider": ACE_STEP_PROVIDER_NAME,
+            "model": self._config.model,
+            "engine_version": ACE_STEP_VERSION,
+            "operation": "edit",
+            "edit_kind": request.kind.value,
+            "start_seconds": request.start_seconds,
+            "end_seconds": request.end_seconds,
+            "preservation": request.preservation,
+            "source_audio_bytes": request.source_audio.stat().st_size,
+            "source_audio_format": request.source_audio.suffix.lstrip("."),
+            "source_audio_transport": "multipart",
+            "payload": payload,
+        }
+
+    async def edit(self, request: AudioEditRequest) -> GenerationResult:
+        if not self.supports_edit(request.kind):
+            raise GenerationProviderError(
+                f"model {self._config.model!r} cannot perform {request.kind.value}",
+                error_code=ErrorCode.MODEL_LOAD_FAILED,
+            )
+        await self._require_healthy_server()
+
+        payload = self._build_edit_payload(request)
+        try:
+            handle = await self._client.submit_generation_with_source_audio(
+                payload, request.source_audio
+            )
+        except (AceStepApiError, httpx.HTTPError) as exc:
+            raise GenerationProviderError(
+                f"ACE-Step edit submission failed: {exc}",
+                error_code=self._classify_upstream_error(str(exc)),
+            ) from exc
+
+        return await self._collect_result(
+            handle.task_id,
+            duration_seconds=request.total_seconds,
+            fallback_seed=request.seed,
+        )
+
+    def timeout_for(self, duration_seconds: float) -> float:
         """How long to wait for *duration_seconds* of audio before giving up.
 
         A timeout exists to tell "the provider is dead or hung" apart

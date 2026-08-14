@@ -40,6 +40,27 @@ MAX_RESULT_COUNT = 2
 #: to hold a transaction open indefinitely.
 MAX_BULK_IDS = 200
 
+#: How much audio one Extend may append. The floor keeps a request from
+#: costing a full inference run for a musically useless sliver; the
+#: ceiling matches the largest option the product offers.
+EXTENSION_MIN_SECONDS = 5
+EXTENSION_MAX_SECONDS = 60
+
+#: Hard ceiling on the *total* length of an extended song.
+#:
+#: Two bounds apply and the stricter one wins. The engine's own limit on
+#: this deployment is 600s (``gpu_config`` resolves tier6a, and LUBER
+#: runs the LM disabled, so ``max_duration_without_lm`` applies). LUBER's
+#: own validated contract stops at ``DURATION_MAX`` = 360s, which is what
+#: ``GenerationRequest`` accepts and what the long-form durations were validated
+#: against in Phase 9. 360 therefore binds first.
+EXTENSION_TOTAL_MAX_SECONDS = DURATION_MAX
+
+#: The engine bound, recorded for the report and for the day LUBER's own
+#: cap is raised. Derived by resolving ``acestep.gpu_config`` on this
+#: machine, not from documentation.
+ENGINE_TOTAL_MAX_SECONDS = 600
+
 
 class GenerationCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -180,6 +201,20 @@ class GenerationUpdateRequest(BaseModel):
         return self
 
 
+class ExtendGenerationRequest(BaseModel):
+    """Append newly generated music to the end of an existing song.
+
+    A product concept, expressed in the only term the user cares about:
+    how much longer. The engine's editing vocabulary — task types, repaint
+    ranges, mask modes — never appears in this contract or in any
+    response derived from it.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    seconds: int = Field(ge=EXTENSION_MIN_SECONDS, le=EXTENSION_MAX_SECONDS)
+
+
 class BulkIdsRequest(BaseModel):
     """Ids for a bulk action."""
 
@@ -295,6 +330,12 @@ class GenerationResponse(BaseModel):
     #: the client should use its own placeholder — it is never a stand-in
     #: URL that does not resolve.
     cover_art_url: str | None = None
+    #: ``None`` for an ordinary generation; set when this row was produced
+    #: by editing its parent's audio. The range is in seconds from the
+    #: start of the source. No engine vocabulary and no filesystem path.
+    edit_kind: str | None = None
+    edit_start_seconds: float | None = None
+    edit_end_seconds: float | None = None
     #: Pre-flight findings recorded at submission. Empty list means
     #: "none found"; these were persisted as JSON.
     advisories: list[AdvisoryResponse] = Field(default_factory=list)

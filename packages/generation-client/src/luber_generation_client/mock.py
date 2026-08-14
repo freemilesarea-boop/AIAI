@@ -12,6 +12,11 @@ from __future__ import annotations
 import wave
 from pathlib import Path
 
+from luber_generation_client.editing import (
+    AudioEditingProvider,
+    AudioEditKind,
+    AudioEditRequest,
+)
 from luber_generation_client.errors import GenerationProviderError
 from luber_generation_client.provider import (
     GenerationRequest,
@@ -25,13 +30,23 @@ MOCK_MODEL_NAME = "mock-generation-provider"
 MOCK_MODEL_VERSION = "phase1"
 
 
-class MockGenerationProvider(MusicGenerationProvider):
-    """Returns the committed fixture WAV as the generation output."""
+class MockGenerationProvider(MusicGenerationProvider, AudioEditingProvider):
+    """Returns the committed fixture WAV as the generation output.
+
+    Implements the editing contract too, so tests can prove the worker
+    routes an edit to :meth:`edit` and never to :meth:`generate`. It does
+    not pretend to *perform* an edit: the returned audio is the same
+    fixture, and every call is recorded on :attr:`edits` for assertions.
+    A provider that cannot edit is exercised separately, because failing
+    rather than falling back is itself a requirement.
+    """
 
     name = MOCK_PROVIDER_NAME
 
     def __init__(self, fixture_path: Path) -> None:
         self._fixture_path = fixture_path
+        #: Every edit this provider was asked to perform, in order.
+        self.edits: list[AudioEditRequest] = []
 
     async def generate(self, request: GenerationRequest) -> GenerationResult:
         path = self._fixture_path
@@ -63,3 +78,42 @@ class MockGenerationProvider(MusicGenerationProvider):
             model_name=MOCK_MODEL_NAME,
             model_version=MOCK_MODEL_VERSION,
         )
+
+    # ── editing (Phase 13B) ────────────────────────────────────────
+
+    def supports_edit(self, kind: AudioEditKind) -> bool:
+        return kind is AudioEditKind.REGENERATE_RANGE
+
+    def describe_edit(self, request: AudioEditRequest) -> dict[str, object]:
+        return {
+            "provider": MOCK_PROVIDER_NAME,
+            "operation": "edit",
+            "edit_kind": request.kind.value,
+            "start_seconds": request.start_seconds,
+            "end_seconds": request.end_seconds,
+            "source_audio_bytes": request.source_audio.stat().st_size,
+        }
+
+    async def edit(self, request: AudioEditRequest) -> GenerationResult:
+        """Record the edit and return the fixture.
+
+        The recorded request is the point: it lets a test assert that the
+        parent's real audio, and the measured range, reached the provider.
+        """
+        self.edits.append(request)
+        result = await self.generate(
+            GenerationRequest(
+                title=request.title,
+                prompt=request.prompt,
+                lyrics=request.lyrics,
+                vocal_gender=request.vocal_gender,
+                duration_seconds=round(request.total_seconds),
+                seed=request.seed,
+                language=request.language,
+                instrumental=request.instrumental,
+                bpm=request.bpm,
+                key_scale=request.key_scale,
+                time_signature=request.time_signature,
+            )
+        )
+        return result

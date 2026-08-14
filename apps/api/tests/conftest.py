@@ -66,9 +66,14 @@ async def app(tmp_path) -> FastAPI:
     application.state.session_factory = session_factory
     application.state.redis = FakeRedis()
     application.state.audio_storage = storage
+    # Held on app.state as well so tests can assert *which* provider
+    # method a request reached — routing an edit to generate() is the
+    # failure mode Phase 13B exists to prevent.
+    provider = MockGenerationProvider(FIXTURE_WAV)
+    application.state.provider = provider
     application.state.enqueuer = InlineGenerationRunner(
         session_factory,
-        MockGenerationProvider(FIXTURE_WAV),
+        provider,
         storage,
     )
     yield application

@@ -113,7 +113,53 @@ class AceStepClient:
     async def submit_generation(self, payload: dict[str, Any]) -> AceStepTaskHandle:
         """POST /release_task with a payload of documented fields only."""
         data = self._unwrap(await self._client.post("/release_task", json=payload))
-        task_id = data.get("task_id")
+        return self._task_handle(data)
+
+    async def submit_generation_with_source_audio(
+        self, payload: dict[str, Any], source_audio: Path
+    ) -> AceStepTaskHandle:
+        """POST /release_task as multipart, uploading the source audio.
+
+        Editing tasks need the audio itself, and upstream will not take a
+        path to it: ``validate_audio_path`` rejects absolute paths outside
+        the system temp directory. Uploading is also the only option that
+        survives ACE-Step running on another host or LUBER's masters
+        living in object storage, so it is the transport rather than a
+        workaround for the path check.
+
+        ``src_audio`` is the field name the upstream multipart parser
+        reads (``form.get("ctx_audio") or form.get("src_audio")``); it
+        saves the upload to its own temp file and cleans it up.
+
+        Scalar fields travel as form values. Upstream re-parses them with
+        its own coercion helpers, so they are sent as strings, and
+        ``None`` is omitted entirely rather than sent as ``"None"``.
+        """
+        fields = {
+            key: self._form_value(value) for key, value in payload.items() if value is not None
+        }
+        # The handle is opened and closed around the request itself, so
+        # it is released on success, HTTP error, timeout and cancellation
+        # alike — httpx reads the stream during ``post``.
+        with source_audio.open("rb") as handle:
+            files = {"src_audio": (source_audio.name, handle, "audio/wav")}
+            response = await self._client.post("/release_task", data=fields, files=files)
+        return self._task_handle(self._unwrap(response))
+
+    @staticmethod
+    def _form_value(value: Any) -> str:
+        """Render one payload value for a multipart form field.
+
+        Booleans need explicit lowercase text: ``str(False)`` is
+        ``"False"``, which upstream's parser does not read as false.
+        """
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    @staticmethod
+    def _task_handle(data: Any) -> AceStepTaskHandle:
+        task_id = data.get("task_id") if isinstance(data, dict) else None
         if not task_id:
             raise AceStepApiError(f"release_task returned no task_id: {data!r}")
         return AceStepTaskHandle(task_id=str(task_id), queue_position=data.get("queue_position"))

@@ -97,6 +97,14 @@ export interface Generation {
   project_id?: string | null;
   /** Server-side favourite state, not browser storage. */
   favorite: boolean;
+  /**
+   * `null` for an ordinary generation. Set when this song was produced
+   * by editing its parent's audio; the range is in seconds from the
+   * start of the source.
+   */
+  edit_kind: string | null;
+  edit_start_seconds: number | null;
+  edit_end_seconds: number | null;
   /** Shared by songs produced by the same CREATE. */
   generation_group_id: string | null;
   /**
@@ -323,6 +331,37 @@ export async function updateGeneration(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
+}
+
+/**
+ * The longest a song may become. Mirrors `EXTENSION_TOTAL_MAX_SECONDS`
+ * in the API, so the UI can hide options the backend would reject
+ * instead of offering them and failing.
+ */
+export const MAX_SONG_SECONDS = 360;
+
+/** Extension lengths the product offers. */
+export const EXTENSION_CHOICES = [15, 30, 60] as const;
+
+/**
+ * Append newly generated music to the end of a song.
+ *
+ * The backend performs a real audio edit — the parent's master
+ * conditions the engine — but that is not this contract's business. The
+ * client asks for seconds and receives an ordinary queued generation.
+ */
+export async function extendGeneration(
+  generationId: string,
+  seconds: number,
+): Promise<CreateGenerationResponse> {
+  return request<CreateGenerationResponse>(
+    `/v1/generations/${encodeURIComponent(generationId)}/extend`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seconds }),
+    },
+  );
 }
 
 export async function deleteGeneration(generationId: string): Promise<void> {

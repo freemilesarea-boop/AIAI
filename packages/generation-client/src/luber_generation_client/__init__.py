@@ -6,6 +6,11 @@ Business logic must never import a concrete model integration
 """
 
 from luber_generation_client.ace_step import AceStepProvider
+from luber_generation_client.editing import (
+    AudioEditingProvider,
+    AudioEditKind,
+    AudioEditRequest,
+)
 from luber_generation_client.errors import GenerationProviderError
 from luber_generation_client.factory import build_provider, provider_from_settings
 from luber_generation_client.mock import MockGenerationProvider
@@ -26,6 +31,9 @@ __all__ = [
     "GENERATION_JOB_NAME",
     "GENERATION_QUEUE_NAME",
     "AceStepProvider",
+    "AudioEditKind",
+    "AudioEditRequest",
+    "AudioEditingProvider",
     "GenerationProviderError",
     "GenerationRequest",
     "GenerationResult",

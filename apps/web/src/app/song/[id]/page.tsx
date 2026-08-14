@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { ExtendSong } from "@/components/ExtendSong";
 import { trackFromGeneration, usePlayer } from "@/components/player/PlayerProvider";
 import { SongActions } from "@/components/SongActions";
 import { SongCard } from "@/components/SongCard";
@@ -135,6 +136,12 @@ export default function SongDetailPage() {
             <Link href={`/create?from=${generation.id}`}>
               <Button>Generate again</Button>
             </Link>
+            {/* The extension is queued like any other generation, so the
+                user follows it in the Library rather than on this page. */}
+            <ExtendSong
+              generation={generation}
+              onExtended={(id) => router.push(`/song/${id}`)}
+            />
           </div>
         )}
         {/* Rename, favourite, duplicate, downloads, project and delete —
@@ -184,8 +191,12 @@ export default function SongDetailPage() {
         <section>
           <h2 className="text-sm font-semibold">Generation history</h2>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            These tracks were generated from the same settings. No audio was reused — each is
-            a fresh generation that recorded where it came from.
+            {/* Two kinds of relative now exist and they are not the same
+                thing: a re-generation shares only settings, an extension
+                is built on this song's actual audio. Saying "no audio was
+                reused" would be false for the second. */}
+            Tracks related to this one. A re-generation reuses the settings only; an extension
+            keeps this song&rsquo;s recording and continues it.
           </p>
           <div className="mt-3 flex flex-col gap-3">
             {lineage.parent && <SongCard generation={lineage.parent} />}

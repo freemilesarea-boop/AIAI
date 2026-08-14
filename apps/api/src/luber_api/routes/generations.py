@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import uuid
 from collections.abc import Iterable
@@ -22,12 +23,14 @@ from sqlalchemy.exc import IntegrityError
 from luber_api.dependencies import get_audio_storage, get_enqueuer, get_repository
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
+    EXTENSION_TOTAL_MAX_SECONDS,
     AdvisoryResponse,
     BulkIdsRequest,
     BulkProjectRequest,
     BulkResultResponse,
     CreatedGeneration,
     ExpectedLineResponse,
+    ExtendGenerationRequest,
     GenerationCreateRequest,
     GenerationCreateResponse,
     GenerationListResponse,
@@ -45,7 +48,7 @@ from luber_api.schemas import (
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationRepository
 from luber_database.models.generation import Generation, GenerationQA, LyricLineQA
-from luber_generation_client import GENERATION_QUEUE_NAME
+from luber_generation_client import GENERATION_QUEUE_NAME, AudioEditKind
 from luber_schemas import (
     FULL_SONG_THRESHOLD_SECONDS,
     Advisory,
@@ -569,6 +572,131 @@ async def list_generations(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/{generation_id}/extend",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=GenerationCreateResponse,
+)
+async def extend_generation(
+    generation_id: uuid.UUID,
+    payload: ExtendGenerationRequest,
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+    enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
+    storage: Annotated[AudioStorage, Depends(get_audio_storage)],
+    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
+) -> GenerationCreateResponse:
+    """Append newly generated music to the end of an existing song.
+
+    The child is a real audio edit: the worker uploads the parent's master
+    to the engine and regenerates only the range past its end, so the
+    original audio is preserved by the model rather than spliced on by us.
+    Nothing about that mechanism appears in this contract — the client
+    asks for seconds.
+
+    The parent's brief, lyrics and musical controls are inherited. Asking
+    someone to retype a song's whole description in order to make it
+    longer would be a worse product for no gain, and the inherited values
+    are exactly what conditioned the audio being continued.
+    """
+    parent = await repository.get_generation(generation_id)
+    # Same answer for "no such generation" and "not yours", matching the
+    # rule this module already applies to audio reads and lineage.
+    if parent is None or not caller_may_access(parent, caller):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    if parent.status != GenerationStatus.COMPLETED.value:
+        raise HTTPException(status_code=409, detail="only a completed song can be extended")
+
+    master = next((a for a in parent.audio_assets if a.asset_type == AssetType.MASTER.value), None)
+    if master is None:
+        raise HTTPException(status_code=409, detail="this song has no master audio")
+    # The bytes must be there now, not merely recorded: an edit whose
+    # source has gone missing should fail here rather than after the user
+    # has waited for a worker slot.
+    if not await storage.exists(master.storage_key):
+        raise HTTPException(status_code=409, detail="this song's audio is unavailable")
+
+    # The parent's own recorded duration is the best estimate available
+    # without reading the file, and it is only used to reject obviously
+    # over-long requests early. The boundary the engine actually receives
+    # is measured from the audio in the worker.
+    source_seconds = float(master.duration or parent.duration_actual or 0.0)
+    total_seconds = source_seconds + payload.seconds
+    if total_seconds > EXTENSION_TOTAL_MAX_SECONDS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"extending by {payload.seconds}s would exceed the "
+                f"{EXTENSION_TOTAL_MAX_SECONDS}s maximum song length"
+            ),
+        )
+
+    child = await repository.create_generation(
+        title=parent.title,
+        prompt=parent.prompt,
+        lyrics=parent.lyrics,
+        vocal_gender=parent.vocal_gender,
+        # Rounded up so the requested seconds are never silently short.
+        duration_requested=math.ceil(total_seconds),
+        # A new seed: reusing the parent's would ask the engine to
+        # re-derive the same material for the new section.
+        seed=None,
+        language=parent.language,
+        instrumental=parent.instrumental,
+        bpm=parent.bpm,
+        key_scale=parent.key_scale,
+        time_signature=parent.time_signature,
+        parent_generation_id=parent.id,
+        # Its own group: a group is the set of results from one CREATE,
+        # and an extension is a different action. Lineage is what ties it
+        # to the parent.
+        generation_group_id=uuid.uuid4(),
+        edit_kind=AudioEditKind.REGENERATE_RANGE.value,
+        edit_start_seconds=source_seconds,
+        edit_end_seconds=total_seconds,
+        status=GenerationStatus.QUEUED.value,
+    )
+    await repository.create_job(
+        child.id,
+        queue_name=GENERATION_QUEUE_NAME,
+        status=GenerationStatus.QUEUED.value,
+    )
+
+    try:
+        await enqueuer.enqueue(child.id)
+    except Exception as exc:
+        logger.exception(
+            "failed to enqueue extension",
+            extra={"generation_id": str(child.id), "parent_id": str(parent.id)},
+        )
+        await repository.mark_failed(
+            child.id,
+            status=GenerationStatus.FAILED.value,
+            error_code=ErrorCode.QUEUE_FAILED.value,
+            error_message=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=ErrorCode.QUEUE_FAILED.value,
+        ) from exc
+
+    refreshed = await repository.get_generation(child.id)
+    assert refreshed is not None
+    return GenerationCreateResponse(
+        generation_id=child.id,
+        status=GenerationStatus(refreshed.status),
+        advisories=[],
+        generation_group_id=child.generation_group_id,
+        generations=[
+            CreatedGeneration(
+                generation_id=child.id,
+                status=GenerationStatus(refreshed.status),
+                seed=child.seed,
+            )
+        ],
     )
 
 
