@@ -222,7 +222,16 @@ export function newIdempotencyKey(): string {
 async function readErrorCode(res: Response): Promise<string | null> {
   try {
     const body = (await res.json()) as { detail?: unknown };
-    return typeof body.detail === "string" ? body.detail : null;
+    // Most routes send `detail` as a bare code string. Routes that also
+    // need to say how much is in the way — the delete refusal counts its
+    // derived versions — send an object instead, and the code lives in
+    // it. Reading only the string form silently loses those.
+    if (typeof body.detail === "string") return body.detail;
+    if (body.detail && typeof body.detail === "object") {
+      const code = (body.detail as { code?: unknown }).code;
+      if (typeof code === "string") return code;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -691,7 +700,32 @@ export interface Lineage {
   generation_id: string;
   parent: Generation | null;
   children: Generation[];
+  /** Phase 17: the whole bounded tree, so version history is one request. */
+  root_generation_id: string | null;
+  current_generation_id: string | null;
+  nodes: LineageNode[];
 }
+
+/** One generation as version history needs it. Never a storage key. */
+export interface LineageNode {
+  id: string;
+  parent_generation_id: string | null;
+  title: string;
+  status: GenerationStatus;
+  operation: LineageOperation;
+  created_at: string;
+  duration_actual: number | null;
+  cover_art_url: string | null;
+  edit_start_seconds: number | null;
+  edit_end_seconds: number | null;
+}
+
+export type LineageOperation =
+  | "ORIGINAL"
+  | "GENERATE_AGAIN"
+  | "EXTEND"
+  | "REPLACE_SECTION"
+  | "COVER";
 
 /**
  * A generation's origin and descendants.

@@ -42,4 +42,5 @@ def test_error_codes_are_stable_strings():
     # and returned to clients, which makes every addition a contract
     # change rather than an implementation detail.
     assert ErrorCode.REFERENCE_AUDIO_UNAVAILABLE.value == "REFERENCE_AUDIO_UNAVAILABLE"
-    assert len(ErrorCode) == 9
+    assert ErrorCode.GENERATION_HAS_DERIVED_VERSIONS.value == "GENERATION_HAS_DERIVED_VERSIONS"
+    assert len(ErrorCode) == 10

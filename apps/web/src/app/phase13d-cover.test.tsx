@@ -67,7 +67,41 @@ function stubApi(options: { fail?: boolean; children?: unknown[] } = {}) {
         });
       }
       if (String(url).includes("/lineage")) {
-        return json({ generation_id: "gen-1", parent: null, children: options.children ?? [] });
+        // Mirrors the real response since Phase 17: the tree is what the
+        // UI reads, and `parent`/`children` are kept for older callers.
+        const kids = (options.children ?? []) as Record<string, unknown>[];
+        const toNode = (g: Record<string, unknown>) => ({
+          id: g.id,
+          parent_generation_id: g.parent_generation_id ?? null,
+          title: g.title,
+          status: g.status ?? "COMPLETED",
+          operation:
+            g.parent_generation_id == null
+              ? "ORIGINAL"
+              : g.edit_kind === "EXTEND"
+                ? "EXTEND"
+                : g.edit_kind === "REPLACE_RANGE"
+                  ? "REPLACE_SECTION"
+                  : g.edit_kind === "COVER"
+                    ? "COVER"
+                    : "GENERATE_AGAIN",
+          created_at: g.created_at ?? "2026-08-15T12:00:00Z",
+          duration_actual: g.duration_actual ?? null,
+          cover_art_url: null,
+          edit_start_seconds: g.edit_start_seconds ?? null,
+          edit_end_seconds: g.edit_end_seconds ?? null,
+        });
+        return json({
+          generation_id: "gen-1",
+          parent: null,
+          children: kids,
+          root_generation_id: "gen-1",
+          current_generation_id: "gen-1",
+          nodes: [
+            toNode({ id: "gen-1", title: "Midnight Window", parent_generation_id: null }),
+            ...kids.map(toNode),
+          ],
+        });
       }
       if (String(url).includes("/v1/projects")) return json({ items: [] });
       return json(song());

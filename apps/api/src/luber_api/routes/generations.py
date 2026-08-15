@@ -42,6 +42,7 @@ from luber_api.schemas import (
     GenerationQAResponse,
     GenerationResponse,
     GenerationUpdateRequest,
+    LineageNode,
     LineageResponse,
     LongFormQAResponse,
     LyricLineQAEntry,
@@ -51,7 +52,7 @@ from luber_api.schemas import (
     SectionSummary,
 )
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
-from luber_database import GenerationRepository
+from luber_database import GenerationHasDescendantsError, GenerationRepository
 from luber_database.models.generation import AudioAsset, Generation, GenerationQA, LyricLineQA
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
@@ -62,6 +63,7 @@ from luber_schemas import (
     ErrorCode,
     GenerationStatus,
     LineVerdict,
+    classify_operation,
     estimate_syllables,
     expected_lyric_lines,
     parse_structure,
@@ -966,13 +968,22 @@ async def bulk_delete_generations(
     open for a while.
     """
     affected = 0
+    blocked = 0
     for generation_id in payload.ids:
         if await repository.get_generation(generation_id) is None:
             continue
         # DB first, storage second — the same order the single delete
         # uses, so a storage failure can never leave a row pointing at
         # audio that has been removed.
-        await repository.delete_generation(generation_id)
+        try:
+            await repository.delete_generation(generation_id)
+        except GenerationHasDescendantsError:
+            # Skipped for the same reason a stale id is skipped: the rest
+            # of the selection is still deletable, and the count tells the
+            # user how many actually went. Silently destroying a lineage
+            # to satisfy a bulk action would be the worse answer.
+            blocked += 1
+            continue
         affected += 1
         try:
             await storage.delete_generation_audio(generation_id)
@@ -981,7 +992,7 @@ async def bulk_delete_generations(
                 "failed to delete stored audio",
                 extra={"generation_id": str(generation_id)},
             )
-    return BulkResultResponse(affected=affected)
+    return BulkResultResponse(affected=affected, blocked=blocked)
 
 
 @router.post("/bulk-project", response_model=BulkResultResponse)
@@ -1013,7 +1024,20 @@ async def delete_generation(
     if generation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
 
-    await repository.delete_generation(generation_id)
+    try:
+        await repository.delete_generation(generation_id)
+    except GenerationHasDescendantsError as exc:
+        # Nothing has been touched at this point: the repository checks
+        # for descendants before deleting any asset row, so a refusal
+        # leaves the generation and its lineage exactly as they were.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": ErrorCode.GENERATION_HAS_DERIVED_VERSIONS.value,
+                "message": "This version has derived versions. Delete those first.",
+                "derived_count": exc.descendant_count,
+            },
+        ) from exc
     try:
         await storage.delete_generation_audio(generation_id)
     except AudioStorageError:
@@ -1181,6 +1205,30 @@ def decode_string_map(raw: str | None) -> dict[str, str]:
     return {str(k): str(v) for k, v in decoded.items()}
 
 
+def serialize_lineage_node(generation: Generation) -> LineageNode:
+    """Project a row down to what version history needs.
+
+    The operation is computed by the shared classifier rather than read
+    off ``edit_kind``, so the stored ``REPLACE_RANGE`` becomes
+    ``REPLACE_SECTION`` here and nowhere else has to know.
+    """
+    return LineageNode(
+        id=generation.id,
+        parent_generation_id=generation.parent_generation_id,
+        title=generation.title,
+        status=generation.status,
+        operation=classify_operation(
+            parent_generation_id=generation.parent_generation_id,
+            edit_kind=generation.edit_kind,
+        ).value,
+        created_at=generation.created_at,
+        duration_actual=generation.duration_actual,
+        cover_art_url=generation.cover_art_url,
+        edit_start_seconds=generation.edit_start_seconds,
+        edit_end_seconds=generation.edit_end_seconds,
+    )
+
+
 @router.get("/{generation_id}/lineage", response_model=LineageResponse)
 async def get_generation_lineage(
     generation_id: uuid.UUID,
@@ -1204,8 +1252,20 @@ async def get_generation_lineage(
             parent = serialize_generation(parent_row)
 
     children = await repository.list_children(generation_id)
+
+    # The whole bounded tree, so version history is one request rather
+    # than a walk. Ancestry gives the root; descendants of that root give
+    # every sibling branch, which is what makes the current generation
+    # locatable inside its family instead of only its own line.
+    ancestry = await repository.get_ancestry(generation_id)
+    root = ancestry[-1] if ancestry else generation
+    nodes = [root, *await repository.get_descendants(root.id)]
+
     return LineageResponse(
         generation_id=generation_id,
         parent=parent,
         children=[serialize_generation(child) for child in children],
+        root_generation_id=root.id,
+        current_generation_id=generation_id,
+        nodes=[serialize_lineage_node(node) for node in nodes],
     )

@@ -19,7 +19,6 @@ import { ExtendSong } from "@/components/ExtendSong";
 import { ReplaceSection } from "@/components/ReplaceSection";
 import { trackFromGeneration, usePlayer } from "@/components/player/PlayerProvider";
 import { SongActions } from "@/components/SongActions";
-import { SongCard } from "@/components/SongCard";
 import { Button, Card, EmptyState, Skeleton, StatusPill } from "@/components/ui";
 import {
   getGeneration,
@@ -30,7 +29,8 @@ import {
   type Project,
 } from "@/lib/api";
 import { describeGenerationFailure } from "@/lib/errors";
-import { describeRelation } from "@/lib/lineage";
+import { VersionHistory } from "@/components/VersionHistory";
+import { derivedContext } from "@/lib/lineage";
 
 function Detail({ label, value }: { label: string; value: string | number | null }) {
   if (value === null || value === "") return null;
@@ -52,6 +52,16 @@ export default function SongDetailPage() {
   const [missing, setMissing] = useState(false);
 
   const id = params?.id;
+
+  // Resolved from the lineage response rather than the generation row so
+  // the parent's *title* is available; the row only carries its id.
+  const lineageNodes = lineage?.nodes ?? [];
+  const currentNode = lineageNodes.find((node) => node.id === id) ?? null;
+  const parentNode = currentNode?.parent_generation_id
+    ? (lineageNodes.find((node) => node.id === currentNode.parent_generation_id) ?? null)
+    : null;
+  const context =
+    currentNode && parentNode ? derivedContext(currentNode.operation, parentNode.title) : null;
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -139,22 +149,47 @@ export default function SongDetailPage() {
             <Link href={`/create?from=${generation.id}`}>
               <Button>Generate again</Button>
             </Link>
-            {/* The extension is queued like any other generation, so the
-                user follows it in the Library rather than on this page. */}
-            <ExtendSong
-              generation={generation}
-              onExtended={(id) => router.push(`/song/${id}`)}
-            />
-            <ReplaceSection
-              generation={generation}
-              onReplaced={(id) => router.push(`/song/${id}`)}
-            />
-            <CreateCover
-              generation={generation}
-              onCovered={(id) => router.push(`/song/${id}`)}
-            />
           </div>
         )}
+
+        {/* Only operations with a working backend path appear here. The
+            section is shown even when they are unavailable, and says
+            why: silently hiding controls reads as a missing feature. */}
+        <section
+          aria-labelledby="song-editor-heading"
+          className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 py-4"
+        >
+          <h2 id="song-editor-heading" className="text-sm font-semibold">
+            Edit this song
+          </h2>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Each of these makes a new song from this one. The original is kept.
+          </p>
+          {ready ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {/* Each is queued like any other generation, so the user
+                  follows it in the Library rather than on this page. */}
+              <ExtendSong
+                generation={generation}
+                onExtended={(id) => router.push(`/song/${id}`)}
+              />
+              <ReplaceSection
+                generation={generation}
+                onReplaced={(id) => router.push(`/song/${id}`)}
+              />
+              <CreateCover
+                generation={generation}
+                onCovered={(id) => router.push(`/song/${id}`)}
+              />
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-[var(--text-secondary)]">
+              {failed
+                ? "This song has no finished audio, so there is nothing to edit."
+                : "Available once this song finishes generating."}
+            </p>
+          )}
+        </section>
         {/* Rename, favourite, duplicate, downloads, project and delete —
             the same component every other surface uses, so they cannot
             behave differently here. */}
@@ -198,44 +233,20 @@ export default function SongDetailPage() {
         </Card>
       )}
 
-      {lineage && (lineage.parent || lineage.children.length > 0) && (
-        <section>
-          <h2 className="text-sm font-semibold">Generation history</h2>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {/* Two kinds of relative now exist and they are not the same
-                thing: a re-generation shares only settings, an extension
-                is built on this song's actual audio. Saying "no audio was
-                reused" would be false for the second. */}
-            Tracks related to this one. Each is labelled with what actually happened to the
-            audio, which is not the same for all of them.
-          </p>
-          <div className="mt-3 flex flex-col gap-3">
-            {lineage.parent && (
-              <div>
-                <p className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
-                  Came from
-                </p>
-                <SongCard generation={lineage.parent} />
-              </div>
-            )}
-            {lineage.children.map((child) => {
-              const relation = describeRelation(child);
-              return (
-                <div key={child.id} className="sm:pl-6">
-                  {relation && (
-                    <p
-                      className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-muted)]"
-                      title={relation.detail}
-                    >
-                      {relation.label}
-                    </p>
-                  )}
-                  <SongCard generation={child} />
-                </div>
-              );
-            })}
-          </div>
-        </section>
+      {lineage && (
+        <>
+          {/* Where this version came from, stated as origin rather than
+              resemblance: nothing here claims the child sounds like the
+              parent, because nothing measured that. */}
+          {context && (
+            <p className="text-xs text-[var(--text-secondary)]">{context}</p>
+          )}
+          <VersionHistory
+            nodes={lineageNodes}
+            currentId={lineage.current_generation_id ?? id}
+            rootId={lineage.root_generation_id}
+          />
+        </>
       )}
 
       <details className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-5 py-4">

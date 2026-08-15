@@ -8,6 +8,15 @@
 
 import type { AudioAsset, Generation, Project } from "@/lib/api";
 
+/**
+ * A fixed timestamp rather than `new Date()`. Two fixtures built in the
+ * same expression usually land in the same millisecond and sort as a
+ * tie, which a stable sort resolves by insertion order — but not always,
+ * and a library test that sorts newest-first would then flip at random.
+ */
+const FIXED_CREATED_AT = "2026-08-15T12:00:00.000Z";
+
+
 export function masterAsset(overrides: Partial<AudioAsset> = {}): AudioAsset {
   return {
     id: "a1",
@@ -23,7 +32,7 @@ export function masterAsset(overrides: Partial<AudioAsset> = {}): AudioAsset {
     storage_key: "k",
     sha256: "s",
     file_size: 1,
-    created_at: new Date().toISOString(),
+    created_at: FIXED_CREATED_AT,
     ...overrides,
   };
 }
@@ -74,7 +83,7 @@ export function generation(overrides: Partial<Generation> = {}): Generation {
     provider: "ace_step",
     model_name: "acestep-v15-turbo",
     model_version: "1.5.0",
-    created_at: new Date().toISOString(),
+    created_at: FIXED_CREATED_AT,
     started_at: null,
     completed_at: null,
     error_code: null,
@@ -89,7 +98,7 @@ export function project(overrides: Partial<Project> = {}): Project {
     id: "proj-1",
     name: "Summer EP",
     generation_count: 0,
-    created_at: new Date().toISOString(),
+    created_at: FIXED_CREATED_AT,
     updated_at: new Date().toISOString(),
     ...overrides,
   };

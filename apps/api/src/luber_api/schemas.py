@@ -372,6 +372,10 @@ class BulkResultResponse(BaseModel):
     """
 
     affected: int
+    #: Rows refused because other generations were derived from them.
+    #: Reported separately so "3 of 5 deleted" can be explained rather
+    #: than looking like ids that silently vanished.
+    blocked: int = 0
 
 
 class PreflightRequest(BaseModel):
@@ -635,3 +639,39 @@ class LineageResponse(BaseModel):
     generation_id: uuid.UUID
     parent: GenerationResponse | None = None
     children: list[GenerationResponse] = Field(default_factory=list)
+
+    #: Phase 17. The whole bounded tree the current generation sits in,
+    #: so the UI can draw version history from one request instead of
+    #: walking parents itself. ``parent`` and ``children`` above are kept
+    #: because existing clients read them.
+    root_generation_id: uuid.UUID | None = None
+    current_generation_id: uuid.UUID | None = None
+    nodes: list[LineageNode] = Field(default_factory=list)
+
+
+class LineageNode(BaseModel):
+    """One generation as it appears in version history.
+
+    Deliberately a narrow projection rather than a full
+    ``GenerationResponse``: version history needs to label and order
+    nodes, not reproduce every field, and a smaller surface is one fewer
+    place for an internal to escape. Nothing here names a storage key, a
+    master role, a finishing decision or a provider payload.
+    """
+
+    id: uuid.UUID
+    parent_generation_id: uuid.UUID | None = None
+    title: str
+    status: str
+    #: Product vocabulary — never the stored ``REPLACE_RANGE``.
+    operation: str
+    created_at: datetime
+    duration_actual: float | None = None
+    cover_art_url: str | None = None
+    #: Present for REPLACE_SECTION, so the UI can say which span changed.
+    edit_start_seconds: float | None = None
+    edit_end_seconds: float | None = None
+
+
+# ``LineageResponse`` names ``LineageNode`` before it is defined.
+LineageResponse.model_rebuild()

@@ -7,10 +7,12 @@ databases is forbidden.
 
 from luber_database.base import Base
 from luber_database.engine import create_async_engine_from_url, create_session_factory
+from luber_database.errors import GenerationHasDescendantsError
 from luber_database.repository import GenerationRepository
 
 __all__ = [
     "Base",
+    "GenerationHasDescendantsError",
     "GenerationRepository",
     "create_async_engine_from_url",
     "create_session_factory",

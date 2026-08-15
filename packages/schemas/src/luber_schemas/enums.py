@@ -138,6 +138,10 @@ class ErrorCode(StrEnum):
     #: downgraded to an ordinary generation: a song made without the
     #: reference the user chose is a different song.
     REFERENCE_AUDIO_UNAVAILABLE = "REFERENCE_AUDIO_UNAVAILABLE"
+    #: Refused a delete because other generations were derived from this
+    #: one. Deleting it would leave those rows claiming to descend from
+    #: nothing, so the user removes the derived versions first.
+    GENERATION_HAS_DERIVED_VERSIONS = "GENERATION_HAS_DERIVED_VERSIONS"
     UPLOAD_FAILED = "UPLOAD_FAILED"
     ENCODING_FAILED = "ENCODING_FAILED"
     QUEUE_FAILED = "QUEUE_FAILED"

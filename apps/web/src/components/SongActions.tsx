@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Button, cx, inputClass } from "@/components/ui";
 import {
   assignGenerationToProject,
+  ApiError,
   deleteGeneration,
   getAudioAssetUrl,
   updateGeneration,
@@ -142,8 +143,14 @@ export function SongActions({
       await deleteGeneration(generation.id);
       onDeleted?.(generation.id);
       toast.notify("Song deleted");
-    } catch {
-      toast.notifyError("Could not delete this song.");
+    } catch (error) {
+      // The refusal is the one delete failure with a fix the user can
+      // act on, so it must not be flattened into "something went wrong".
+      toast.notifyError(
+        error instanceof ApiError && error.code === "GENERATION_HAS_DERIVED_VERSIONS"
+          ? "Other versions were made from this song. Delete those first."
+          : "Could not delete this song.",
+      );
     }
   };
 
@@ -263,7 +270,8 @@ export function SongActions({
         description={
           <>
             <span className="font-medium text-[var(--text-primary)]">{generation.title}</span>{" "}
-            and its audio will be removed permanently. Songs generated from it are kept.
+            and its audio will be removed permanently. If other versions were made
+            from it, they are kept and this song cannot be deleted until they are.
           </>
         }
         confirmLabel="Delete song"

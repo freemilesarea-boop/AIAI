@@ -179,17 +179,28 @@ async def test_cover_art_url_is_present_and_null(client):
 # ── 2. deletion and lineage consistency ───────────────────────────────
 
 
-async def test_deleting_a_parent_keeps_the_child_and_clears_the_link(client):
+async def test_deleting_a_parent_is_refused_while_it_has_children(client):
+    """Phase 17 replaced the old behaviour, which nulled the child's link.
+
+    That kept the child alive but left it claiming an ``edit_kind`` while
+    descending from nothing — a contradiction version history would draw
+    as a root labelled "Extended". Refusing is the only option that keeps
+    the record true, and it is recoverable: delete the derived version
+    first.
+    """
     parent_id = await _generation(client)
     child_id = await _generation(client, parent_generation_id=parent_id, title="Take 2")
 
-    assert (await client.delete(f"/v1/generations/{parent_id}")).status_code == 204
+    refusal = await client.delete(f"/v1/generations/{parent_id}")
+    assert refusal.status_code == 409
+    detail = refusal.json()["detail"]
+    assert detail["code"] == "GENERATION_HAS_DERIVED_VERSIONS"
+    assert detail["derived_count"] == 1
 
+    # Both rows survive untouched, and the link is intact.
+    assert (await client.get(f"/v1/generations/{parent_id}")).status_code == 200
     child = (await client.get(f"/v1/generations/{child_id}")).json()
-    assert child["id"] == child_id
-    # Not merely "the child survived" — it must not still claim a parent
-    # that no longer exists, or the lineage view renders a dead link.
-    assert child["parent_generation_id"] is None
+    assert child["parent_generation_id"] == parent_id
 
 
 async def test_deleting_a_child_leaves_the_parent_alone(client):

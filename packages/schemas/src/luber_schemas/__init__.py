@@ -18,6 +18,7 @@ from luber_schemas.enums import (
     LineVerdict,
     VocalGender,
 )
+from luber_schemas.lineage import LineageOperation, classify_operation
 from luber_schemas.reference_audio import (
     CANONICAL_REFERENCE_CHANNELS,
     CANONICAL_REFERENCE_EXTENSION,
@@ -123,6 +124,7 @@ __all__ = [
     "GenerationStatus",
     "HasAssetType",
     "LineVerdict",
+    "LineageOperation",
     "LyricBudget",
     "ParsedStructure",
     "PresetId",
@@ -137,6 +139,7 @@ __all__ = [
     "analyze_lyric_budget",
     "apply_template",
     "audit_korean_lyrics",
+    "classify_operation",
     "compute_lyric_budget",
     "count_hangul_syllables",
     "describe_template_fit",

@@ -8,7 +8,7 @@
  * engine did not do.
  */
 
-import type { Generation } from "@/lib/api";
+import type { Generation, LineageNode, LineageOperation } from "@/lib/api";
 
 export type RelationKind = "generated-again" | "extended" | "replaced" | "cover";
 
@@ -73,4 +73,94 @@ export function describeRelation(generation: Generation): Relation | null {
     label: "Generated again",
     detail: "A fresh generation from the same settings. No audio was reused.",
   };
+}
+
+
+/**
+ * The one place an operation becomes words.
+ *
+ * Every surface reads from here so two screens cannot disagree about the
+ * same row, and so the stored ``REPLACE_RANGE`` never escapes: the
+ * classifier already renamed it, and this only ever sees
+ * ``REPLACE_SECTION``.
+ */
+export function operationLabel(node: {
+  operation: LineageOperation;
+  edit_start_seconds: number | null;
+  edit_end_seconds: number | null;
+}): string {
+  switch (node.operation) {
+    case "ORIGINAL":
+      return "Original";
+    case "GENERATE_AGAIN":
+      return "Generated again";
+    case "EXTEND": {
+      const { edit_start_seconds: from, edit_end_seconds: to } = node;
+      // How much was added is the only thing that distinguishes two
+      // extensions of the same song, so it stays in the label.
+      const added = from !== null && to !== null ? Math.round(to - from) : null;
+      return added !== null && added > 0 ? `Extended +${added}s` : "Extended";
+    }
+    case "COVER":
+      return "Cover";
+    case "REPLACE_SECTION": {
+      const { edit_start_seconds: start, edit_end_seconds: end } = node;
+      // The span is what makes this label useful; without it the user
+      // cannot tell two replacements of the same song apart.
+      return start !== null && end !== null
+        ? `Replaced ${formatClock(start)}–${formatClock(end)}`
+        : "Replaced a section";
+    }
+    default:
+      // An operation this build does not know about. Saying nothing
+      // specific beats guessing, and the node still renders.
+      return "Derived version";
+  }
+}
+
+/**
+ * How the current version relates to the one it came from.
+ *
+ * Phrased as an origin statement rather than a similarity claim: the
+ * engine's own calibration never established that a cover sounds like
+ * its source, so the copy says where it came from and stops.
+ */
+export function derivedContext(
+  operation: LineageOperation,
+  parentTitle: string,
+): string | null {
+  switch (operation) {
+    case "GENERATE_AGAIN":
+      return `Generated again from “${parentTitle}”`;
+    case "EXTEND":
+      return `Extended from “${parentTitle}”`;
+    case "REPLACE_SECTION":
+      return `Replaced section from “${parentTitle}”`;
+    case "COVER":
+      return `Cover of “${parentTitle}”`;
+    default:
+      return null;
+  }
+}
+
+/** Depth of each node from the root, for indentation. Bounded by construction. */
+export function lineageDepths(nodes: LineageNode[]): Map<string, number> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const depths = new Map<string, number>();
+  for (const node of nodes) {
+    let depth = 0;
+    let cursor: LineageNode | undefined = node;
+    const seen = new Set<string>();
+    // Guarded: lineage data can be imperfect, and an indentation helper
+    // must not be the thing that hangs the page.
+    while (cursor?.parent_generation_id && !seen.has(cursor.id) && depth < 24) {
+      seen.add(cursor.id);
+      const parent: LineageNode | undefined = byId.get(cursor.parent_generation_id);
+      if (!parent) break;
+      depth += 1;
+      cursor = parent;
+    }
+    depths.set(node.id, depth);
+  }
+  return depths;
 }

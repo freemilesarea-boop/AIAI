@@ -282,7 +282,7 @@ describe("song management", () => {
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });
 
-  it("deletes on confirmation and says the lineage is kept", async () => {
+  it("deletes on confirmation and says derived versions block it", async () => {
     const user = userEvent.setup();
     const onDeleted = vi.fn();
     const { calls } = stubApi({ generations: [generation()] });
@@ -291,7 +291,9 @@ describe("song management", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/Songs generated from it are kept/);
+    // Phase 17 replaced orphaning with a refusal, so the dialog no
+    // longer promises that derived versions simply survive the delete.
+    expect(dialog).toHaveTextContent(/cannot be deleted until they are/);
     await user.click(within(dialog).getByRole("button", { name: "Delete song" }));
 
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("gen-1"));

@@ -15,6 +15,7 @@ from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from luber_database.errors import GenerationHasDescendantsError
 from luber_database.models.generation import (
     AudioAsset,
     Generation,
@@ -213,34 +214,122 @@ class GenerationRepository:
         generation.completed_at = _utcnow()
         await self._session.commit()
 
+    async def get_ancestry(self, generation_id: UUID, *, max_depth: int = 64) -> list[Generation]:
+        """Ancestors from the immediate parent up to the root.
+
+        One query per level rather than one per node, and the depth
+        ceiling plus the visited set mean a self-parent or a cycle
+        terminates instead of hanging a request. A parent that no longer
+        exists simply ends the walk — legacy rows are not assumed to be
+        well-formed.
+        """
+        chain: list[Generation] = []
+        seen: set[UUID] = {generation_id}
+        current = await self._session.get(Generation, generation_id)
+        while current is not None and current.parent_generation_id is not None:
+            if current.parent_generation_id in seen or len(chain) >= max_depth:
+                break
+            seen.add(current.parent_generation_id)
+            parent = await self._session.get(Generation, current.parent_generation_id)
+            if parent is None:
+                break
+            chain.append(parent)
+            current = parent
+        return chain
+
+    async def get_descendants(
+        self, generation_id: UUID, *, max_depth: int = 16, max_nodes: int = 200
+    ) -> list[Generation]:
+        """Everything derived from this generation, breadth-first.
+
+        Bounded twice — by depth and by total nodes — so one pathological
+        lineage cannot turn a page load into an unbounded scan. One query
+        per level, not per node.
+        """
+        collected: list[Generation] = []
+        seen: set[UUID] = {generation_id}
+        frontier = [generation_id]
+        depth = 0
+        while frontier and depth < max_depth and len(collected) < max_nodes:
+            result = await self._session.execute(
+                select(Generation)
+                .where(Generation.parent_generation_id.in_(frontier))
+                .order_by(Generation.created_at)
+            )
+            children = [row for row in result.scalars().all() if row.id not in seen]
+            if not children:
+                break
+            for child in children:
+                if len(collected) >= max_nodes:
+                    break
+                seen.add(child.id)
+                collected.append(child)
+            frontier = [child.id for child in children]
+            depth += 1
+        return collected
+
+    async def count_descendants(self, generation_id: UUID, *, max_depth: int = 64) -> int:
+        """How many generations descend from this one, directly or not.
+
+        Walks the parent links breadth-first with a visited set and a
+        depth ceiling. Legacy data is not trusted to be a tree: a row that
+        is its own parent, or a cycle introduced by some future path,
+        would otherwise loop forever inside a delete request.
+        """
+        seen: set[UUID] = set()
+        frontier = [generation_id]
+        depth = 0
+        while frontier and depth < max_depth:
+            result = await self._session.execute(
+                select(Generation.id).where(Generation.parent_generation_id.in_(frontier))
+            )
+            children = [row for row in result.scalars().all() if row not in seen]
+            # A self-parent would put the row back in its own frontier;
+            # excluding the origin keeps it from counting as its own child.
+            children = [child for child in children if child != generation_id]
+            if not children:
+                break
+            seen.update(children)
+            frontier = children
+            depth += 1
+        return len(seen)
+
     async def delete_generation(self, generation_id: UUID) -> bool:
         """Hard-delete a generation with its jobs and asset rows.
 
-        Deletes children explicitly (portable across SQLite/PostgreSQL
-        regardless of FK enforcement). Returns False when the row does
-        not exist.
+        Deletes jobs and asset rows explicitly (portable across
+        SQLite/PostgreSQL regardless of FK enforcement). Returns False
+        when the row does not exist.
 
-        Descendants are *kept* and re-pointed to ``NULL``. Deleting a take
-        must never delete the takes made from it, and a child left
-        pointing at a row that no longer exists is a lie the lineage view
-        would then have to render. PostgreSQL would do this itself via
-        ``ON DELETE SET NULL``; doing it here as well means SQLite (where
-        the unit tests run, with FK enforcement off) reaches the same
-        state instead of quietly diverging from production.
+        **Refuses when anything was derived from this generation.** The
+        previous behaviour re-pointed each child's ``parent_generation_id``
+        to NULL, on the reasoning that deleting a take must not delete the
+        takes made from it. That half is right; the result was not. A
+        child keeps its ``edit_kind``, so nulling the link leaves a row
+        that claims to be an extension of nothing — not a missing edge but
+        a contradiction, which version history would draw as a root
+        labelled "Extended".
+
+        There is no third option that preserves provenance: cascading
+        destroys the children, re-parenting invents a history that never
+        happened, and nulling corrupts the record. Refusing is the only
+        one that keeps the truth, and it is recoverable — the user deletes
+        the derived versions first.
+
+        Raises :class:`GenerationHasDescendantsError` rather than
+        returning a flag, so a caller cannot mistake the refusal for
+        "already gone".
         """
         generation = await self._session.get(Generation, generation_id)
         if generation is None:
             return False
-        for child in (
-            (
-                await self._session.execute(
-                    select(Generation).where(Generation.parent_generation_id == generation_id)
-                )
-            )
-            .scalars()
-            .all()
-        ):
-            child.parent_generation_id = None
+
+        # Database-authoritative, and checked before a single asset row
+        # is touched so a refusal leaves nothing partially deleted.
+        descendants = await self.count_descendants(generation_id)
+        if descendants:
+            raise GenerationHasDescendantsError(generation_id, descendants)
+
         for job in (
             (
                 await self._session.execute(

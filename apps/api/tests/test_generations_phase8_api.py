@@ -345,15 +345,15 @@ async def test_blank_variation_label_without_a_parent_is_accepted_as_absent(clie
     assert detail["variation_label"] is None
 
 
-async def test_deleting_a_parent_leaves_the_child_intact(client):
-    """Deleting an original must not delete what was made from it.
+async def test_deleting_a_parent_is_refused_while_it_has_a_child(client):
+    """Deleting an original must not delete, or orphan, what came from it.
 
-    Scope note: this asserts the child *survives*, which is what this
-    suite can prove. The ``ON DELETE SET NULL`` that blanks the child's
-    ``parent_generation_id`` is enforced by the database, and SQLite
-    ignores foreign keys unless ``PRAGMA foreign_keys=ON`` — so the
-    NULL-ing itself is verified against PostgreSQL in the migration
-    check (see docs/PHASE8_ADVANCED_CONTROLS.md), not here.
+    Phase 17 turned this into a refusal. The earlier version of this test
+    asserted only that the child survived, and noted that the blanking of
+    its ``parent_generation_id`` was left to PostgreSQL's ``ON DELETE SET
+    NULL`` and so unverifiable on SQLite. That blanking is gone: it left
+    the child claiming an ``edit_kind`` while descending from nothing.
+    The rule now lives in the repository, so it holds here too.
     """
     parent_id = (await client.post("/v1/generations", json=LEGACY_PAYLOAD)).json()["generation_id"]
     child_id = (
@@ -362,10 +362,11 @@ async def test_deleting_a_parent_leaves_the_child_intact(client):
         )
     ).json()["generation_id"]
 
-    assert (await client.delete(f"/v1/generations/{parent_id}")).status_code == 204
+    assert (await client.delete(f"/v1/generations/{parent_id}")).status_code == 409
 
     detail = (await client.get(f"/v1/generations/{child_id}")).json()
     assert detail["status"] == "COMPLETED"
+    assert detail["parent_generation_id"] == parent_id
     assert detail["audio_assets"]  # the derived track is still deliverable
 
 
