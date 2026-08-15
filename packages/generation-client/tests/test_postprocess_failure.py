@@ -14,6 +14,7 @@ import pytest
 from luber_audio_utils import (
     AudioStorageError,
     LocalAudioStorage,
+    finished_master_storage_key,
     master_storage_key,
     preview_storage_key,
 )
@@ -153,11 +154,19 @@ async def test_rerunning_post_processing_does_not_duplicate_assets(repository, t
     assert await service.execute(gen.id, worker_id="w2") is GenerationStatus.COMPLETED
     second = {a.asset_type: a for a in await repository.get_audio_assets(gen.id)}
 
-    assert len(second) == 2
-    assert set(second) == {AssetType.MASTER.value, AssetType.PREVIEW.value}
+    # Three roles at most, and exactly the same set as the first run —
+    # finishing is deterministic, so a retry cannot add a fourth asset or
+    # drop one it produced before.
+    assert set(second) == set(first)
+    assert set(second) <= {
+        AssetType.MASTER.value,
+        AssetType.FINISHED_MASTER.value,
+        AssetType.PREVIEW.value,
+    }
     # Same rows updated in place, same deterministic keys.
     assert {a.id for a in first.values()} == {a.id for a in second.values()}
-    assert first[AssetType.MASTER.value].storage_key == second[AssetType.MASTER.value].storage_key
+    for role, asset in second.items():
+        assert asset.storage_key == first[role].storage_key
 
 
 async def test_repeated_post_processing_keeps_one_object_per_role(tmp_path):
@@ -170,8 +179,18 @@ async def test_repeated_post_processing_keeps_one_object_per_role(tmp_path):
 
     assert first.master.storage_key == second.master.storage_key == master_storage_key(gid)
     assert first.preview.storage_key == second.preview.storage_key == preview_storage_key(gid)
+    assert (first.finished is None) == (second.finished is None)
+    if first.finished is not None and second.finished is not None:
+        assert first.finished.storage_key == second.finished.storage_key
+        assert first.finished.storage_key == finished_master_storage_key(gid)
+
+    # One object per role, however many attempts ran. The finished master
+    # is a distinct object from the raw one, never a rewrite of it.
+    expected = ["master.wav", "preview.mp3"]
+    if first.finished is not None:
+        expected = ["finished.wav", *expected]
     generation_dir = (tmp_path / "store" / "audio" / str(gid)).resolve()
-    assert sorted(p.name for p in generation_dir.iterdir()) == ["master.wav", "preview.mp3"]
+    assert sorted(p.name for p in generation_dir.iterdir()) == sorted(expected)
 
 
 # ── recorded digests describe the stored bytes ────────────────────────

@@ -27,7 +27,12 @@ def test_vocal_gender_options():
 
 
 def test_asset_types():
-    assert {a.value for a in AssetType} == {"MASTER", "PREVIEW", "STEM"}
+    assert {a.value for a in AssetType} == {
+        "MASTER",
+        "FINISHED_MASTER",
+        "PREVIEW",
+        "STEM",
+    }
 
 
 def test_error_codes_are_stable_strings():

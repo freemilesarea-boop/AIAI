@@ -1,11 +1,19 @@
 """Shared schemas and domain enums for LUBER MUSIC AI."""
 
+from luber_schemas.assets import (
+    DELIVERY_MASTER_PRIORITY,
+    HasAssetType,
+    select_delivery_master,
+    select_finished_master,
+    select_raw_master,
+)
 from luber_schemas.enums import (
     QA_SECTIONS,
     AssetType,
     EditKind,
     ErrorCode,
     FailureTag,
+    FinishingOutcome,
     GenerationStatus,
     LineVerdict,
     VocalGender,
@@ -62,6 +70,7 @@ from luber_schemas.songform import (
 __all__ = [
     "BPM_MAX",
     "BPM_MIN",
+    "DELIVERY_MASTER_PRIORITY",
     "DURATION_MAX",
     "DURATION_MIN",
     "DURATION_PRESETS",
@@ -86,7 +95,9 @@ __all__ = [
     "ErrorCode",
     "ExpectedLine",
     "FailureTag",
+    "FinishingOutcome",
     "GenerationStatus",
+    "HasAssetType",
     "LineVerdict",
     "LyricBudget",
     "ParsedStructure",
@@ -110,6 +121,9 @@ __all__ = [
     "lyrics_have_content",
     "parse_structure",
     "preflight",
+    "select_delivery_master",
+    "select_finished_master",
+    "select_raw_master",
     "validate_product_duration",
     "validate_structure",
 ]

@@ -63,6 +63,11 @@ class Generation(Base):
     request_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: JSON: pre-flight advisories recorded at submission time.
     advisories: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: JSON: what the Phase 14 finishing engine decided — outcome, engine
+    #: version, the digest of the raw master it read, and the plan. NULL
+    #: means the engine never ran (the generation predates Phase 14B),
+    #: which is a different fact from it having run and found nothing.
+    finishing_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     #: Set when this generation was produced by "generate again" or by
     #: a variation. SET NULL on delete so removing an original does not

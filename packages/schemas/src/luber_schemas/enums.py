@@ -40,11 +40,44 @@ class VocalGender(StrEnum):
 
 
 class AssetType(StrEnum):
-    """Kind of audio asset attached to a generation."""
+    """Kind of audio asset attached to a generation.
+
+    ``MASTER`` is the **raw** generation master: the model's output with
+    nothing but format normalisation applied. It is written once, never
+    overwritten by finishing, and is the source every later operation
+    reads. The name predates Phase 14 and is kept because every stored
+    row and every deployed client already means exactly this by it —
+    renaming it would reinterpret existing data rather than describe it.
+
+    ``FINISHED_MASTER`` is the Phase 14 finishing result. It exists only
+    when the engine decided a correction was warranted, so its absence is
+    normal and means "nothing to fix", not "not processed".
+
+    Callers must never pick between the two by hand. Use
+    :func:`luber_schemas.assets.select_delivery_master` for what a
+    listener should hear, and
+    :func:`luber_schemas.assets.select_raw_master` for what a further
+    generation should be fed.
+    """
 
     MASTER = "MASTER"
+    FINISHED_MASTER = "FINISHED_MASTER"
     PREVIEW = "PREVIEW"
     STEM = "STEM"
+
+
+class FinishingOutcome(StrEnum):
+    """What the finishing engine did for one generation.
+
+    Recorded durably so that "the engine looked and found nothing to do"
+    stays distinguishable from "the engine never ran" (no record at all)
+    and from "the engine failed" — three states that an absent
+    ``FINISHED_MASTER`` asset alone cannot tell apart.
+    """
+
+    FINISHED = "FINISHED"
+    NO_ACTION = "NO_ACTION"
+    FAILED = "FAILED"
 
 
 class EditKind(StrEnum):

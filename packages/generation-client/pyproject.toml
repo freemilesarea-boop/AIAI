@@ -9,6 +9,7 @@ dependencies = [
     "luber-schemas",
     "luber-database",
     "luber-audio-utils",
+    "luber-audio-finishing",
     "luber-shared",
 ]
 
@@ -16,6 +17,7 @@ dependencies = [
 luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-audio-utils = { workspace = true }
+luber-audio-finishing = { workspace = true }
 luber-shared = { workspace = true }
 
 [build-system]

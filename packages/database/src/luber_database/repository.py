@@ -155,6 +155,19 @@ class GenerationRepository:
         generation.request_trace = trace
         await self._session.commit()
 
+    async def record_finishing_trace(self, generation_id: UUID, *, trace: str) -> None:
+        """Store what the finishing engine decided.
+
+        Written whether the engine acted, declined, or failed, so that a
+        generation with no finished master can still say which of those
+        three happened.
+        """
+        generation = await self._session.get(Generation, generation_id)
+        if generation is None:
+            raise LookupError(f"generation not found: {generation_id}")
+        generation.finishing_trace = trace
+        await self._session.commit()
+
     async def mark_completed(
         self,
         generation_id: UUID,
@@ -414,6 +427,27 @@ class GenerationRepository:
         await self._session.commit()
         await self._session.refresh(asset)
         return asset
+
+    async def delete_audio_asset(self, generation_id: UUID, *, asset_type: str) -> bool:
+        """Remove one asset row; ``True`` when a row was actually deleted.
+
+        Needed so a retry can retract a finished master that the current
+        engine version no longer produces. Without it a stale
+        FINISHED_MASTER row would keep winning delivery selection and
+        point at an object the new run never wrote.
+        """
+        existing = await self._session.execute(
+            select(AudioAsset).where(
+                AudioAsset.generation_id == generation_id,
+                AudioAsset.asset_type == asset_type,
+            )
+        )
+        asset = existing.scalar_one_or_none()
+        if asset is None:
+            return False
+        await self._session.delete(asset)
+        await self._session.commit()
+        return True
 
     async def get_audio_assets(self, generation_id: UUID) -> list[AudioAsset]:
         result = await self._session.execute(

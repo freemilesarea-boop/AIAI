@@ -52,6 +52,17 @@ def master_storage_key(generation_id: UUID, extension: str = "wav") -> str:
     return f"audio/{generation_id}/master.{extension}"
 
 
+def finished_master_storage_key(generation_id: UUID, extension: str = "wav") -> str:
+    """Deterministic key for a generation's finished master.
+
+    A separate key from the raw master, not a variant of it: finishing
+    must never be able to write over the only copy of what the model
+    produced, and a distinct key makes that impossible rather than merely
+    unintended.
+    """
+    return f"audio/{generation_id}/finished.{extension}"
+
+
 def preview_storage_key(generation_id: UUID, extension: str = "mp3") -> str:
     """Deterministic key for a generation's preview asset."""
     return f"audio/{generation_id}/preview.{extension}"

@@ -56,7 +56,7 @@ export function isTerminalStatus(status: GenerationStatus): boolean {
 export type VocalGender = "female" | "male" | "instrumental";
 
 /** Mirrors `AssetType`. */
-export type AssetType = "MASTER" | "PREVIEW" | "STEM";
+export type AssetType = "MASTER" | "FINISHED_MASTER" | "PREVIEW" | "STEM";
 
 export interface AudioAsset {
   id: string;
@@ -491,7 +491,23 @@ export function getAudioAssetUrl(
   return `${API_BASE_URL}/v1/generations/${encodeURIComponent(generationId)}/audio?${params}`;
 }
 
+/**
+ * The master a listener should get: the finished one when the finishing
+ * engine produced it, otherwise the raw one.
+ *
+ * `"MASTER"` is the raw generation master, not the delivery master —
+ * matching it directly is how you silently serve unfinished audio.
+ */
 export function findMasterAsset(generation: Generation): AudioAsset | null {
+  return (
+    generation.audio_assets.find((a) => a.asset_type === "FINISHED_MASTER") ??
+    generation.audio_assets.find((a) => a.asset_type === "MASTER") ??
+    null
+  );
+}
+
+/** The unprocessed master, for callers that specifically need the source. */
+export function findRawMasterAsset(generation: Generation): AudioAsset | null {
   return generation.audio_assets.find((a) => a.asset_type === "MASTER") ?? null;
 }
 

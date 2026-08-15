@@ -27,6 +27,7 @@ from luber_audio_utils import (
     AudioStorage,
     AudioStorageError,
     WavValidationError,
+    finished_master_storage_key,
     inspect_wav,
     probe_audio,
 )
@@ -42,11 +43,37 @@ from luber_generation_client.editing import (
     AudioEditRequest,
 )
 from luber_generation_client.errors import GenerationProviderError
-from luber_generation_client.postprocess import produce_delivery_assets
+from luber_generation_client.postprocess import FinishingRecord, produce_delivery_assets
 from luber_generation_client.provider import GenerationRequest, MusicGenerationProvider
-from luber_schemas import AssetType, EditKind, ErrorCode, GenerationStatus, VocalGender
+from luber_schemas import (
+    AssetType,
+    EditKind,
+    ErrorCode,
+    GenerationStatus,
+    VocalGender,
+    select_raw_master,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _finishing_trace_json(record: FinishingRecord) -> str:
+    """Serialise the finishing decision for the durable trace.
+
+    The plan is kept whole rather than summarised: it is the only record
+    of *why* a master sounds the way it does, and a summary would have to
+    guess in advance which field a future question needs.
+    """
+    payload: dict[str, object] = {
+        "outcome": record.outcome.value,
+        "finishing_version": record.finishing_version,
+        "source_sha256": record.source_sha256,
+    }
+    if record.plan is not None:
+        payload["plan"] = record.plan
+    if record.error is not None:
+        payload["error"] = record.error
+    return json.dumps(payload, sort_keys=True)
 
 
 class GenerationService:
@@ -60,17 +87,38 @@ class GenerationService:
         self._provider = provider
         self._storage = storage
 
+    async def _retract_stale_finished_master(
+        self, repo: GenerationRepository, generation_id: UUID
+    ) -> None:
+        """Drop a finished master this run did not reproduce.
+
+        The row goes first and the object second: a row without an object
+        is a broken download, while an object without a row is unreferenced
+        bytes that the generation-wide delete already cleans up.
+        """
+        removed = await repo.delete_audio_asset(
+            generation_id, asset_type=AssetType.FINISHED_MASTER.value
+        )
+        if not removed:
+            return
+        logger.info(
+            "retracted a finished master this run did not reproduce",
+            extra={"generation_id": str(generation_id)},
+        )
+        await self._storage.delete(finished_master_storage_key(generation_id))
+
     async def _resolve_source_audio(self, parent: Generation, stack: AsyncExitStack) -> Path:
-        """Get the parent's MASTER onto local disk for the provider.
+        """Get the parent's raw master onto local disk for the provider.
 
         Uses the storage backend's local path when there is one, and
         otherwise materialises the object into a temp file that the
         caller's exit stack removes. Object storage has no path, so the
         edit path cannot assume one exists.
         """
-        master = next(
-            (a for a in parent.audio_assets if a.asset_type == AssetType.MASTER.value), None
-        )
+        # The *raw* master, deliberately: feeding a finished master back
+        # into the model would stack finishing corrections across
+        # generations, and the child gets its own finishing pass anyway.
+        master = select_raw_master(list(parent.audio_assets))
         if master is None:
             raise GenerationProviderError(
                 "source generation has no master audio",
@@ -379,13 +427,23 @@ class GenerationService:
                     sha256=asset.sha256,
                     file_size=asset.file_size,
                 )
+            if produced.finished is None:
+                # A previous attempt may have produced a finished master
+                # that this one did not — a different engine version, or
+                # a failure this time. Leaving the old row in place would
+                # keep it winning delivery selection while pointing at an
+                # object no longer backed by this run's decisions.
+                await self._retract_stale_finished_master(repo, generation_id)
+            await repo.record_finishing_trace(
+                generation_id, trace=_finishing_trace_json(produced.finishing)
+            )
             # COMPLETED only after every required asset is stored and
             # recorded — a post-processing or upload failure raises above
             # and lands in the FAILED branch instead.
             await repo.mark_completed(
                 generation_id,
                 status=GenerationStatus.COMPLETED.value,
-                duration_actual=produced.master.duration,
+                duration_actual=produced.delivery_master.duration,
                 provider=result.provider,
                 model_name=result.model_name,
                 model_version=result.model_version,

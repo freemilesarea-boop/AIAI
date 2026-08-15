@@ -79,15 +79,52 @@ async def test_preview_plays_inline_by_default(client):
 # ── 5/6. delivered bytes match the recorded digests ───────────────────
 
 
-@pytest.mark.parametrize(("asset", "asset_type"), [("master", "MASTER"), ("preview", "PREVIEW")])
-async def test_delivered_bytes_match_recorded_sha256(client, asset, asset_type):
+def delivered_asset(generation: dict, asset: str) -> dict:
+    """The row the API will serve for ``?asset=``.
+
+    Mirrors the server's delivery selector rather than assuming a type:
+    a test that hardcoded "MASTER" would keep passing while the endpoint
+    served something else entirely.
+    """
+    assets = generation["audio_assets"]
+    if asset == "preview":
+        return next(a for a in assets if a["asset_type"] == "PREVIEW")
+    for wanted in ("FINISHED_MASTER", "MASTER"):
+        match = next((a for a in assets if a["asset_type"] == wanted), None)
+        if match is not None:
+            return match
+    raise AssertionError("generation has no master asset")
+
+
+@pytest.mark.parametrize("asset", ["master", "preview"])
+async def test_delivered_bytes_match_recorded_sha256(client, asset):
     generation = await _completed(client)
-    record = next(a for a in generation["audio_assets"] if a["asset_type"] == asset_type)
+    record = delivered_asset(generation, asset)
 
     resp = await client.get(f"/v1/generations/{generation['id']}/audio", params={"asset": asset})
 
     assert hashlib.sha256(resp.content).hexdigest() == record["sha256"]
     assert len(resp.content) == record["file_size"]
+
+
+async def test_master_download_serves_the_finished_master_when_one_exists(client):
+    """Phase 14B: `?asset=master` means "the master you should have".
+
+    The raw master stays available as its own asset, but it is not what
+    a listener is served once the engine has improved on it.
+    """
+    generation = await _completed(client)
+    kinds = {a["asset_type"] for a in generation["audio_assets"]}
+    if "FINISHED_MASTER" not in kinds:
+        pytest.skip("finishing took no action on this fixture")
+
+    finished = next(a for a in generation["audio_assets"] if a["asset_type"] == "FINISHED_MASTER")
+    raw = next(a for a in generation["audio_assets"] if a["asset_type"] == "MASTER")
+    assert finished["storage_key"] != raw["storage_key"]
+
+    resp = await client.get(f"/v1/generations/{generation['id']}/audio", params={"asset": "master"})
+    assert hashlib.sha256(resp.content).hexdigest() == finished["sha256"]
+    assert hashlib.sha256(resp.content).hexdigest() != raw["sha256"]
 
 
 async def test_master_and_preview_are_distinct_objects(client):
@@ -263,15 +300,41 @@ async def test_mime_extension_mismatch_is_refused(client, app):
     from luber_database import GenerationRepository
 
     generation = await _completed(client)
+    # Tamper the row that will actually be served, which after Phase 14B
+    # is the finished master when one exists. Tampering the raw row and
+    # asserting a refusal would pass without testing anything.
+    served = delivered_asset(generation, "master")["asset_type"]
     async with app.state.session_factory() as session:
         repo = GenerationRepository(session)
         row = await repo.get_generation(uuid.UUID(generation["id"]))
-        master = next(a for a in row.audio_assets if a.asset_type == "MASTER")
+        master = next(a for a in row.audio_assets if a.asset_type == served)
         master.mime_type = "text/html"
         await session.commit()
 
     resp = await client.get(f"/v1/generations/{generation['id']}/audio")
     assert resp.status_code == 404
+
+
+async def test_an_edit_reads_the_raw_master_not_the_finished_one(client, app):
+    """Feeding a finished master back into the model would compound.
+
+    Extend/replace/cover all resolve their source through the raw
+    selector, so a song edited repeatedly does not accumulate a
+    finishing correction per generation.
+    """
+    from luber_database import GenerationRepository
+    from luber_schemas import select_raw_master
+
+    generation = await _completed(client)
+    async with app.state.session_factory() as session:
+        repo = GenerationRepository(session)
+        row = await repo.get_generation(uuid.UUID(generation["id"]))
+        assets = list(row.audio_assets)
+
+    raw = select_raw_master(assets)
+    assert raw is not None
+    assert raw.asset_type == "MASTER"
+    assert raw.storage_key.endswith("master.wav")
 
 
 # ── no path or infrastructure leakage ─────────────────────────────────

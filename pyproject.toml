@@ -32,14 +32,7 @@ dev = [
     "fakeredis>=2.26",
     "aiosqlite>=0.20",
     "numpy>=2.1",
-    # Phase 14A proves the finishing engine before integrating it, so no
-    # service depends on it yet. It is installed here so its tests run
-    # with the rest of the suite.
-    "luber-audio-finishing",
 ]
-
-[tool.uv.sources]
-luber-audio-finishing = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

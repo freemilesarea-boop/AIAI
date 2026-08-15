@@ -52,7 +52,7 @@ from luber_api.schemas import (
 )
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationRepository
-from luber_database.models.generation import Generation, GenerationQA, LyricLineQA
+from luber_database.models.generation import AudioAsset, Generation, GenerationQA, LyricLineQA
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
     FULL_SONG_THRESHOLD_SECONDS,
@@ -66,6 +66,8 @@ from luber_schemas import (
     expected_lyric_lines,
     parse_structure,
     preflight,
+    select_delivery_master,
+    select_raw_master,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,14 +96,29 @@ _DECODED_JSON_FIELDS = frozenset({"advisories", "request_trace"})
 
 
 class AudioAssetKind(StrEnum):
-    """Which delivery asset a client is asking for."""
+    """Which delivery asset a client is asking for.
+
+    A client asks for "master" and gets whichever master it should have.
+    Phase 14B introduced a second one, and the public vocabulary
+    deliberately did not change: the finished/raw distinction is an
+    internal storage concern, and asking callers to know about it would
+    put the choice in the hands of whoever knew least about it.
+    """
 
     MASTER = "master"
     PREVIEW = "preview"
 
-    @property
-    def asset_type(self) -> str:
-        return AssetType.MASTER.value if self is AudioAssetKind.MASTER else AssetType.PREVIEW.value
+
+def resolve_requested_asset(assets: list[AudioAsset], kind: AudioAssetKind) -> AudioAsset | None:
+    """The stored row backing a requested asset kind.
+
+    ``master`` resolves through the shared delivery selector, so the
+    finished master is served when one exists and the raw is served when
+    it does not.
+    """
+    if kind is AudioAssetKind.PREVIEW:
+        return next((a for a in assets if a.asset_type == AssetType.PREVIEW.value), None)
+    return select_delivery_master(assets)
 
 
 def build_download_filename(title: str, generation_id: uuid.UUID, extension: str = "wav") -> str:
@@ -496,11 +513,7 @@ async def get_generation_audio(
         # an existence oracle.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
 
-    asset_type = asset.asset_type
-    record = next(
-        (a for a in generation.audio_assets if a.asset_type == asset_type),
-        None,
-    )
+    record = resolve_requested_asset(list(generation.audio_assets), asset)
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -608,7 +621,9 @@ async def _editable_parent(
     if parent.status != GenerationStatus.COMPLETED.value:
         raise HTTPException(status_code=409, detail=f"only a completed song can be {verb}")
 
-    master = next((a for a in parent.audio_assets if a.asset_type == AssetType.MASTER.value), None)
+    # The raw master: an edit is fed back into the model, and the model
+    # must not be given audio the finishing engine has already shaped.
+    master = select_raw_master(list(parent.audio_assets))
     if master is None:
         raise HTTPException(status_code=409, detail="this song has no master audio")
     if not await storage.exists(master.storage_key):

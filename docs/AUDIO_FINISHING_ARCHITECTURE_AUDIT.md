@@ -1,8 +1,9 @@
 # LUBER audio finishing — architecture audit and Phase 14A engine
 
 Read from the repository as it stands, then tested against 40 existing
-LUBER masters. Phase 14A builds and proves the engine; it does **not**
-integrate it. No production behaviour changed.
+LUBER masters. Phase 14A built and proved the engine. **Phase 14B wired
+it into the delivery pipeline** — see §8 for what changed; everything
+above it describes the engine, which 14B did not alter.
 
 This work belongs to `luber-music-ai` alone. No code, model,
 configuration or binary from any other mastering project was read,
@@ -35,8 +36,9 @@ dithering choice. Container, sample rate, channel count and sample width
 only. So the stored MASTER *is* the model output, resampled — which is
 what makes it usable as a raw reference.
 
-**The preview is derived from the master**, not from the raw file, so
-both assets always describe the same audio.
+**The preview is derived from a stored master**, not from the provider's
+file, so what is streamed and what is downloaded describe the same audio.
+Since 14B that is the *delivery* master — see §8.
 
 **Storage keys are deterministic** — `audio/<generation-id>/master.wav`.
 A retry overwrites its own object rather than accumulating new ones.
@@ -55,13 +57,14 @@ encode_preview_mp3_async     → preview, from whichever master ships
 That position is the right one for four reasons. The audio is already
 normalised to one format, so the engine never has to handle whatever the
 model emitted. The preview is generated downstream, so it follows the
-shipping master automatically. The whole step already fails closed — any
-exception leaves the generation not COMPLETED — so a finishing failure
-cannot ship a half-processed file. And storage is addressed by key, so a
+shipping master automatically. The raw master is produced before
+finishing runs, so no ordering exists in which a finishing failure leaves
+a generation without a master. And storage is addressed by key, so a
 second asset costs a key, not a redesign.
 
-**Not implemented in 14A.** The engine is proven first; wiring it in is
-Phase 14B's decision, after listening.
+**Implemented in 14B, at exactly this point.** The insertion point was
+re-verified against the code before wiring, and the surrounding call
+graph was unchanged.
 
 ## 2. Raw preservation
 
@@ -77,16 +80,17 @@ Non-negotiable, and enforced in code rather than by convention:
 
 ### Does this need a migration?
 
-**No — and that is a measurement, not an assumption.** `AudioAsset.asset_type`
-is `String(20)` (`models/generation.py`). There is no `sa.Enum` and no
-`CheckConstraint` anywhere in `packages/database/alembic/versions/`, so the
-database does not constrain the value. Adding `RAW_MASTER` to the
-`AssetType` StrEnum is a Python-side change only.
+**Not for the asset type — and that is a measurement, not an assumption.**
+`AudioAsset.asset_type` is `String(20)` (`models/generation.py`). There is
+no `sa.Enum` and no `CheckConstraint` anywhere in
+`packages/database/alembic/versions/`, so the database does not constrain
+the value. Adding `FINISHED_MASTER` to the `AssetType` StrEnum is a
+Python-side change only, and `MASTER` keeps its existing meaning so no
+stored row is reinterpreted.
 
-What *would* need a migration is durable finishing metadata —
-`finishing_version`, the serialised plan, the analysis — as columns on
-`audio_assets` or a new table. Phase 14A stores none of that, so no
-migration was created and `alembic heads` remains `0010`.
+Durable finishing metadata is a different question, and 14B answered it
+with migration `0011`: one nullable Text column, `generations.finishing_trace`,
+matching the `request_trace` pattern from 0004. See §8.
 
 The unique constraint is `(generation_id, asset_type)`, so a raw and a
 finished master coexist as two rows without touching it.
@@ -319,14 +323,78 @@ pass would measure audio the first pass already changed, and the result
 would depend on how many times it ran. Same source plus same version
 produces the same plan and byte-identical output.
 
-## 7. Status
+## 7. Phase 14A status
 
-**Engine built, measured, and not integrated.** The objective results
-show the processing did what each plan said, within its stated ceilings,
-without clipping and without changing duration, rate, channel count or
-dynamics.
+**Engine built and measured.** The objective results showed the
+processing did what each plan said, within its stated ceilings, without
+clipping and without changing duration, rate, channel count or dynamics.
 
-They do not show it sounds better. Nothing here can. Five RAW/FINISHED
-pairs covering different failure modes are at
-`~/Desktop/LUBER_PHASE14_FINISHING_LISTENING/`, and the phase stops until
-someone has heard them.
+They did not show it sounds better; nothing measurable can. Five
+RAW/FINISHED pairs went to `~/Desktop/LUBER_PHASE14_FINISHING_LISTENING/`
+and the phase stopped there.
+
+## 8. Phase 14B — integration
+
+Listening review completed, so the engine was wired into delivery. The
+engine itself was not changed.
+
+### Assets
+
+Three roles now, from two masters:
+
+| Role | Meaning |
+|---|---|
+| `MASTER` | the raw generation master — model output, format-normalised, written once |
+| `FINISHED_MASTER` | the finishing result, present only when the engine acted |
+| `PREVIEW` | derived from whichever master is being delivered |
+
+`MASTER` deliberately keeps its pre-14B meaning. Renaming it to
+`RAW_MASTER` would have read better but would have reinterpreted every
+stored row and broken any client mid-deploy; adding a value alongside it
+breaks nothing and leaves old rows correct as they stand.
+
+The cost of that choice is that "MASTER" no longer means "the master to
+serve", so every consumer that filtered for it by hand is now a place the
+wrong one can be picked silently. All five were routed through two
+selectors in `luber_schemas.assets`:
+
+* `select_delivery_master` — finished if present, else raw. Downloads,
+  playback, the preview encode.
+* `select_raw_master` — always raw. Extend, replace-section, cover.
+
+Edits read the **raw** master on purpose. Feeding a finished master back
+into the model and finishing the result would stack corrections across
+generations — a track extended five times would carry five high-shelf
+lifts — and the child gets its own finishing pass regardless.
+
+### Failure policy
+
+Two policies, deliberately different. The transcode, the preview and
+their uploads still fail the whole generation. Finishing does not: the
+raw master is a complete, shippable product and was the entire product
+before 14B, so a finishing failure is logged, recorded as `FAILED` in the
+trace, and the raw ships.
+
+That fallback cannot publish a bad file. The engine verifies its own
+output and deletes it rather than returning it, so the pipeline is only
+ever deciding whether to ship the enhancement, never whether it is safe.
+Only `FinishingError` is treated this way; an unexpected exception is a
+defect in the wiring and still fails the generation.
+
+### Provenance
+
+`generations.finishing_trace` (migration `0011`, nullable Text holding
+JSON) records the outcome, the engine version, the digest of the raw
+master the decision was made from, and the whole plan. It exists because
+an absent `FINISHED_MASTER` cannot distinguish three real states: the
+engine declined, the engine failed, or the generation predates 14B. NULL
+is the third.
+
+### Retry
+
+Storage keys are deterministic and `create_audio_asset` upserts, so a
+retry overwrites rather than accumulates. The engine is deterministic, so
+a retry reaches the same decision. The one case that needs handling is a
+future engine version declining where an earlier one acted: the stale
+`FINISHED_MASTER` row is retracted, row first and object second, so a
+half-cleaned state is unreferenced bytes rather than a broken download.

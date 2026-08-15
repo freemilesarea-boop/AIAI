@@ -44,9 +44,17 @@ async def test_serves_master_audio_with_correct_headers(client):
 
 
 async def test_served_bytes_match_master_sha256(client):
-    """The browser must receive exactly the MASTER the backend recorded."""
+    """The browser must receive exactly the master the backend recorded.
+
+    Which master that is depends on whether finishing acted, so the row
+    is resolved the way the endpoint resolves it.
+    """
     generation = await _completed_generation(client)
-    master = next(a for a in generation["audio_assets"] if a["asset_type"] == "MASTER")
+    assets = generation["audio_assets"]
+    master = next(
+        (a for a in assets if a["asset_type"] == "FINISHED_MASTER"),
+        next(a for a in assets if a["asset_type"] == "MASTER"),
+    )
 
     resp = await client.get(f"/v1/generations/{generation['id']}/audio")
 

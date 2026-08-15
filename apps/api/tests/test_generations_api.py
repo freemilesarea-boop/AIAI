@@ -153,7 +153,8 @@ async def test_full_generation_flow_produces_master_wav(client, tmp_path):
 
     # Both delivery assets exist, each with verifiable bytes on disk.
     assets = {a["asset_type"]: a for a in detail["audio_assets"]}
-    assert set(assets) == {"MASTER", "PREVIEW"}
+    assert {"MASTER", "PREVIEW"} <= set(assets)
+    assert set(assets) <= {"MASTER", "FINISHED_MASTER", "PREVIEW"}
 
     master = assets["MASTER"]
     assert master["format"] == "wav"

@@ -93,7 +93,14 @@ async def test_service_success_walks_full_lifecycle(repository, tmp_path):
 
     # Post-processing produces both delivery assets.
     assets = {a.asset_type: a for a in await repository.get_audio_assets(gen.id)}
-    assert set(assets) == {AssetType.MASTER.value, AssetType.PREVIEW.value}
+    # Finishing acted on this fixture, so the raw master and the finished
+    # master both exist. The raw one is the point: it must never be
+    # replaced by the thing derived from it.
+    assert set(assets) == {
+        AssetType.MASTER.value,
+        AssetType.FINISHED_MASTER.value,
+        AssetType.PREVIEW.value,
+    }
 
     master = assets[AssetType.MASTER.value]
     assert master.format == "wav"
