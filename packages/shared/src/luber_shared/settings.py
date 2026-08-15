@@ -34,6 +34,23 @@ class BaseServiceSettings(BaseSettings):
     generation_provider: str = "mock"
     mock_fixture_path: str = "tests/fixtures/mock_generation.wav"
 
+    # ── Reference-audio lifecycle ─────────────────────────────────
+    #
+    # How long an unused reference upload is kept before cleanup may
+    # remove it. 24 hours is deliberately generous: a genuinely
+    # abandoned browser upload is abandoned within minutes, but a user
+    # who uploads, gets pulled away and comes back the same day must not
+    # find their reference gone. Short enough that storage cannot grow
+    # without bound; long enough that no legitimate flow is interrupted.
+    #
+    # One value, read by every caller. A grace period that differed
+    # between the API and the cleaner would be a deletion nobody
+    # predicted.
+    reference_abandonment_grace_hours: int = 24
+    #: Ceiling on one cleanup invocation, so a large backlog is drained
+    #: over several runs rather than in one unbounded sweep.
+    reference_cleanup_batch_size: int = 200
+
     # ACE-Step provider (used when generation_provider="ace_step").
     # See docs/ACE_STEP_UPSTREAM_AUDIT.md for the pinned upstream.
     ace_step_base_url: str = "http://127.0.0.1:8001"

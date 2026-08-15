@@ -8,10 +8,12 @@ dependencies = [
     "luber-shared",
     "luber-schemas",
     "luber-audio-utils",
+    "luber-database",
 ]
 
 [tool.uv.sources]
 luber-shared = { workspace = true }
+luber-database = { workspace = true }
 luber-schemas = { workspace = true }
 luber-audio-utils = { workspace = true }
 

@@ -740,6 +740,7 @@ source = { editable = "services/audio-worker" }
 dependencies = [
     { name = "arq" },
     { name = "luber-audio-utils" },
+    { name = "luber-database" },
     { name = "luber-schemas" },
     { name = "luber-shared" },
 ]
@@ -748,6 +749,7 @@ dependencies = [
 requires-dist = [
     { name = "arq", specifier = ">=0.26" },
     { name = "luber-audio-utils", editable = "packages/audio-utils" },
+    { name = "luber-database", editable = "packages/database" },
     { name = "luber-schemas", editable = "packages/schemas" },
     { name = "luber-shared", editable = "packages/shared" },
 ]

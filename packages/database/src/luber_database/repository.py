@@ -8,9 +8,10 @@ in an open transaction when a worker crashes mid-generation.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -423,6 +424,55 @@ class GenerationRepository:
 
     async def get_reference_audio(self, reference_id: UUID) -> ReferenceAudio | None:
         return await self._session.get(ReferenceAudio, reference_id)
+
+    async def find_abandoned_references(
+        self, *, cutoff: datetime, limit: int
+    ) -> list[ReferenceAudio]:
+        """References older than *cutoff* that no generation cites.
+
+        Candidates only. Nothing here is safe to delete on the strength
+        of this result alone — a generation can attach one microsecond
+        later, which is why the delete re-checks atomically rather than
+        trusting this list.
+        """
+        used = select(Generation.reference_audio_id).where(
+            Generation.reference_audio_id.is_not(None)
+        )
+        result = await self._session.execute(
+            select(ReferenceAudio)
+            .where(ReferenceAudio.created_at < cutoff)
+            .where(ReferenceAudio.id.not_in(used))
+            .order_by(ReferenceAudio.created_at)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def delete_reference_audio_if_unused(self, reference_id: UUID) -> bool:
+        """Delete a reference, but only if still nothing references it.
+
+        The condition lives *inside* the DELETE rather than in a preceding
+        SELECT, which is what makes this race-safe. A generation committed
+        between the candidate scan and this call makes the NOT EXISTS
+        false, the statement matches zero rows, and the caller learns the
+        reference is in use instead of destroying provenance.
+
+        PostgreSQL additionally refuses via ON DELETE RESTRICT. The
+        condition is not redundant: SQLite runs the unit tests with
+        foreign keys disabled, so without it the guarantee would exist
+        only in production and never be exercised by a test.
+
+        Returns True when a row was actually removed.
+        """
+        referenced = (
+            select(Generation.id).where(Generation.reference_audio_id == reference_id).exists()
+        )
+        result = await self._session.execute(
+            delete(ReferenceAudio).where(ReferenceAudio.id == reference_id).where(~referenced)
+        )
+        await self._session.commit()
+        # CursorResult on a DML statement; the base Result protocol does
+        # not declare rowcount, so it is read off the cursor explicitly.
+        return bool(cast("CursorResult[Any]", result).rowcount)
 
     # ── audio assets ───────────────────────────────────────────────
 
