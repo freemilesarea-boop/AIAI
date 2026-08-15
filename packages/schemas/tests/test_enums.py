@@ -37,4 +37,9 @@ def test_asset_types():
 
 def test_error_codes_are_stable_strings():
     assert ErrorCode.OUT_OF_MEMORY.value == "OUT_OF_MEMORY"
-    assert len(ErrorCode) == 8
+    # Phase 15R added REFERENCE_AUDIO_UNAVAILABLE. The count is asserted
+    # so a new code has to be a deliberate act: these values are stored
+    # and returned to clients, which makes every addition a contract
+    # change rather than an implementation detail.
+    assert ErrorCode.REFERENCE_AUDIO_UNAVAILABLE.value == "REFERENCE_AUDIO_UNAVAILABLE"
+    assert len(ErrorCode) == 9

@@ -146,6 +146,34 @@ class AceStepClient:
             response = await self._client.post("/release_task", data=fields, files=files)
         return self._task_handle(self._unwrap(response))
 
+    async def submit_generation_with_reference_audio(
+        self, payload: dict[str, Any], reference_audio: Path
+    ) -> AceStepTaskHandle:
+        """POST /release_task as multipart, uploading the reference track.
+
+        ``ref_audio`` is a different field from ``src_audio`` and drives a
+        different mechanism. Upstream reads it at
+        ``release_task_request_parser.py`` — ``form.get("ref_audio") or
+        form.get("reference_audio")`` — saves it to its own temp file and
+        sets ``reference_audio_path``, which feeds the timbre encoder.
+        ``src_audio`` instead becomes ``src_audio_path`` and feeds repaint
+        or the cover sketch. Sending a reference under the source field
+        would silently perform a different operation than the user asked
+        for, so the two never share a code path here.
+
+        Uploading rather than passing a path is not a convenience:
+        upstream's ``validate_audio_path`` rejects absolute paths outside
+        its own temp directory, and the worker may not share a filesystem
+        with the engine at all.
+        """
+        fields = {
+            key: self._form_value(value) for key, value in payload.items() if value is not None
+        }
+        with reference_audio.open("rb") as handle:
+            files = {"ref_audio": (reference_audio.name, handle, "audio/wav")}
+            response = await self._client.post("/release_task", data=fields, files=files)
+        return self._task_handle(self._unwrap(response))
+
     @staticmethod
     def _form_value(value: Any) -> str:
         """Render one payload value for a multipart form field.

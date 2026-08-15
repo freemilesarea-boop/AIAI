@@ -12,9 +12,11 @@ from luber_database.models.generation import (
     GenerationQA,
     LyricLineQA,
     Project,
+    ReferenceAudio,
 )
 
 GENERATION_TABLES = [
+    ReferenceAudio.__table__,
     Generation.__table__,
     GenerationJob.__table__,
     AudioAsset.__table__,

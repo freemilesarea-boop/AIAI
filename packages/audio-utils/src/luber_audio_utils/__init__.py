@@ -21,6 +21,15 @@ from luber_audio_utils.constants import (
     PREVIEW_SAMPLE_RATE,
 )
 from luber_audio_utils.factory import storage_from_settings
+from luber_audio_utils.reference import (
+    NormalizedReference,
+    ReferenceAudioRejected,
+    check_upload_size,
+    inspect_upload,
+    normalize_reference,
+    resolve_upload_format,
+    safe_display_name,
+)
 from luber_audio_utils.s3 import S3AudioStorage, S3StorageConfig
 from luber_audio_utils.storage import (
     AudioStorage,
@@ -63,18 +72,25 @@ __all__ = [
     "AudioStorageError",
     "DownloadTarget",
     "LocalAudioStorage",
+    "NormalizedReference",
+    "ReferenceAudioRejected",
     "S3AudioStorage",
     "S3StorageConfig",
     "WavInfo",
     "WavValidationError",
+    "check_upload_size",
     "encode_preview_mp3",
     "encode_preview_mp3_async",
     "finished_master_storage_key",
     "generation_prefix",
+    "inspect_upload",
     "inspect_wav",
     "master_storage_key",
+    "normalize_reference",
     "preview_storage_key",
     "probe_audio",
+    "resolve_upload_format",
+    "safe_display_name",
     "sha256_file",
     "storage_from_settings",
     "transcode_master_wav",

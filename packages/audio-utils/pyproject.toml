@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Audio delivery format contract, ffmpeg post-processing, and object storage"
 requires-python = ">=3.11"
 # ffmpeg/ffprobe are external binaries, not Python packages.
-dependencies = ["boto3>=1.35"]
+dependencies = ["boto3>=1.35", "luber-schemas"]
+
+[tool.uv.sources]
+luber-schemas = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

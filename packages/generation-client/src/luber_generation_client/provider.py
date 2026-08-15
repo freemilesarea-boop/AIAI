@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -30,6 +31,23 @@ from luber_schemas import (
     VALID_TIME_SIGNATURE_VALUES,
     VocalGender,
 )
+
+
+class ReferenceAudioInput(BaseModel):
+    """A reference track, materialised locally for the provider.
+
+    Carries the identity from :class:`~luber_schemas.ReferenceAudioCondition`
+    together with a local path, because the provider has to upload actual
+    bytes. The path is produced by the service from storage and never
+    comes from a client — the client only ever names a reference id.
+    """
+
+    reference_id: UUID
+    audio_path: Path
+    duration_seconds: float
+    sha256: str
+
+    model_config = {"frozen": True}
 
 
 class GenerationRequest(BaseModel):
@@ -54,6 +72,12 @@ class GenerationRequest(BaseModel):
     bpm: int | None = Field(default=None, ge=BPM_MIN, le=BPM_MAX)
     key_scale: str | None = None
     time_signature: str | None = None
+
+    #: Set when the user chose a reference track. A provider that cannot
+    #: honour it must refuse rather than generate without it: a song made
+    #: without the reference the user picked is a different song, and
+    #: silently returning one would be the worst possible outcome here.
+    reference_audio: ReferenceAudioInput | None = None
 
     @field_validator("key_scale")
     @classmethod
@@ -99,6 +123,18 @@ class MusicGenerationProvider(ABC):
     - ``AceStepProvider``        (Phase 2, real ACE-Step 1.5 engine)
     - future: Stable Audio family, licensed/custom foundation models
     """
+
+    @property
+    def supports_reference_audio(self) -> bool:
+        """Whether this provider can condition on a user reference track.
+
+        Defaults to ``False`` so a capability is opted into rather than
+        assumed. The service checks this before queueing and refuses the
+        request outright when it is false — the alternative, generating
+        without the reference, produces a plausible song that is not the
+        one that was asked for.
+        """
+        return False
 
     name: str
 

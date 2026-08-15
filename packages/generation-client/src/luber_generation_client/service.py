@@ -44,7 +44,11 @@ from luber_generation_client.editing import (
 )
 from luber_generation_client.errors import GenerationProviderError
 from luber_generation_client.postprocess import FinishingRecord, produce_delivery_assets
-from luber_generation_client.provider import GenerationRequest, MusicGenerationProvider
+from luber_generation_client.provider import (
+    GenerationRequest,
+    MusicGenerationProvider,
+    ReferenceAudioInput,
+)
 from luber_schemas import (
     AssetType,
     EditKind,
@@ -106,6 +110,56 @@ class GenerationService:
             extra={"generation_id": str(generation_id)},
         )
         await self._storage.delete(finished_master_storage_key(generation_id))
+
+    async def _resolve_reference_audio(
+        self, generation: Generation, stack: AsyncExitStack
+    ) -> ReferenceAudioInput | None:
+        """Materialise the chosen reference track for the provider.
+
+        Refuses rather than degrades at every step. A provider that
+        cannot condition on a reference, a reference row that has gone,
+        an object missing from storage — each ends the generation with
+        ``REFERENCE_AUDIO_UNAVAILABLE``. Generating without the reference
+        would produce a song the user did not ask for while reporting
+        success, which is the one outcome worse than failing.
+        """
+        if generation.reference_audio_id is None:
+            return None
+
+        if not self._provider.supports_reference_audio:
+            raise GenerationProviderError(
+                "configured provider cannot condition on reference audio",
+                error_code=ErrorCode.REFERENCE_AUDIO_UNAVAILABLE,
+            )
+
+        reference = await self._repository.get_reference_audio(generation.reference_audio_id)
+        if reference is None:
+            raise GenerationProviderError(
+                "the reference track for this generation no longer exists",
+                error_code=ErrorCode.REFERENCE_AUDIO_UNAVAILABLE,
+            )
+
+        local = self._storage.local_path(reference.storage_key)
+        if local is None or not local.is_file():
+            try:
+                data = await self._storage.open(reference.storage_key)
+            except AudioStorageError as exc:
+                raise GenerationProviderError(
+                    "the reference track for this generation could not be read",
+                    error_code=ErrorCode.REFERENCE_AUDIO_UNAVAILABLE,
+                ) from exc
+            handle = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            stack.callback(lambda: Path(handle.name).unlink(missing_ok=True))
+            with handle:
+                handle.write(data)
+            local = Path(handle.name)
+
+        return ReferenceAudioInput(
+            reference_id=reference.id,
+            audio_path=local,
+            duration_seconds=reference.duration_seconds,
+            sha256=reference.sha256,
+        )
 
     async def _resolve_source_audio(self, parent: Generation, stack: AsyncExitStack) -> Path:
         """Get the parent's raw master onto local disk for the provider.
@@ -393,7 +447,10 @@ class GenerationService:
                     await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
                     result = await self._provider.edit(edit_request)
                 else:
-                    request = self._to_provider_request(generation)
+                    reference = await self._resolve_reference_audio(generation, stack)
+                    request = self._to_provider_request(generation).model_copy(
+                        update={"reference_audio": reference}
+                    )
                     await self._record_trace(generation_id, request)
                     await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
                     result = await self._provider.generate(request)

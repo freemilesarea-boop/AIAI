@@ -35,6 +35,47 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+class ReferenceAudio(Base):
+    """Audio a user supplied to steer a generation.
+
+    Its own table, not an ``audio_assets`` role. Assets belong to the
+    generation that produced them; a reference is an input that exists
+    before any generation, may steer several, and must never be
+    reachable through the routes that serve masters. Keeping it here
+    means there is no asset row that could name it and no key shape that
+    could collide with one.
+
+    Rows are immutable once written: the bytes are content-addressed by
+    ``sha256`` and the canonical file is never rewritten, so a stored
+    generation can always say exactly what conditioned it.
+    """
+
+    __tablename__ = "reference_audio"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    #: Key under ``reference/``, never under ``audio/``.
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Digest of the canonical stored bytes.
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    #: Digest of what the user actually uploaded, before normalisation.
+    #: Kept so provenance survives a change to the canonical format.
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: Container the upload arrived in, for provenance only.
+    source_format: Mapped[str] = mapped_column(String(10), nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    sample_rate: Mapped[int] = mapped_column(Integer, nullable=False)
+    channels: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    #: Free-text label from the upload, shown back to the user. Never a
+    #: path and never used to build one.
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), default=_utcnow
+    )
+
+    generations: Mapped[list[Generation]] = relationship(back_populates="reference_audio")
+
+
 class Generation(Base):
     __tablename__ = "generations"
 
@@ -63,6 +104,14 @@ class Generation(Base):
     request_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: JSON: pre-flight advisories recorded at submission time.
     advisories: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The reference track this generation was conditioned on, if any.
+    #: RESTRICT rather than CASCADE: deleting a reference must not delete
+    #: the songs made from it, and a generation that silently lost its
+    #: provenance would be worse than a refused delete.
+    reference_audio_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("reference_audio.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+
     #: JSON: what the Phase 14 finishing engine decided — outcome, engine
     #: version, the digest of the raw master it read, and the plan. NULL
     #: means the engine never ran (the generation predates Phase 14B),
@@ -157,6 +206,7 @@ class Generation(Base):
         back_populates="generation", cascade="all, delete-orphan"
     )
     project: Mapped[Project | None] = relationship(back_populates="generations")
+    reference_audio: Mapped[ReferenceAudio | None] = relationship(back_populates="generations")
 
 
 class GenerationJob(Base):

@@ -310,6 +310,17 @@ async def create_generation(
     group_id = uuid.uuid4()
     created: list[Generation] = []
 
+    # Checked before anything is queued. A generation that reaches the
+    # worker naming a reference that does not exist can only fail there,
+    # after the user has been told it started.
+    if payload.reference_audio_id is not None:
+        reference = await repository.get_reference_audio(payload.reference_audio_id)
+        if reference is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="That reference track does not exist. Upload it again.",
+            )
+
     for index in range(payload.result_count):
         try:
             generation = await repository.create_generation(
@@ -318,6 +329,7 @@ async def create_generation(
                 lyrics=payload.lyrics,
                 vocal_gender=payload.vocal_gender.value,
                 duration_requested=payload.duration,
+                reference_audio_id=payload.reference_audio_id,
                 # A pinned seed applies to the first result only. Giving
                 # every sibling the same seed would ask the engine for the
                 # same song twice, which defeats the purpose of asking for

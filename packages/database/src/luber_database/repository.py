@@ -21,6 +21,7 @@ from luber_database.models.generation import (
     GenerationQA,
     LyricLineQA,
     Project,
+    ReferenceAudio,
 )
 
 
@@ -57,6 +58,7 @@ class GenerationRepository:
         edit_start_seconds: float | None = None,
         edit_end_seconds: float | None = None,
         source_adherence: float | None = None,
+        reference_audio_id: UUID | None = None,
         user_id: UUID | None = None,
         idempotency_key: str | None = None,
     ) -> Generation:
@@ -86,6 +88,7 @@ class GenerationRepository:
             edit_start_seconds=edit_start_seconds,
             edit_end_seconds=edit_end_seconds,
             source_adherence=source_adherence,
+            reference_audio_id=reference_audio_id,
             status=status,
             user_id=user_id,
             idempotency_key=idempotency_key,
@@ -374,6 +377,52 @@ class GenerationRepository:
         job.error_message = error_message
         job.finished_at = _utcnow()
         await self._session.commit()
+
+    # ── reference audio (inputs, not assets) ───────────────────────
+
+    async def create_reference_audio(
+        self,
+        *,
+        reference_id: UUID,
+        storage_key: str,
+        sha256: str,
+        source_sha256: str,
+        source_format: str,
+        duration_seconds: float,
+        sample_rate: int,
+        channels: int,
+        file_size: int,
+        display_name: str | None,
+    ) -> ReferenceAudio:
+        """Record an uploaded reference track.
+
+        Always an insert. References are content-addressed and immutable,
+        and two users uploading the same bytes get two rows: sharing one
+        would tie their lifecycles together for no benefit.
+        """
+        # The id is supplied rather than generated here: the caller already
+        # built the storage key from it, and a row whose key names a
+        # different id than the row itself is a reference that cannot be
+        # reasoned about.
+        reference = ReferenceAudio(
+            id=reference_id,
+            storage_key=storage_key,
+            sha256=sha256,
+            source_sha256=source_sha256,
+            source_format=source_format,
+            duration_seconds=duration_seconds,
+            sample_rate=sample_rate,
+            channels=channels,
+            file_size=file_size,
+            display_name=display_name,
+        )
+        self._session.add(reference)
+        await self._session.commit()
+        await self._session.refresh(reference)
+        return reference
+
+    async def get_reference_audio(self, reference_id: UUID) -> ReferenceAudio | None:
+        return await self._session.get(ReferenceAudio, reference_id)
 
     # ── audio assets ───────────────────────────────────────────────
 

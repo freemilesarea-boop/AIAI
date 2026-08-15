@@ -105,6 +105,11 @@ class GenerationCreateRequest(BaseModel):
     key_scale: str | None = None
     time_signature: str | None = None
 
+    #: An uploaded reference track to steer the sound. Only an id is
+    #: accepted — never a path, a storage key or a URL — so a client
+    #: cannot name audio it did not upload through the ingest endpoint.
+    reference_audio_id: uuid.UUID | None = None
+
     #: Set when this request came from "generate again" or a variation.
     parent_generation_id: uuid.UUID | None = None
     variation_label: str | None = Field(default=None, max_length=50)

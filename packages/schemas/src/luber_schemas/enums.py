@@ -133,6 +133,11 @@ class ErrorCode(StrEnum):
     MODEL_LOAD_FAILED = "MODEL_LOAD_FAILED"
     OUT_OF_MEMORY = "OUT_OF_MEMORY"
     INVALID_AUDIO = "INVALID_AUDIO"
+    #: Reference audio was requested but the configured provider cannot
+    #: honour it, or the reference no longer exists. Never silently
+    #: downgraded to an ordinary generation: a song made without the
+    #: reference the user chose is a different song.
+    REFERENCE_AUDIO_UNAVAILABLE = "REFERENCE_AUDIO_UNAVAILABLE"
     UPLOAD_FAILED = "UPLOAD_FAILED"
     ENCODING_FAILED = "ENCODING_FAILED"
     QUEUE_FAILED = "QUEUE_FAILED"

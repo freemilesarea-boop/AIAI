@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "LUBER MUSIC AI — public FastAPI backend"
 requires-python = ">=3.11"
 dependencies = [
+    # Required by FastAPI to parse multipart uploads (reference audio).
+    "python-multipart>=0.0.20",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "redis>=5.2",

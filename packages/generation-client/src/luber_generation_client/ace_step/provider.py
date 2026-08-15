@@ -174,6 +174,21 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider, AudioToAudi
             "added_conditioning": list(compiled.added_conditioning),
             "skipped_conditioning": list(compiled.skipped_conditioning),
             "payload": payload,
+            # Reference provenance: which track, proved by digest, and the
+            # transport that carried it. Never the local path — it is a
+            # temp file on whichever host the worker happened to run on,
+            # and durable records must not contain filesystem locations.
+            "reference_audio": (
+                None
+                if request.reference_audio is None
+                else {
+                    "reference_id": str(request.reference_audio.reference_id),
+                    "sha256": request.reference_audio.sha256,
+                    "duration_seconds": request.reference_audio.duration_seconds,
+                    "transport": "multipart:ref_audio",
+                    "engine_field": "reference_audio_path",
+                }
+            ),
         }
 
     async def _require_healthy_server(self) -> None:
@@ -246,12 +261,42 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider, AudioToAudi
             model_version=ACE_STEP_VERSION,
         )
 
+    @property
+    def supports_reference_audio(self) -> bool:
+        """Verified against the installed runtime, not inferred.
+
+        ACE-Step 6d467e4b accepts a ``ref_audio`` multipart upload on
+        ``/release_task``, saves it, and sets ``reference_audio_path`` on
+        ``GenerateMusicRequest``. That feeds the timbre encoder, whose
+        output is merged into ``encoder_hidden_states`` before the sampler
+        runs — so the conditioning is applied on the MLX path even though
+        the reference tensor never appears in the MLX sampler itself.
+        Phase 13E measured the effect at roughly twenty times the
+        seed-only noise floor, in the correct direction for two opposite
+        references.
+        """
+        return True
+
     async def generate(self, request: GenerationRequest) -> GenerationResult:
         await self._require_healthy_server()
 
         payload = self._build_payload(request)
+        reference = request.reference_audio
         try:
-            handle = await self._client.submit_generation(payload)
+            if reference is None:
+                handle = await self._client.submit_generation(payload)
+            else:
+                # A missing file here is a server-side fault, not a bad
+                # request: the service materialised it from storage a
+                # moment ago. Refusing beats generating without it.
+                if not reference.audio_path.is_file():
+                    raise GenerationProviderError(
+                        "reference audio is no longer available",
+                        error_code=ErrorCode.REFERENCE_AUDIO_UNAVAILABLE,
+                    )
+                handle = await self._client.submit_generation_with_reference_audio(
+                    payload, reference.audio_path
+                )
         except (AceStepApiError, httpx.HTTPError) as exc:
             raise GenerationProviderError(
                 f"ACE-Step task submission failed: {exc}",
