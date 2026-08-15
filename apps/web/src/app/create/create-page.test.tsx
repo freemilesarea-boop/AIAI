@@ -335,7 +335,7 @@ describe("submission", () => {
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("Creating your music"),
+      expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Creating your music"),
     );
 
     // Still editable, still submittable, mid-inference.
@@ -357,7 +357,7 @@ describe("status rendering", () => {
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: "Create" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Preparing generation");
+    expect(await screen.findByRole("status", { name: "" })).toHaveTextContent("Preparing generation");
   });
 
   it("shows GENERATING and an elapsed timer, with no fake percentage", async () => {
@@ -369,7 +369,7 @@ describe("status rendering", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("Creating your music"),
+      expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Creating your music"),
     );
     expect(screen.getByText(/Elapsed/)).toBeInTheDocument();
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
@@ -535,7 +535,7 @@ describe("refresh recovery", () => {
     renderCreate();
 
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("Creating your music"),
+      expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Creating your music"),
     );
   });
 

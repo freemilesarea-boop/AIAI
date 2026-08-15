@@ -21,6 +21,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { AdvancedControls } from "@/components/AdvancedControls";
+import { ReferenceTrack, type ReferenceStatus } from "@/components/ReferenceTrack";
 import { AdvisoryList } from "@/components/AdvisoryList";
 import { PromptChips } from "@/components/PromptChips";
 import { SongPresets } from "@/components/SongPresets";
@@ -123,6 +124,9 @@ interface FieldErrors {
   lyrics?: string;
   bpm?: string;
   seed?: string;
+  /** Not a field error in the usual sense: the reference is valid, it is
+      simply not finished uploading yet. */
+  reference?: string;
 }
 
 export function GenerationForm({
@@ -158,6 +162,12 @@ export function GenerationForm({
   const [seedMode, setSeedMode] = useState<"random" | "fixed">(
     initialValues?.seed ? "fixed" : "random",
   );
+  // A reference only exists once the backend has accepted it. The id is
+  // the whole state the form needs; the status is kept so a submit can
+  // be refused while a file is chosen but not yet uploaded.
+  const [referenceId, setReferenceId] = useState<string | null>(null);
+  const [referenceStatus, setReferenceStatus] = useState<ReferenceStatus>("EMPTY");
+
   const [resultCount, setResultCount] = useState<1 | 2>(
     initialValues?.resultCount ?? DEFAULT_RESULT_COUNT,
   );
@@ -253,6 +263,14 @@ export function GenerationForm({
     event.preventDefault();
     if (disabled || busy) return;
 
+    // A file chosen but not uploaded has no id and therefore no effect.
+    // Submitting here would produce an unreferenced song while the form
+    // still showed a reference attached, so it is refused instead.
+    if (referenceStatus === "SELECTED" || referenceStatus === "UPLOADING") {
+      setErrors({ reference: "Wait for the reference track to finish uploading." });
+      return;
+    }
+
     const found = validate();
     setErrors(found);
     if (Object.keys(found).length > 0) {
@@ -278,6 +296,9 @@ export function GenerationForm({
       // Random is the absence of a seed, not a seed we invent.
       seed: seedMode === "fixed" ? parseSeedInput(seed).seed : null,
       result_count: resultCount,
+      // Omitted entirely when nothing is attached, so an ordinary
+      // generation sends exactly the request it always did.
+      ...(referenceId ? { reference_audio_id: referenceId } : {}),
     });
   };
 
@@ -567,6 +588,13 @@ export function GenerationForm({
           )}
         </fieldset>
       )}
+
+      <ReferenceTrack
+        onChange={setReferenceId}
+        onStatusChange={setReferenceStatus}
+        disabled={disabled || busy}
+      />
+      {errors.reference && <p className={errorClass}>{errors.reference}</p>}
 
       {custom && (
       <AdvancedControls

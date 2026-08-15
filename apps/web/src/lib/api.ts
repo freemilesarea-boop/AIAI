@@ -156,6 +156,12 @@ export interface CreateGenerationInput {
   bpm?: number | null;
   key_scale?: string | null;
   time_signature?: string | null;
+  /**
+   * A reference track uploaded through `POST /v1/reference-audio`. Only
+   * the backend-issued id is ever sent — never a filename, a path or a
+   * storage key. Omitted entirely when no reference is attached.
+   */
+  reference_audio_id?: string | null;
   /** Set when this request came from "Generate again". */
   parent_generation_id?: string | null;
   variation_label?: string | null;
@@ -498,6 +504,103 @@ export function getAudioAssetUrl(
  * `"MASTER"` is the raw generation master, not the delivery master —
  * matching it directly is how you silently serve unfinished audio.
  */
+/* ── Reference audio ───────────────────────────────────────────────── */
+
+/** What the server will accept. Read from the API, never hardcoded. */
+export interface ReferenceAudioLimits {
+  max_file_bytes: number;
+  max_duration_seconds: number;
+  supported_formats: string[];
+}
+
+/** A stored reference. `reference_id` is the only handle the UI keeps. */
+export interface ReferenceAudioAsset {
+  reference_id: string;
+  display_name: string | null;
+  duration_seconds: number;
+  sample_rate: number;
+  channels: number;
+  file_size: number;
+}
+
+/**
+ * The server's own limits.
+ *
+ * Deliberately not mirrored as frontend constants: two copies of a limit
+ * drift, and the copy the user is shown would be the one that is wrong.
+ * A failure here is surfaced rather than papered over with defaults.
+ */
+export async function fetchReferenceAudioLimits(
+  signal?: AbortSignal,
+): Promise<ReferenceAudioLimits> {
+  const res = await fetch(`${API_BASE_URL}/v1/reference-audio/limits`, { signal });
+  if (!res.ok) {
+    throw new ApiError(
+      `Reference limits unavailable: ${res.status}`,
+      res.status,
+      await readErrorCode(res),
+    );
+  }
+  const body: unknown = await res.json();
+  // The shape is checked rather than asserted. A 200 carrying the wrong
+  // body is indistinguishable from a working endpoint to a bare cast,
+  // and the first thing the UI does with it is call .map — so a
+  // malformed payload would take out the whole Create page instead of
+  // degrading to "requirements unavailable".
+  if (!isReferenceAudioLimits(body)) {
+    throw new ApiError("Reference limits response was malformed", res.status, undefined);
+  }
+  return body;
+}
+
+function isReferenceAudioLimits(value: unknown): value is ReferenceAudioLimits {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.max_file_bytes === "number" &&
+    candidate.max_file_bytes > 0 &&
+    typeof candidate.max_duration_seconds === "number" &&
+    candidate.max_duration_seconds > 0 &&
+    Array.isArray(candidate.supported_formats) &&
+    candidate.supported_formats.length > 0 &&
+    candidate.supported_formats.every((entry) => typeof entry === "string")
+  );
+}
+
+/**
+ * Upload the actual file the user picked.
+ *
+ * The browser sends the bytes; it never sends a path, and it never
+ * invents an identifier. Whatever comes back is the only thing a
+ * generation request may cite.
+ */
+export async function uploadReferenceAudio(
+  file: File,
+  signal?: AbortSignal,
+): Promise<ReferenceAudioAsset> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/v1/reference-audio`, {
+    method: "POST",
+    body,
+    signal,
+  });
+  if (!res.ok) {
+    // The backend's rejection text is written for users ("That file is
+    // larger than 40 MB"), so it is shown rather than replaced with a
+    // generic message that hides which rule was broken.
+    let detail = `Upload failed: ${res.status}`;
+    try {
+      const parsed = (await res.json()) as { detail?: unknown };
+      if (typeof parsed.detail === "string" && parsed.detail) detail = parsed.detail;
+    } catch {
+      // Non-JSON error body; the status-derived message stands.
+    }
+    throw new ApiError(detail, res.status, undefined);
+  }
+  return (await res.json()) as ReferenceAudioAsset;
+}
+
 export function findMasterAsset(generation: Generation): AudioAsset | null {
   return (
     generation.audio_assets.find((a) => a.asset_type === "FINISHED_MASTER") ??

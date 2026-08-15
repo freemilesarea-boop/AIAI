@@ -536,7 +536,7 @@ describe("generation cards", () => {
         onDismiss={vi.fn()}
       />,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Creating your music");
+    expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Creating your music");
     expect(screen.queryByText(/%/)).toBeNull();
   });
 
