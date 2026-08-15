@@ -282,12 +282,12 @@ export function GenerationForm({
   };
 
   const fieldClass =
-    "w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 " +
-    "placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none " +
-    "focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60";
+    "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-2 text-[var(--text-primary)] " +
+    "placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none " +
+    "focus-visible:ring-2 focus-visible:ring-[var(--brand)] disabled:opacity-60";
 
-  const labelClass = "block text-sm font-medium text-zinc-200";
-  const errorClass = "mt-1 text-sm text-red-400";
+  const labelClass = "block text-sm font-medium text-[var(--text-primary)]";
+  const errorClass = "mt-1 text-sm text-[var(--danger)]";
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
@@ -309,8 +309,8 @@ export function GenerationForm({
       </div>
 
       {parent && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-violet-900/60 bg-violet-950/20 px-3 py-2">
-          <p className="text-sm text-violet-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--brand-muted)] bg-[var(--brand-muted)] px-3 py-2">
+          <p className="text-sm text-[var(--brand-text)]">
             Based on <span className="font-medium">{parent.title}</span> — adjust anything
             before generating.
           </p>
@@ -318,9 +318,9 @@ export function GenerationForm({
             <button
               type="button"
               onClick={onClearParent}
-              className="rounded border border-violet-800 px-2 py-1 text-xs font-medium
-                text-violet-200 transition-colors hover:bg-violet-900/40
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+              className="rounded border border-[var(--brand-muted)] px-2 py-1 text-xs font-medium
+                text-[var(--brand-text)] transition-colors hover:bg-[var(--brand-muted)]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
             >
               Start fresh
             </button>
@@ -396,7 +396,7 @@ export function GenerationForm({
         <label htmlFor={ids.lyrics} className={labelClass}>
           Lyrics
         </label>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
           Section tags like [Verse] and [Chorus] are passed through as written. Plain lyrics
           with no tags work too.
         </p>
@@ -435,7 +435,7 @@ export function GenerationForm({
           className={`mt-1.5 resize-y font-mono text-sm leading-relaxed ${fieldClass}`}
         />
         {instrumental && (
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
             Instrumental selected — lyrics are not used.
           </p>
         )}
@@ -592,11 +592,11 @@ export function GenerationForm({
         <button
           type="submit"
           disabled={disabled || busy}
-          className="rounded-lg bg-violet-600 px-6 py-3 text-base font-semibold text-white
-            transition-colors hover:bg-violet-500 focus-visible:outline-none
-            focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2
+          className="rounded-lg bg-[var(--brand)] px-6 py-3 text-base font-semibold text-white
+            transition-colors hover:bg-[var(--brand)] focus-visible:outline-none
+            focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2
             focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed
-            disabled:bg-violet-900 disabled:text-zinc-400"
+            disabled:bg-[var(--brand-muted)] disabled:text-[var(--text-secondary)]"
         >
           {busy ? "Sending…" : "Create"}
         </button>

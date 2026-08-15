@@ -89,25 +89,25 @@ export function SongPresets({
   };
 
   const chipClass =
-    "inline-flex min-h-9 items-center rounded-lg border border-zinc-700 px-3 " +
-    "text-xs font-medium text-zinc-300 " +
-    "transition-colors hover:border-violet-600 hover:text-violet-200 " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 " +
+    "inline-flex min-h-9 items-center rounded-lg border border-[var(--border-strong)] px-3 " +
+    "text-xs font-medium text-[var(--text-secondary)] " +
+    "transition-colors hover:border-[var(--brand)] hover:text-[var(--brand-text)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] " +
     "disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
-    <details className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
-      <summary className="cursor-pointer select-none text-sm font-medium text-zinc-200 marker:text-zinc-600">
-        Song presets <span className="font-normal text-zinc-500">— optional</span>
+    <details className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] px-4 py-3">
+      <summary className="cursor-pointer select-none text-sm font-medium text-[var(--text-primary)] marker:text-[var(--text-muted)]">
+        Song presets <span className="font-normal text-[var(--text-muted)]">— optional</span>
       </summary>
 
-      <p className="mt-2 text-xs text-zinc-500">
+      <p className="mt-2 text-xs text-[var(--text-muted)]">
         A preset sets the length and drops in a section skeleton. It never writes lyrics for
         you, and section tags guide the model rather than forcing it.
       </p>
 
       <div className="mt-3">
-        <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Presets</h4>
+        <h4 className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">Presets</h4>
         <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Song presets">
           {SONG_PRESETS.map((preset) => (
             <button
@@ -119,7 +119,7 @@ export function SongPresets({
               className={chipClass}
             >
               {preset.name}
-              <span className="ml-1.5 text-zinc-500">
+              <span className="ml-1.5 text-[var(--text-muted)]">
                 {formatDurationLabel(preset.duration)}
               </span>
             </button>
@@ -128,7 +128,7 @@ export function SongPresets({
       </div>
 
       <div className="mt-4">
-        <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
           Structure only
         </h4>
         <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Structure templates">
@@ -142,7 +142,7 @@ export function SongPresets({
               className={chipClass}
             >
               {template.name}
-              <span className="ml-1.5 text-zinc-500">{template.sections.length}</span>
+              <span className="ml-1.5 text-[var(--text-muted)]">{template.sections.length}</span>
             </button>
           ))}
         </div>
@@ -152,9 +152,9 @@ export function SongPresets({
         <div
           role="alertdialog"
           aria-label="Apply structure to existing lyrics"
-          className="mt-4 rounded-lg border border-amber-900/60 bg-amber-950/20 p-3"
+          className="mt-4 rounded-lg border border-[var(--accent-muted)] bg-[var(--accent-muted)] p-3"
         >
-          <p className="text-sm text-amber-100">
+          <p className="text-sm text-[var(--text-primary)]">
             You already have lyrics. Add the {pending.template.name} structure after them, or
             replace what you have written?
           </p>
@@ -162,27 +162,27 @@ export function SongPresets({
             <button
               type="button"
               onClick={() => resolve(false)}
-              className="inline-flex min-h-9 items-center rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white
-                transition-colors hover:bg-violet-500 focus-visible:outline-none
-                focus-visible:ring-2 focus-visible:ring-violet-400"
+              className="inline-flex min-h-9 items-center rounded-lg bg-[var(--brand)] px-3 text-xs font-semibold text-white
+                transition-colors hover:bg-[var(--brand)] focus-visible:outline-none
+                focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
             >
               Add after my lyrics
             </button>
             <button
               type="button"
               onClick={() => resolve(true)}
-              className="inline-flex min-h-9 items-center rounded-lg border border-amber-700 px-3 text-xs font-semibold
-                text-amber-200 transition-colors hover:bg-amber-900/40
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              className="inline-flex min-h-9 items-center rounded-lg border border-[var(--accent)] px-3 text-xs font-semibold
+                text-[var(--accent)] transition-colors hover:bg-[var(--accent-muted)]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
             >
               Replace my lyrics
             </button>
             <button
               type="button"
               onClick={() => setPending(null)}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium
-                text-zinc-300 transition-colors hover:bg-zinc-800
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+              className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-medium
+                text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-overlay)]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)]"
             >
               Cancel
             </button>

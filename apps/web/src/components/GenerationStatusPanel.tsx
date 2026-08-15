@@ -38,7 +38,7 @@ export function GenerationStatusPanel({
   return (
     <section
       aria-labelledby={headingId}
-      className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6"
+      className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] p-6"
     >
       <h2 id={headingId} className="sr-only">
         Generation status
@@ -47,7 +47,7 @@ export function GenerationStatusPanel({
       <div className="flex items-center gap-3">
         <span
           aria-hidden="true"
-          className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-zinc-700 border-t-violet-400"
+          className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-violet-400"
         />
         {/* The visible headline is itself the live region, so screen
             readers announce each state change exactly once. */}
@@ -55,13 +55,13 @@ export function GenerationStatusPanel({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="text-lg font-medium text-zinc-100"
+          className="text-lg font-medium text-[var(--text-primary)]"
         >
           {label}
         </p>
       </div>
 
-      <p className="mt-2 text-sm text-zinc-400">
+      <p className="mt-2 text-sm text-[var(--text-secondary)]">
         Elapsed <span className="font-mono tabular-nums">{formatElapsed(elapsedSeconds)}</span>
       </p>
 
@@ -73,13 +73,13 @@ export function GenerationStatusPanel({
             <li
               key={step}
               className={`flex items-center gap-2.5 text-sm ${
-                active ? "text-zinc-100" : done ? "text-zinc-500" : "text-zinc-600"
+                active ? "text-[var(--text-primary)]" : done ? "text-[var(--text-muted)]" : "text-[var(--text-muted)]"
               }`}
             >
               <span
                 aria-hidden="true"
                 className={`h-1.5 w-1.5 rounded-full ${
-                  active ? "bg-violet-400" : done ? "bg-zinc-600" : "bg-zinc-800"
+                  active ? "bg-[var(--brand)]" : done ? "bg-[var(--border-strong)]" : "bg-[var(--surface-overlay)]"
                 }`}
               />
               {statusLabel(step)}
@@ -90,7 +90,7 @@ export function GenerationStatusPanel({
         })}
       </ol>
 
-      <p className="mt-5 text-xs text-zinc-500">
+      <p className="mt-5 text-xs text-[var(--text-muted)]">
         You can leave this page open. Refreshing will reconnect to this generation.
       </p>
     </section>

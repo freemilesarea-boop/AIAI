@@ -17,14 +17,14 @@ export interface AdvisoryListProps {
 }
 
 const LEVEL_STYLES: Record<string, { dot: string; label: string }> = {
-  warning: { dot: "bg-amber-400", label: "Warning" },
-  info: { dot: "bg-sky-400", label: "Note" },
+  warning: { dot: "bg-[var(--accent)]", label: "Warning" },
+  info: { dot: "bg-[var(--info)]", label: "Note" },
 };
 
 export function AdvisoryList({ advisories, checking = false }: AdvisoryListProps) {
   if (advisories.length === 0) {
     return checking ? (
-      <p className="mt-2 text-xs text-zinc-500" role="status">
+      <p className="mt-2 text-xs text-[var(--text-muted)]" role="status">
         Checking lyrics…
       </p>
     ) : null;
@@ -39,13 +39,13 @@ export function AdvisoryList({ advisories, checking = false }: AdvisoryListProps
   return (
     <section
       aria-labelledby="advisory-heading"
-      className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3"
+      className="mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] p-3"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h3 id="advisory-heading" className="text-sm font-medium text-zinc-200">
+        <h3 id="advisory-heading" className="text-sm font-medium text-[var(--text-primary)]">
           Suggestions ({ordered.length})
         </h3>
-        <p className="text-xs text-zinc-500">Advice only — these never block generation.</p>
+        <p className="text-xs text-[var(--text-muted)]">Advice only — these never block generation.</p>
       </div>
 
       <ul className="mt-2 flex flex-col gap-2" role="status" aria-live="polite">
@@ -57,7 +57,7 @@ export function AdvisoryList({ advisories, checking = false }: AdvisoryListProps
                 aria-hidden="true"
                 className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`}
               />
-              <span className="text-zinc-300">
+              <span className="text-[var(--text-secondary)]">
                 <span className="sr-only">{style.label}: </span>
                 {advisory.message}
               </span>

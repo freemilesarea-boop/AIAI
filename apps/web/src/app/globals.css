@@ -43,6 +43,12 @@
   --danger-muted: #3a1b1b;
   --success: #3fbf7f;
 
+  /* Informational, distinct from "warning". Advisories come in both
+     levels and must not look alike: a note about sparse lyrics is not
+     the same claim as a warning about an out-of-range value. */
+  --info: #4cb2e8;
+  --info-muted: #14293a;
+
   /* Radius scale. */
   --radius-sm: 6px;
   --radius-md: 10px;

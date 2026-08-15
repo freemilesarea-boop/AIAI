@@ -30,6 +30,15 @@ vi.mock("next/navigation", () => ({
 
 /** SongCard consumes the player context, so any page that renders
  *  cards must be mounted inside the provider — same as in the app. */
+/**
+ * Every page render goes through here.
+ *
+ * The root layout mounts `PlayerProvider` around the whole app, so any
+ * page containing a play control is always inside it in production.
+ * Rendering one bare in a test is not a lighter-weight version of the
+ * real thing — it is a different tree, in which `usePlayer()` throws
+ * during render.
+ */
 function renderWithPlayer(ui: React.ReactNode) {
   return render(<PlayerProvider>{ui}</PlayerProvider>);
 }
@@ -191,13 +200,13 @@ describe("create modes", () => {
 
   it("lands in Simple mode", () => {
     stub();
-    render(<CreatePage />);
+    renderWithPlayer(<CreatePage />);
     expect(screen.getByRole("tab", { name: "Simple" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("Simple mode hides the advanced surface entirely", () => {
     stub();
-    render(<CreatePage />);
+    renderWithPlayer(<CreatePage />);
     // A first-time user must reach Create without meeting any of this.
     expect(screen.queryByLabelText("BPM")).toBeNull();
     expect(screen.queryByLabelText("Key / Scale")).toBeNull();
@@ -213,7 +222,7 @@ describe("create modes", () => {
   it("Custom mode reveals the advanced surface", async () => {
     const user = userEvent.setup();
     stub();
-    render(<CreatePage />);
+    renderWithPlayer(<CreatePage />);
     await user.click(screen.getByRole("tab", { name: "Custom" }));
     expect(screen.getByLabelText("BPM")).toBeInTheDocument();
     expect(screen.getByLabelText("Duration")).toBeInTheDocument();
@@ -224,7 +233,7 @@ describe("create modes", () => {
   it("a Simple generation submits without touching anything advanced", async () => {
     const user = userEvent.setup();
     const fetchMock = stub();
-    render(<CreatePage />);
+    renderWithPlayer(<CreatePage />);
     await user.type(screen.getByLabelText("Title"), "Quick Song");
     await user.type(screen.getByLabelText("Music description"), "Warm lo-fi");
     await user.click(screen.getByLabelText("Lyrics"));
@@ -265,7 +274,7 @@ describe("prompt chips", () => {
   it("edit the description the user can see", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn(async () => json({ advisories: [], sections: [], preamble_line_count: 0, estimated_syllables: 0 })));
-    render(<CreatePage />);
+    renderWithPlayer(<CreatePage />);
     await user.click(screen.getByRole("button", { name: "Pop" }));
     // The chip's effect is visible in the textarea, not hidden in a payload.
     expect(screen.getByLabelText("Music description")).toHaveValue("Pop");
@@ -277,7 +286,7 @@ describe("prompt chips", () => {
 describe("library", () => {
   it("shows an honest empty state rather than demo songs", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [], total: 0, limit: 20, offset: 0 })));
-    render(<LibraryPage />);
+    renderWithPlayer(<LibraryPage />);
     expect(await screen.findByText("No songs yet")).toBeInTheDocument();
   });
 
@@ -317,7 +326,7 @@ describe("library", () => {
 
   it("surfaces a connection failure without a stack trace", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("ECONNREFUSED 127.0.0.1")));
-    render(<LibraryPage />);
+    renderWithPlayer(<LibraryPage />);
     expect(await screen.findByText("Could not load your library")).toBeInTheDocument();
     expect(screen.queryByText(/ECONNREFUSED/)).toBeNull();
   });

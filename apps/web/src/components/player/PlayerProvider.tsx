@@ -71,6 +71,36 @@ export function trackFromGeneration(generation: Generation): PlayerTrack | null 
   };
 }
 
+/** Message shown whenever playback cannot start, from any cause. */
+const PLAYBACK_ERROR = "This track could not be played.";
+
+/**
+ * Start playback without assuming how `play()` reports failure.
+ *
+ * The spec says `HTMLMediaElement.play()` returns a Promise, and modern
+ * browsers do. Not everything that runs this code is a modern browser:
+ * older WebKit and some embedded webviews return `undefined`, and jsdom
+ * throws synchronously. In those environments `element.play().catch(...)`
+ * is itself the crash — a TypeError inside a click handler, which takes
+ * out the React event and leaves the UI stuck showing "playing" with no
+ * audio and no error.
+ *
+ * Every failure mode lands in the same place instead: the player's own
+ * error state, which the UI already knows how to display.
+ */
+function startPlayback(element: HTMLAudioElement, onFailure: () => void): void {
+  let result: unknown;
+  try {
+    result = element.play();
+  } catch {
+    onFailure();
+    return;
+  }
+  if (result instanceof Promise) {
+    void result.catch(onFailure);
+  }
+}
+
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [track, setTrack] = useState<PlayerTrack | null>(null);
@@ -94,9 +124,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setDuration(next.durationHint ?? 0);
         element.src = next.src;
       }
-      void element.play().catch(() => {
+      startPlayback(element, () => {
         setPlaying(false);
-        setError("This track could not be played.");
+        setError(PLAYBACK_ERROR);
       });
     },
     [track],
@@ -106,7 +136,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const element = audioRef.current;
     if (!element || !track) return;
     if (element.paused) {
-      void element.play().catch(() => setError("This track could not be played."));
+      startPlayback(element, () => {
+        setPlaying(false);
+        setError(PLAYBACK_ERROR);
+      });
     } else {
       element.pause();
     }
@@ -169,7 +202,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
     const onError = () => {
       setPlaying(false);
-      if (element.currentSrc) setError("This track could not be played.");
+      if (element.currentSrc) setError(PLAYBACK_ERROR);
     };
     element.addEventListener("play", onPlay);
     element.addEventListener("pause", onPause);

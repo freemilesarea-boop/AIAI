@@ -21,12 +21,12 @@ export function GenerationFailure({ error, onRetry, onDismiss }: GenerationFailu
   return (
     <section
       aria-labelledby="generation-failure-heading"
-      className="rounded-xl border border-red-900/60 bg-red-950/30 p-6"
+      className="rounded-xl border border-[var(--danger-muted)] bg-[var(--danger-muted)] p-6"
     >
-      <h2 id="generation-failure-heading" className="text-lg font-semibold text-red-200">
+      <h2 id="generation-failure-heading" className="text-lg font-semibold text-[var(--danger)]">
         Generation failed
       </h2>
-      <p role="alert" className="mt-2 text-sm text-red-100/90">
+      <p role="alert" className="mt-2 text-sm text-[var(--text-primary)]">
         {error.message}
       </p>
       <div className="mt-5 flex flex-wrap gap-3">
@@ -34,9 +34,9 @@ export function GenerationFailure({ error, onRetry, onDismiss }: GenerationFailu
           <button
             type="button"
             onClick={onRetry}
-            className="rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white
-              transition-colors hover:bg-violet-500 focus-visible:outline-none
-              focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2
+            className="rounded-lg bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white
+              transition-colors hover:bg-[var(--brand)] focus-visible:outline-none
+              focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2
               focus-visible:ring-offset-zinc-950"
           >
             Retry
@@ -46,9 +46,9 @@ export function GenerationFailure({ error, onRetry, onDismiss }: GenerationFailu
           <button
             type="button"
             onClick={onDismiss}
-            className="rounded-lg bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-100
-              transition-colors hover:bg-zinc-700 focus-visible:outline-none
-              focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2
+            className="rounded-lg bg-[var(--surface-overlay)] px-5 py-2.5 text-sm font-semibold text-[var(--text-primary)]
+              transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none
+              focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] focus-visible:ring-offset-2
               focus-visible:ring-offset-zinc-950"
           >
             Start over

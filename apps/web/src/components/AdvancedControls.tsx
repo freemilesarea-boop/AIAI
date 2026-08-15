@@ -60,25 +60,25 @@ export function AdvancedControls({
   const anySet = Boolean(bpm || keyScale || timeSignature);
 
   const fieldClass =
-    "w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 " +
-    "placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none " +
-    "focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60";
-  const labelClass = "block text-sm font-medium text-zinc-200";
-  const hintClass = "mt-1 text-xs text-zinc-500";
+    "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-2 text-[var(--text-primary)] " +
+    "placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none " +
+    "focus-visible:ring-2 focus-visible:ring-[var(--brand)] disabled:opacity-60";
+  const labelClass = "block text-sm font-medium text-[var(--text-primary)]";
+  const hintClass = "mt-1 text-xs text-[var(--text-muted)]";
 
   return (
     <details
       open={defaultOpen || anySet}
-      className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3"
+      className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-raised)] px-4 py-3"
     >
-      <summary className="cursor-pointer select-none text-sm font-medium text-zinc-200 marker:text-zinc-600">
+      <summary className="cursor-pointer select-none text-sm font-medium text-[var(--text-primary)] marker:text-[var(--text-muted)]">
         Advanced controls{" "}
-        <span className="font-normal text-zinc-500">
+        <span className="font-normal text-[var(--text-muted)]">
           — optional{anySet ? " · in use" : ""}
         </span>
       </summary>
 
-      <p className="mt-2 text-xs text-zinc-500">
+      <p className="mt-2 text-xs text-[var(--text-muted)]">
         Leave any of these empty and the model chooses for you, exactly as it does today.
         Only values the pinned ACE-Step engine accepts are offered.
       </p>
@@ -103,7 +103,7 @@ export function AdvancedControls({
             className={`mt-1.5 ${fieldClass}`}
           />
           {bpmError ? (
-            <p id={`${ids.bpm}-error`} className="mt-1 text-sm text-red-400">
+            <p id={`${ids.bpm}-error`} className="mt-1 text-sm text-[var(--danger)]">
               {bpmError}
             </p>
           ) : (
@@ -161,9 +161,9 @@ export function AdvancedControls({
           type="button"
           onClick={onClear}
           disabled={disabled}
-          className="mt-3 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium
-            text-zinc-300 transition-colors hover:bg-zinc-800 focus-visible:outline-none
-            focus-visible:ring-2 focus-visible:ring-zinc-400"
+          className="mt-3 rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-medium
+            text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-overlay)] focus-visible:outline-none
+            focus-visible:ring-2 focus-visible:ring-[var(--border-strong)]"
         >
           Clear advanced controls
         </button>
