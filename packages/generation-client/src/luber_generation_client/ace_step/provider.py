@@ -300,7 +300,7 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider, AudioToAudi
         except (AceStepApiError, httpx.HTTPError) as exc:
             raise GenerationProviderError(
                 f"ACE-Step task submission failed: {exc}",
-                error_code=self._classify_upstream_error(str(exc)),
+                error_code=self._classify_api_error(exc),
             ) from exc
 
         return await self._collect_result(
@@ -519,7 +519,7 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider, AudioToAudi
         except (AceStepApiError, httpx.HTTPError) as exc:
             raise GenerationProviderError(
                 f"ACE-Step cover submission failed: {exc}",
-                error_code=self._classify_upstream_error(str(exc)),
+                error_code=self._classify_api_error(exc),
             ) from exc
 
         return await self._collect_result(
@@ -544,7 +544,7 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider, AudioToAudi
         except (AceStepApiError, httpx.HTTPError) as exc:
             raise GenerationProviderError(
                 f"ACE-Step edit submission failed: {exc}",
-                error_code=self._classify_upstream_error(str(exc)),
+                error_code=self._classify_api_error(exc),
             ) from exc
 
         return await self._collect_result(
@@ -613,6 +613,20 @@ class AceStepProvider(MusicGenerationProvider, AudioEditingProvider, AudioToAudi
                 error_code=ErrorCode.INVALID_AUDIO,
             )
         return frames / sample_rate, sample_rate
+
+    @staticmethod
+    def _classify_api_error(exc: Exception) -> ErrorCode:
+        """Prefer the HTTP status the engine actually sent.
+
+        A full queue is the one upstream failure that is purely about
+        timing — ACE-Step answers 429 and the identical request succeeds
+        once a slot frees. Reading it out of the status code rather than
+        the message means the classification does not depend on wording
+        the engine is free to change.
+        """
+        if getattr(exc, "status_code", None) == 429:
+            return ErrorCode.PROVIDER_BUSY
+        return AceStepProvider._classify_upstream_error(str(exc))
 
     @staticmethod
     def _classify_upstream_error(message: str) -> ErrorCode:

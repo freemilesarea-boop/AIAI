@@ -37,6 +37,7 @@ from luber_generation_client.postprocess import produce_delivery_assets
 from luber_generation_client.service import GenerationService
 from luber_schemas import (
     AssetType,
+    ErrorCode,
     FinishingOutcome,
     GenerationStatus,
     select_delivery_master,
@@ -365,6 +366,14 @@ class TestServiceIntegration:
         A future engine version could decline where an earlier one acted.
         Left in place, the old row would keep winning delivery selection
         while pointing at bytes the current decision never endorsed.
+
+        Reached here the way production reaches it. A COMPLETED
+        generation is never re-executed — Phase 18 made a duplicate
+        invocation a no-op precisely so a retry cannot replace delivered
+        audio — so the run that leaves a stale finished master behind is
+        an *interrupted* one: assets written, then cancelled before
+        mark_completed. That row is FAILED, and its retry is what can
+        decline where the first attempt acted.
         """
         import luber_generation_client.postprocess as postprocess
 
@@ -372,6 +381,14 @@ class TestServiceIntegration:
         service = GenerationService(repository, MockGenerationProvider(FIXTURE), storage)
         await service.execute(gen.id, worker_id="w1")
         assert select_finished_master(await repository.get_audio_assets(gen.id)) is not None
+
+        # The interruption: assets exist, the run never reached COMPLETED.
+        await repository.mark_failed(
+            gen.id,
+            status=GenerationStatus.FAILED.value,
+            error_code=ErrorCode.GENERATION_INTERRUPTED.value,
+            error_message="interrupted after assets were written",
+        )
 
         monkeypatch.setattr(
             postprocess,

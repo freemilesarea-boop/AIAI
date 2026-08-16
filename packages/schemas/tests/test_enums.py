@@ -43,4 +43,6 @@ def test_error_codes_are_stable_strings():
     # change rather than an implementation detail.
     assert ErrorCode.REFERENCE_AUDIO_UNAVAILABLE.value == "REFERENCE_AUDIO_UNAVAILABLE"
     assert ErrorCode.GENERATION_HAS_DERIVED_VERSIONS.value == "GENERATION_HAS_DERIVED_VERSIONS"
-    assert len(ErrorCode) == 10
+    assert ErrorCode.GENERATION_INTERRUPTED.value == "GENERATION_INTERRUPTED"
+    assert ErrorCode.PROVIDER_BUSY.value == "PROVIDER_BUSY"
+    assert len(ErrorCode) == 12

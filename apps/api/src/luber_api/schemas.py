@@ -493,7 +493,11 @@ class GenerationResponse(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     error_code: str | None
-    error_message: str | None
+    #: Deliberately absent: the stored ``error_message`` is a raw
+    #: exception string and can carry a filesystem path or a provider
+    #: endpoint. It stays in the database, where an operator can read it,
+    #: and never crosses this boundary — ``error_code`` is the contract
+    #: the client is meant to branch on.
     audio_assets: list[AudioAssetResponse]
 
     model_config = {"from_attributes": True}

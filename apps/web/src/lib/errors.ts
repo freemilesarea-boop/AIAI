@@ -15,6 +15,8 @@ export type ErrorCodeLike =
   | "MODEL_LOAD_FAILED"
   | "OUT_OF_MEMORY"
   | "INVALID_AUDIO"
+  | "PROVIDER_BUSY"
+  | "GENERATION_INTERRUPTED"
   | "UPLOAD_FAILED"
   | "ENCODING_FAILED"
   | "QUEUE_FAILED"
@@ -29,6 +31,15 @@ const CODE_MESSAGES: Record<string, string> = {
     "The server ran out of memory for this track. Try a shorter duration.",
   INVALID_AUDIO:
     "The generated audio could not be read. Please try generating again.",
+  // The engine's own queue was full. Nothing is wrong with the song, so
+  // the copy says "busy", not "failed" — the identical request works
+  // once a slot frees.
+  PROVIDER_BUSY:
+    "The music engine is busy right now. Your settings are fine — please try again in a moment.",
+  // The worker stopped mid-run. Usually the queue retries and this is
+  // never seen; when it is, retrying is exactly the right move.
+  GENERATION_INTERRUPTED:
+    "This track was interrupted before it finished. Please generate it again.",
   UPLOAD_FAILED: "Your track was created but could not be saved. Please try again.",
   ENCODING_FAILED: "The track could not be prepared for playback. Please try again.",
   QUEUE_FAILED:

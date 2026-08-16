@@ -15,6 +15,7 @@ raw exception strings never reach clients (they are stored in
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import tempfile
@@ -399,11 +400,27 @@ class GenerationService:
     async def execute(
         self, generation_id: UUID, *, worker_id: str | None = None
     ) -> GenerationStatus:
-        """Run one generation job to a terminal state. Returns that state."""
+        """Run one generation job to a terminal state. Returns that state.
+
+        Safe to invoke more than once for the same generation. The queue
+        retries a job whose worker was cancelled mid-flight, and that
+        retry can arrive after the work actually finished — the window
+        between :meth:`mark_completed` and the queue recording success is
+        small but real. Re-running then would replace a song the user has
+        already been given with different audio, so a generation that
+        already reached COMPLETED is left exactly as it is.
+        """
         repo = self._repository
         generation = await repo.get_generation(generation_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
+
+        if generation.status == GenerationStatus.COMPLETED.value:
+            logger.info(
+                "generation already completed; skipping duplicate execution",
+                extra={"generation_id": str(generation_id), "worker_id": worker_id},
+            )
+            return GenerationStatus.COMPLETED
 
         job = await repo.get_latest_job(generation_id)
         if job is not None:
@@ -517,6 +534,32 @@ class GenerationService:
                 },
             )
             return GenerationStatus.COMPLETED
+        except asyncio.CancelledError:
+            # Cancellation is a BaseException, so the handler below never
+            # saw it: the worker stopping mid-generation left the row
+            # claiming GENERATING with nothing running behind it, and no
+            # operator or user could tell that apart from slow progress.
+            # Record the interruption, then re-raise so the queue keeps
+            # its own retry semantics — a retry calls mark_started and
+            # moves the row straight back out of this state.
+            await repo.mark_failed(
+                generation_id,
+                status=GenerationStatus.FAILED.value,
+                error_code=ErrorCode.GENERATION_INTERRUPTED.value,
+                error_message="generation was interrupted before it finished",
+            )
+            if job is not None:
+                await repo.mark_job_finished(
+                    job.id,
+                    status=GenerationStatus.FAILED.value,
+                    error_code=ErrorCode.GENERATION_INTERRUPTED.value,
+                    error_message="generation was interrupted before it finished",
+                )
+            logger.warning(
+                "generation interrupted",
+                extra={"generation_id": str(generation_id), "worker_id": worker_id},
+            )
+            raise
         except Exception as exc:
             error_code = self._translate_error(exc)
             await repo.mark_failed(

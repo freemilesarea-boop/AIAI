@@ -77,7 +77,6 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
     started_at: null,
     completed_at: withMaster ? "2026-08-11T12:00:40Z" : null,
     error_code,
-    error_message: null,
     audio_assets: withMaster
       ? [
           {

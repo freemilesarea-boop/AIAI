@@ -77,7 +77,6 @@ function generationBody(overrides: GenerationOverrides = {}) {
     started_at: null,
     completed_at: "2026-08-11T12:00:40Z",
     error_code: null,
-    error_message: null,
     audio_assets: withMaster
       ? [
           {

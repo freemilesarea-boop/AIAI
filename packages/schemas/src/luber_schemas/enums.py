@@ -142,6 +142,19 @@ class ErrorCode(StrEnum):
     #: one. Deleting it would leave those rows claiming to descend from
     #: nothing, so the user removes the derived versions first.
     GENERATION_HAS_DERIVED_VERSIONS = "GENERATION_HAS_DERIVED_VERSIONS"
+    #: The worker was stopped, or its job cancelled, while this
+    #: generation was mid-flight. Terminal only if nothing picks the job
+    #: back up: the queue retries it, and the retry moves the row out of
+    #: this state. Recorded rather than left mid-flight because a row
+    #: still claiming GENERATING with no process behind it is a lie no
+    #: operator or user can distinguish from slow progress.
+    GENERATION_INTERRUPTED = "GENERATION_INTERRUPTED"
+    #: The engine refused the work because its own queue is full — it
+    #: answers HTTP 429 "Server busy: queue is full". Distinct from a
+    #: crash or a bad request: nothing is wrong with the song, and the
+    #: same request submitted later succeeds. Kept separate so the
+    #: product can say "busy, try again" instead of "generation failed".
+    PROVIDER_BUSY = "PROVIDER_BUSY"
     UPLOAD_FAILED = "UPLOAD_FAILED"
     ENCODING_FAILED = "ENCODING_FAILED"
     QUEUE_FAILED = "QUEUE_FAILED"

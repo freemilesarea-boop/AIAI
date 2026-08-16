@@ -141,11 +141,20 @@ class GenerationRepository:
         await self._session.commit()
 
     async def mark_started(self, generation_id: UUID, *, status: str) -> None:
+        """Begin (or begin again) a run, clearing any earlier failure.
+
+        A retry of an interrupted generation passes through here. Leaving
+        the previous attempt's ``error_code`` in place would let a song
+        that finished perfectly well arrive at the client still carrying
+        the reason its *first* attempt stopped.
+        """
         generation = await self._session.get(Generation, generation_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.status = status
         generation.started_at = _utcnow()
+        generation.error_code = None
+        generation.error_message = None
         await self._session.commit()
 
     async def record_request_trace(self, generation_id: UUID, *, trace: str) -> None:

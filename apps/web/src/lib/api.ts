@@ -130,7 +130,6 @@ export interface Generation {
   started_at: string | null;
   completed_at: string | null;
   error_code: string | null;
-  error_message: string | null;
   audio_assets: AudioAsset[];
 }
 

@@ -87,7 +87,6 @@ export function generation(overrides: Partial<Generation> = {}): Generation {
     started_at: null,
     completed_at: null,
     error_code: null,
-    error_message: null,
     audio_assets: [masterAsset(), previewAsset()],
     ...overrides,
   };

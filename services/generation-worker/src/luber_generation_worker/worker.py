@@ -74,11 +74,34 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     logger.info("generation worker stopped", extra={"worker_id": ctx.get("worker_id")})
 
 
+_CONFIG = WorkerConfig()
+
+#: The queue's timeout must sit *outside* the provider's own liveness
+#: backstop, not inside it. ARQ defaults to 300s while the ACE-Step
+#: provider allows at least ``ace_step_generation_timeout`` (1800s in
+#: this deployment) — so the queue used to cut every slow generation
+#: short, and it did so by cancelling the task. Cancellation is not a
+#: provider error: nothing was recorded against the run, and the row was
+#: left claiming GENERATING forever. Letting the provider time out first
+#: means a slow engine produces a truthful GENERATION_TIMEOUT instead.
+#: The margin covers post-processing and upload, which happen after the
+#: provider returns.
+JOB_TIMEOUT_SECONDS = int(_CONFIG.ace_step_generation_timeout) + 600
+
+#: Each attempt is a full inference run. Five (the ARQ default) means a
+#: job that keeps being interrupted can burn five times the compute of
+#: the song it is trying to produce; two bounds that while still giving
+#: an interrupted generation the one retry that actually recovers it.
+MAX_TRIES = 2
+
+
 class WorkerSettings:
     functions: ClassVar = [ping, generate]
     on_startup = startup
     on_shutdown = shutdown
     queue_name = QUEUE_NAME
-    redis_settings = RedisSettings.from_dsn(WorkerConfig().redis_url)
+    redis_settings = RedisSettings.from_dsn(_CONFIG.redis_url)
     max_jobs = 1  # one generation at a time per worker (GPU-bound later)
     health_check_interval = 30
+    job_timeout = JOB_TIMEOUT_SECONDS
+    max_tries = MAX_TRIES
