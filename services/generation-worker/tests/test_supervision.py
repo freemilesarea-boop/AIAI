@@ -153,14 +153,14 @@ class TestLaunchdAgent:
         assert "/Users/" not in template
         assert str(Path.home()) not in template
         # The machine-specific values must all still be placeholders.
-        for placeholder in ("@ARQ@", "@REPO@", "@LOG_DIR@", "@PATH@", "@LABEL@"):
+        for placeholder in ("@PYTHON@", "@REPO@", "@LOG_DIR@", "@PATH@", "@LABEL@"):
             assert placeholder in template
 
     def test_rendering_fills_every_placeholder(self):
         rendered = load_runtime_tool().render_plist()
         # The template's own explanatory comment mentions @PLACEHOLDER@,
         # so check the real placeholders rather than every "@".
-        for placeholder in ("@LABEL@", "@ARQ@", "@REPO@", "@LOG_DIR@", "@PATH@"):
+        for placeholder in ("@LABEL@", "@PYTHON@", "@REPO@", "@LOG_DIR@", "@PATH@"):
             assert placeholder not in rendered, f"{placeholder} was not filled in"
         assert "com.luber.generation-worker" in rendered
 
@@ -169,7 +169,11 @@ class TestLaunchdAgent:
         rendered = module.render_plist()
         assert "luber_generation_worker.worker.WorkerSettings" in rendered
         assert str(module.REPO_ROOT) in rendered
-        assert str(module.arq_path()) in rendered
+        assert str(module.python_path()) in rendered
+        # The interpreter, not the console script: launchd cannot exec a
+        # shebang script under a TCC-protected path such as ~/Desktop.
+        assert "<string>-m</string>" in rendered
+        assert "/bin/arq<" not in rendered
 
     def test_restart_is_throttled_and_not_unconditional(self):
         """A clean exit is a deliberate stop, not something to undo."""

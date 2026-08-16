@@ -14,6 +14,15 @@
 
   Choices worth stating:
 
+  ProgramArguments runs the interpreter with `-m arq`, not the venv's
+  `arq` console script. Both work from a shell, but launchd cannot exec
+  the console script when the repository lives under a TCC-protected
+  directory such as ~/Desktop: the script is an unsigned shebang file, and
+  the interpreter it starts is denied even the read of its own
+  pyvenv.cfg ("Operation not permitted"), which kills Python before the
+  worker's first line runs. Exec'ing the real interpreter binary and
+  passing the module avoids that entirely.
+
   KeepAlive/SuccessfulExit=false — restart when the worker dies
   unexpectedly, but not when it exits 0. A clean exit is a deliberate
   stop, and relaunching it would make `stop` impossible. Note this still
@@ -38,7 +47,9 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>@ARQ@</string>
+        <string>@PYTHON@</string>
+        <string>-m</string>
+        <string>arq</string>
         <string>luber_generation_worker.worker.WorkerSettings</string>
     </array>
 

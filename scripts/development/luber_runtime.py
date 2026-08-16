@@ -52,8 +52,17 @@ WORKER_MODULE = "luber_generation_worker.worker.WorkerSettings"
 STOP_TIMEOUT_SECONDS = 30
 
 
-def arq_path() -> Path:
-    return REPO_ROOT / ".venv" / "bin" / "arq"
+def python_path() -> Path:
+    """The venv interpreter.
+
+    Everything runs the worker as ``python -m arq`` rather than through
+    the venv's ``arq`` console script. From a shell the two are
+    equivalent; under launchd they are not, and the console script fails
+    before Python starts (see the launchd template for the detail).
+    Using one invocation everywhere keeps the supervised and manual
+    workers identical.
+    """
+    return REPO_ROOT / ".venv" / "bin" / "python3"
 
 
 def _command_of(pid: int) -> str:
@@ -131,16 +140,16 @@ def cmd_start(args: argparse.Namespace) -> int:
     if existing:
         print(f"already running (pid {existing}) — nothing to do")
         return 0
-    arq = arq_path()
-    if not arq.exists():
-        print(f"arq not found at {arq}; is the venv installed?", file=sys.stderr)
+    python = python_path()
+    if not python.exists():
+        print(f"interpreter not found at {python}; is the venv installed?", file=sys.stderr)
         return 1
     logs = log_dir()
     logs.mkdir(parents=True, exist_ok=True)
     out = (logs / "generation-worker.out.log").open("a")
     err = (logs / "generation-worker.err.log").open("a")
     process = subprocess.Popen(
-        [str(arq), WORKER_MODULE],
+        [str(python), "-m", "arq", WORKER_MODULE],
         cwd=REPO_ROOT,
         stdout=out,
         stderr=err,
@@ -193,11 +202,11 @@ def cmd_restart(args: argparse.Namespace) -> int:
     return cmd_start(args)
 
 
-def render_plist(*, arq: Path | None = None, repo: Path | None = None) -> str:
+def render_plist(*, python: Path | None = None, repo: Path | None = None) -> str:
     """Fill the launchd template with this machine's paths."""
     template = TEMPLATE.read_text()
     resolved_repo = repo or REPO_ROOT
-    resolved_arq = arq or arq_path()
+    resolved_python = python or python_path()
     # PATH needs the venv and the usual prefixes: launchd starts agents
     # with a minimal environment, and ffmpeg lives in Homebrew's.
     path = os.pathsep.join(
@@ -211,7 +220,7 @@ def render_plist(*, arq: Path | None = None, repo: Path | None = None) -> str:
     )
     return (
         template.replace("@LABEL@", LABEL)
-        .replace("@ARQ@", str(resolved_arq))
+        .replace("@PYTHON@", str(resolved_python))
         .replace("@REPO@", str(resolved_repo))
         .replace("@LOG_DIR@", str(log_dir()))
         .replace("@PATH@", path)
