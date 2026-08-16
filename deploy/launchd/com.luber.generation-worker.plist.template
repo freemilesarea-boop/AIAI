@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent template for the LUBER generation worker.
+
+  This file is a template, not an installable agent: the @PLACEHOLDER@
+  values are machine-specific and are filled in by
+
+      scripts/development/luber_runtime.py plist
+
+  which writes the result to stdout, or installs it with `plist --install`.
+  Keeping the resolved paths out of the repository is the point — a plist
+  with someone's home directory baked into it is not portable, and is not
+  something to commit.
+
+  Choices worth stating:
+
+  KeepAlive/SuccessfulExit=false — restart when the worker dies
+  unexpectedly, but not when it exits 0. A clean exit is a deliberate
+  stop, and relaunching it would make `stop` impossible. Note this still
+  relaunches on the "already running" exit (3) and on a missing
+  dependency; ThrottleInterval is what keeps that bounded rather than a
+  spin.
+
+  ThrottleInterval=30 — launchd's default is 10s. Thirty seconds is long
+  enough that a worker crash-looping against a down Redis costs almost
+  nothing, and short enough that recovery after Redis returns feels
+  immediate.
+
+  RunAtLoad=true — a login should bring the worker back.
+
+  No LimitLoadToSessionType: this is an ordinary Aqua-session user agent
+  and needs no elevation.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>@LABEL@</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@ARQ@</string>
+        <string>luber_generation_worker.worker.WorkerSettings</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>@REPO@</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>@PATH@</string>
+        <key>LUBER_LOG_DIR</key>
+        <string>@LOG_DIR@</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>ProcessType</key>
+    <string>Standard</string>
+
+    <key>StandardOutPath</key>
+    <string>@LOG_DIR@/generation-worker.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>@LOG_DIR@/generation-worker.err.log</string>
+</dict>
+</plist>

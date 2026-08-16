@@ -15,6 +15,8 @@ import uuid
 from typing import Any, ClassVar
 
 from arq.connections import RedisSettings
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from luber_audio_utils import storage_from_settings
 from luber_database import (
@@ -23,6 +25,11 @@ from luber_database import (
     create_session_factory,
 )
 from luber_generation_client import GENERATION_QUEUE_NAME, GenerationService, provider_from_settings
+from luber_generation_worker.singleton import (
+    EXIT_ALREADY_RUNNING,
+    SingleWorkerLock,
+    WorkerAlreadyRunningError,
+)
 from luber_shared import BaseServiceSettings, configure_logging
 
 logger = logging.getLogger(__name__)
@@ -57,20 +64,65 @@ async def generate(ctx: dict[str, Any], generation_id: str) -> str:
     return status.value
 
 
+async def check_database(engine: AsyncEngine) -> None:
+    """Fail fast, and say which dependency is missing.
+
+    ARQ needs Redis to start at all and reports its absence loudly, but
+    PostgreSQL is not touched until the first job — so without this a
+    worker with a bad database URL looks perfectly healthy right up to
+    the moment it drops a real generation.
+    """
+    async with engine.connect() as conn:
+        await conn.execute(text("select 1"))
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     config = WorkerConfig()
     configure_logging(service="luber-generation-worker", level=config.log_level)
+
+    # Before anything else: this machine gets one generation worker.
+    # Released by the kernel when the process dies, so there is no stale
+    # state to clean up after a crash.
+    lock = SingleWorkerLock()
+    try:
+        lock.acquire()
+    except WorkerAlreadyRunningError as exc:
+        logger.error("refusing to start: %s", exc)
+        raise SystemExit(EXIT_ALREADY_RUNNING) from exc
+    ctx["singleton_lock"] = lock
+
+    engine = create_async_engine_from_url(config.database_url)
+    try:
+        await check_database(engine)
+    except Exception:
+        # A dependency that is down is not a reason to hold the lock.
+        await engine.dispose()
+        lock.release()
+        logger.exception("refusing to start: database unreachable")
+        raise
+
+    # ACE-Step is deliberately *not* checked. A generation submitted
+    # while the engine is down fails truthfully with a stable code, so
+    # refusing to start would turn a recoverable per-job failure into an
+    # outage of the whole queue — including the jobs that would have
+    # succeeded by the time they ran.
     ctx["config"] = config
     ctx["worker_id"] = config.worker_id
-    ctx["db_engine"] = create_async_engine_from_url(config.database_url)
-    ctx["session_factory"] = create_session_factory(ctx["db_engine"])
-    logger.info("generation worker started", extra={"worker_id": config.worker_id})
+    ctx["db_engine"] = engine
+    ctx["session_factory"] = create_session_factory(engine)
+    logger.info(
+        "generation worker started",
+        extra={"worker_id": config.worker_id, "lock": str(lock.path)},
+    )
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
     engine = ctx.get("db_engine")
     if engine is not None:
         await engine.dispose()
+    lock = ctx.get("singleton_lock")
+    if lock is not None:
+        lock.release()
     logger.info("generation worker stopped", extra={"worker_id": ctx.get("worker_id")})
 
 
