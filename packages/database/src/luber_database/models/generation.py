@@ -53,6 +53,12 @@ class ReferenceAudio(Base):
     __tablename__ = "reference_audio"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    #: Owner. A reference is user-uploaded audio, so it is owned
+    #: directly rather than through whatever generation happens to use
+    #: it — a reference can exist before any generation references it.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id"), nullable=False, index=True
+    )
     #: Key under ``reference/``, never under ``audio/``.
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     #: Digest of the canonical stored bytes.
@@ -80,7 +86,13 @@ class Generation(Base):
     __tablename__ = "generations"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    #: Owner. NOT NULL since Phase 20A Part 2 — every generation belongs
+    #: to somebody, including the pre-authentication rows, which belong
+    #: to the internal legacy anchor. Authorization is Part 3; this is
+    #: the record it will read.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id"), nullable=False, index=True
+    )
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
@@ -355,8 +367,10 @@ class Project(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    #: Reserved for the authentication phase, like ``Generation.user_id``.
-    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    #: Owner, as on ``Generation``.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id"), nullable=False, index=True
+    )
     # A client-side default as well as the server one. Projects are
     # ordered by creation, and SQLite's CURRENT_TIMESTAMP has one-second
     # resolution — two projects made in the same second tie, and the

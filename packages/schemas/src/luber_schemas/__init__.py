@@ -29,6 +29,7 @@ from luber_schemas.enums import (
     VocalGender,
 )
 from luber_schemas.lineage import LineageOperation, classify_operation
+from luber_schemas.ownership import LEGACY_OWNER_EMAIL, LEGACY_OWNER_ID
 from luber_schemas.reference_audio import (
     CANONICAL_REFERENCE_CHANNELS,
     CANONICAL_REFERENCE_EXTENSION,
@@ -105,6 +106,8 @@ __all__ = [
     "DURATION_MIN",
     "DURATION_PRESETS",
     "FULL_SONG_THRESHOLD_SECONDS",
+    "LEGACY_OWNER_EMAIL",
+    "LEGACY_OWNER_ID",
     "LONG_FORM_THRESHOLD_SECONDS",
     "MAX_REFERENCE_DURATION_SECONDS",
     "MAX_REFERENCE_FILE_BYTES",

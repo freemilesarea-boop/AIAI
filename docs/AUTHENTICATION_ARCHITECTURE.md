@@ -2,12 +2,15 @@
 
 How a person proves who they are, and what the product does with that.
 
-**Part 1 of Phase 20A.** Authentication works end to end. **Nothing is
-owned yet** — every generation, project and reference is still visible
-to every caller, exactly as before. That is deliberate: ownership is
-Part 2 (legacy migration) and Part 3 (enforcement), and shipping
-half-enforced ownership would be worse than none, because the product
-would appear to isolate users while leaking.
+**Parts 1 and 2 of Phase 20A.** Authentication works end to end, and
+every row of product data now has an owner in the database.
+**Authorization still does not exist** — every generation, project and
+reference is still visible to every caller, exactly as before. That is
+deliberate: enforcement is Part 3, and shipping it half-done would be
+worse than not starting, because the product would appear to isolate
+users while leaking.
+
+Nobody's songs are private yet.
 
 ---
 
@@ -144,14 +147,57 @@ data. No scheduler was introduced.
 
 ---
 
+## Legacy ownership
+
+Pre-authentication data belongs to one internal anchor rather than to
+any person.
+
+| | |
+|---|---|
+| Email | `legacy-system@internal.luber` |
+| UUID | `e3c4d3cd-d86f-52f2-91b7-2b97f5011653` — `uuid5(NAMESPACE_DNS, email)`, so it is identical on every database |
+| `password_hash` | `NULL` |
+| Owns | 55 generations, 4 reference audio rows |
+
+It cannot become an account, and needs no special mechanism to prevent
+it. Login refuses a NULL hash before verifying anything; signup hits the
+unique email and returns 409, so the row cannot be claimed or given a
+password. Both are tested, including the case-variant address.
+
+Migration `0014` inserts the anchor, adds `reference_audio.user_id`,
+backfills only rows whose owner is NULL, verifies none remain, then adds
+the foreign keys, indexes and NOT NULL. Ordering is the safety property:
+the constraint is only reachable after the backfill is proved.
+
+**Direct ownership is three tables** — `generations`, `projects`,
+`reference_audio`. Everything else reaches an owner through
+`generation_id`. `audio_assets` deliberately has no `user_id`: a second
+owner column is a second source of truth that can disagree with the
+first.
+
+### The bridge, and how to remove it
+
+`user_id` is NOT NULL, but no code supplies an owner until Part 3. Two
+temporary pieces close that gap, and both are meant to be deleted:
+
+- `GenerationRepository` defaults a missing owner to `LEGACY_OWNER_ID`.
+  An unauthenticated create genuinely has no user behind it, and the
+  anchor records that rather than hiding it.
+- `caller_may_access` treats the anchor exactly as it used to treat
+  `NULL` — as "pre-authentication, readable". Without this the migration
+  would have switched the product off: every row owned, nobody able to
+  authenticate as the anchor, every anonymous read a 404.
+
+Grepping `LEGACY_OWNER_ID` lists everything Part 3 has to replace with
+the session user.
+
 ## Not implemented
 
 None of these exist, and no UI suggests they do:
 
 - **Ownership enforcement** — Part 3. Every generation, project,
-  reference and audio asset is currently readable by any caller.
-- **Legacy ownership migration** — Part 2. The 55 existing generations
-  and 4 references remain unowned, deliberately untouched.
+  reference and audio asset is currently readable by any caller, and
+  `X-User-Id` is still consulted by product routes.
 - **Signup and login pages** — the API exists; the UI is Part 4.
 - **Route protection** — no frontend route requires a session yet.
 - **Email verification** — an address is never confirmed.

@@ -25,6 +25,7 @@ from luber_database.models.generation import (
     Project,
     ReferenceAudio,
 )
+from luber_schemas import LEGACY_OWNER_ID
 
 
 def _utcnow() -> datetime:
@@ -92,7 +93,10 @@ class GenerationRepository:
             source_adherence=source_adherence,
             reference_audio_id=reference_audio_id,
             status=status,
-            user_id=user_id,
+            # Part 3 will make this the session user and drop the
+            # fallback. Until then an unauthenticated create is genuinely
+            # ownerless, and the anchor records that rather than hiding it.
+            user_id=user_id if user_id is not None else LEGACY_OWNER_ID,
             idempotency_key=idempotency_key,
         )
         self._session.add(generation)
@@ -492,6 +496,7 @@ class GenerationRepository:
         channels: int,
         file_size: int,
         display_name: str | None,
+        user_id: UUID | None = None,
     ) -> ReferenceAudio:
         """Record an uploaded reference track.
 
@@ -514,6 +519,8 @@ class GenerationRepository:
             channels=channels,
             file_size=file_size,
             display_name=display_name,
+            # As on generations: Part 3 supplies the session user here.
+            user_id=user_id if user_id is not None else LEGACY_OWNER_ID,
         )
         self._session.add(reference)
         await self._session.commit()
@@ -738,7 +745,7 @@ class GenerationRepository:
     # ── Projects (Phase 11) ───────────────────────────────────────────
 
     async def create_project(self, *, name: str, user_id: UUID | None = None) -> Project:
-        project = Project(name=name, user_id=user_id)
+        project = Project(name=name, user_id=user_id if user_id is not None else LEGACY_OWNER_ID)
         self._session.add(project)
         await self._session.commit()
         await self._session.refresh(project)

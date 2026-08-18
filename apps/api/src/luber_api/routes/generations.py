@@ -57,6 +57,7 @@ from luber_database.models.generation import AudioAsset, Generation, GenerationQ
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
     FULL_SONG_THRESHOLD_SECONDS,
+    LEGACY_OWNER_ID,
     Advisory,
     AssetType,
     EditKind,
@@ -232,14 +233,21 @@ def serialize_generation(generation: Generation) -> GenerationResponse:
 def caller_may_access(generation: Generation, caller: uuid.UUID | None) -> bool:
     """Whether *caller* is allowed to read this generation's assets.
 
-    Generations created before authentication exists carry no owner and
-    stay readable, which keeps local development and the Phase 3 flow
-    working. Once a generation *is* owned, only that owner may read it —
-    so the authorization boundary is real and enforced today, and
-    swapping in a full auth system later means changing only how the
-    caller identity is derived.
+    Pre-authentication data stays readable. That used to mean
+    ``user_id IS NULL``; since Phase 20A Part 2 the same rows carry the
+    internal legacy anchor instead, because the column is now NOT NULL
+    and every row needs an owner. The anchor *is* the "no real user
+    behind this" marker, so it is treated exactly as NULL was.
+
+    Without this the migration would have silently switched the product
+    off: every row would be owned, nobody can authenticate as the anchor,
+    and every anonymous read would 404.
+
+    Part 3 deletes this function. Once the session supplies the caller
+    and every route scopes its queries, "readable because it is old" is
+    not a rule the product should still have.
     """
-    if generation.user_id is None:
+    if generation.user_id is None or generation.user_id == LEGACY_OWNER_ID:
         return True
     return caller is not None and caller == generation.user_id
 
