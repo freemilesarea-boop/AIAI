@@ -30,12 +30,16 @@ from luber_database.models.generation import (
     Project,
     ReferenceAudio,
 )
+from luber_database.models.user import Session, User
 from luber_generation_client import MockGenerationProvider
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_WAV = REPO_ROOT / "tests" / "fixtures" / "mock_generation.wav"
 
 GENERATION_TABLES = [
+    # Auth tables first: sessions carries a foreign key to users.
+    User.__table__,
+    Session.__table__,
     ReferenceAudio.__table__,
     Generation.__table__,
     GenerationJob.__table__,

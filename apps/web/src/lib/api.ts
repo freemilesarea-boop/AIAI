@@ -12,8 +12,18 @@
 
 import type { Advisory, PreflightResponse } from "@/lib/songcraft";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+/**
+ * Where the browser sends API requests.
+ *
+ * Empty by default, which makes every call a same-origin `/api/...`
+ * path handled by the Next rewrite. That is deliberate: a same-origin
+ * request carries the `SameSite=Lax` session cookie, while a direct
+ * call to the backend's own port would not.
+ *
+ * The override exists for server-side rendering and tests, which have
+ * no origin of their own to be same as.
+ */
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export interface HealthResponse {
   status: string;
@@ -21,7 +31,7 @@ export interface HealthResponse {
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${API_BASE_URL}/health`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/health`, { cache: "no-store", credentials: "include" });
   if (!res.ok) {
     throw new Error(`Health check failed: ${res.status}`);
   }
@@ -242,6 +252,7 @@ export async function createGeneration(
   signal?: AbortSignal,
 ): Promise<CreateGenerationResponse> {
   const res = await fetch(`${API_BASE_URL}/v1/generations`, {
+    credentials: "include",
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -277,6 +288,7 @@ export async function preflightGeneration(
   signal?: AbortSignal,
 ): Promise<PreflightResponse> {
   const res = await fetch(`${API_BASE_URL}/v1/generations/preflight`, {
+    credentials: "include",
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -298,7 +310,7 @@ export async function getGeneration(
 ): Promise<Generation> {
   const res = await fetch(
     `${API_BASE_URL}/v1/generations/${encodeURIComponent(generationId)}`,
-    { cache: "no-store", signal },
+    { cache: "no-store", signal, credentials: "include" },
   );
   if (!res.ok) {
     throw new ApiError(
@@ -317,7 +329,7 @@ export async function listGenerations(
 ): Promise<GenerationListResponse> {
   const res = await fetch(
     `${API_BASE_URL}/v1/generations?limit=${limit}&offset=${offset}`,
-    { cache: "no-store", signal },
+    { cache: "no-store", signal, credentials: "include" },
   );
   if (!res.ok) {
     throw new ApiError(
@@ -541,7 +553,10 @@ export interface ReferenceAudioAsset {
 export async function fetchReferenceAudioLimits(
   signal?: AbortSignal,
 ): Promise<ReferenceAudioLimits> {
-  const res = await fetch(`${API_BASE_URL}/v1/reference-audio/limits`, { signal });
+  const res = await fetch(`${API_BASE_URL}/v1/reference-audio/limits`, {
+    signal,
+    credentials: "include",
+  });
   if (!res.ok) {
     throw new ApiError(
       `Reference limits unavailable: ${res.status}`,
@@ -589,6 +604,7 @@ export async function uploadReferenceAudio(
   const body = new FormData();
   body.append("file", file);
   const res = await fetch(`${API_BASE_URL}/v1/reference-audio`, {
+    credentials: "include",
     method: "POST",
     body,
     signal,
@@ -637,7 +653,13 @@ export interface Project {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store", ...init });
+  // The session cookie rides on every request. Same-origin would send
+  // it regardless; explicit keeps it true if the base URL is overridden.
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    cache: "no-store",
+    credentials: "include",
+    ...init,
+  });
   if (!res.ok) {
     throw new ApiError(`${init?.method ?? "GET"} ${path} failed: ${res.status}`, res.status,
       await readErrorCode(res));

@@ -7,8 +7,37 @@ def test_users_table_registered():
 
 
 def test_user_columns():
+    # password_hash added by Phase 20A. The set is asserted exactly so a
+    # column cannot appear here unnoticed — anything on this table is a
+    # candidate for leaking through an API response.
     cols = {c.name for c in User.__table__.columns}
-    assert cols == {"id", "email", "display_name", "created_at"}
+    assert cols == {"id", "email", "password_hash", "display_name", "created_at"}
+
+
+def test_password_hash_is_nullable():
+    """A user without a usable hash cannot be logged into.
+
+    Part 2 relies on this: the ownership anchor for legacy rows is an
+    account with no password rather than one with a password nobody
+    knows.
+    """
+    assert User.__table__.columns["password_hash"].nullable
+
+
+def test_session_columns():
+    from luber_database.models.user import Session
+
+    cols = {c.name for c in Session.__table__.columns}
+    assert cols == {"id", "token_hash", "user_id", "created_at", "expires_at"}
+
+
+def test_sessions_store_a_digest_not_a_token():
+    """The column is named and sized for a SHA-256 hex digest."""
+    from luber_database.models.user import Session
+
+    token_hash = Session.__table__.columns["token_hash"]
+    assert token_hash.type.length == 64
+    assert token_hash.unique
 
 
 def test_email_has_unique_index():

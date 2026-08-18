@@ -35,7 +35,7 @@ from urllib.request import urlopen
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from luber_database import create_async_engine_from_url
+from luber_database import AuthRepository, create_async_engine_from_url, create_session_factory
 from luber_shared import BaseServiceSettings
 
 #: A generation older than this in a non-terminal state is reported as
@@ -394,14 +394,39 @@ async def run_checks(
     return checks
 
 
+async def prune_sessions(settings: BaseServiceSettings) -> int:
+    """Delete expired sessions. The only mutation in this file.
+
+    Safe by construction: an expired session already fails to
+    authenticate, so this reclaims rows rather than revoking access, and
+    the query cannot reach a user or any product data.
+    """
+    engine = create_async_engine_from_url(settings.database_url)
+    try:
+        factory = create_session_factory(engine)
+        async with factory() as session:
+            return await AuthRepository(session).delete_expired_sessions(now=datetime.now(UTC))
+    finally:
+        await engine.dispose()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument(
+        "--prune-sessions",
+        action="store_true",
+        help="delete expired sessions and exit (the one mutating action here)",
+    )
     parser.add_argument("--api", default="http://127.0.0.1:8000")
     parser.add_argument("--web", default="http://127.0.0.1:3000")
     args = parser.parse_args()
 
     settings = BaseServiceSettings()
+    if args.prune_sessions:
+        removed = asyncio.run(prune_sessions(settings))
+        print(f"removed {removed} expired session(s)")
+        return 0
     # Resolved here rather than inside the coroutine: filesystem calls in
     # an async function are a lint error, and this one only needs doing once.
     storage_root = Path(settings.audio_storage_dir).resolve()

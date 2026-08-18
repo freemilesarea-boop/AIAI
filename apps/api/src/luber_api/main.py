@@ -16,6 +16,7 @@ from redis.asyncio import Redis
 
 from luber_api.jobs import ArqGenerationEnqueuer, InlineGenerationRunner
 from luber_api.middleware import RequestIdMiddleware
+from luber_api.routes.auth import router as auth_router
 from luber_api.routes.generations import router as generations_router
 from luber_api.routes.health import router as health_router
 from luber_api.routes.projects import assign_router as project_assign_router
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(auth_router)
     app.include_router(health_router)
     app.include_router(generations_router)
     app.include_router(reference_audio_router)

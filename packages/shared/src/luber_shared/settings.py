@@ -83,6 +83,17 @@ class BaseServiceSettings(BaseSettings):
     #: Optional key prefix so one bucket can serve several environments.
     storage_key_prefix: str = ""
 
+    # --- authentication ------------------------------------------
+    #: How long a session stays valid, server-side. Two weeks: long
+    #: enough that a person is not logging in daily, short enough that
+    #: an abandoned session on a shared machine expires by itself.
+    session_lifetime_seconds: int = 14 * 24 * 60 * 60
+    #: Attempts per window per client address, for signup and login
+    #: separately. Ten is generous for a human and useless for a
+    #: credential-stuffing run.
+    auth_rate_limit_attempts: int = 10
+    auth_rate_limit_window_seconds: int = 15 * 60
+
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
