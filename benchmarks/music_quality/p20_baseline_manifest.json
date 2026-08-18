@@ -1,0 +1,35 @@
+{
+  "baseline_id": "luber-baseline-p20-v1",
+  "frozen_at": "2026-08-18T02:22:56Z",
+  "purpose": "Frozen reference for every future model comparison. Scores against this baseline are only comparable to scores produced with an identical entry here.",
+  "measures": "RAW model master only. The Phase 14 finished master is a delivery artefact and is never the model benchmark.",
+  "luber": {
+    "git_commit": "5a1d0674851a097c37612fb8b63e65946e2a02f2",
+    "branch": "claude/luber-music-generative-ai-wqtfm1",
+    "finishing_version": "p14-v1"
+  },
+  "engine": {
+    "name": "ACE-Step",
+    "git_commit": "6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0",
+    "model": "acestep-v15-turbo",
+    "inference_steps": 8,
+    "thinking": "false",
+    "provider": "ace_step",
+    "base_url_note": "loopback on the development host; not recorded verbatim"
+  },
+  "benchmark": {
+    "version": "p20",
+    "file": "benchmarks/music_quality/prompts/BENCHMARK_P20.json",
+    "sha256": "78dcb22ad9a1de8800667aa9befae13cf2653b0063e6cff7fb16b4a80dfffe13",
+    "case_count": 28,
+    "rubric": "benchmarks/music_quality/listening/RUBRIC_P20.md",
+    "taxonomy": "benchmarks/music_quality/listening/TAXONOMY.md"
+  },
+  "hardware": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.12.11",
+    "accelerator": "Apple Silicon / MLX"
+  },
+  "human_scores": "PENDING - no human listening has been performed against this baseline. Any overall quality figure quoted before that pass is complete is not a measurement."
+}

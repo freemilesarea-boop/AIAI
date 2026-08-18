@@ -61,3 +61,12 @@ models/**/*.bin
 
 # Local audio storage output
 data/
+
+# Phase 20: benchmark and dataset artefacts stay out of git.
+# Audio is large, often not ours to redistribute, and reproducible from
+# the frozen manifest. Manifests and metadata are committed; audio,
+# derived features and checkpoints are not.
+benchmarks/music_quality/results/p20_objective_baseline.json
+datasets/
+*.ckpt
+*.safetensors

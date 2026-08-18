@@ -1,0 +1,327 @@
+{
+  "benchmark_version": "p20",
+  "created": "2026-08-16",
+  "supersedes_for_listening": "v1",
+  "description": "Phase 20 quality-baseline suite. Deliberately smaller than v1 (60 cases): a human listening pass has to be finishable in a few sittings, and 60 cases is how a baseline ends up half-scored. Every case here earns its place by testing something a human listener reported as wrong. Fixed and version-controlled — prompts are never edited to chase a better score. Any change requires a new benchmark_version, and only identical versions are compared.",
+  "lyrics_policy": "All lyrics are original text written for this benchmark. No commercial or copyrighted lyrics appear anywhere in this file. No artist names are used in any prompt.",
+  "raw_only": "Scores describe the RAW model master. The Phase 14 finished master is evaluated separately and must never stand in for model quality.",
+  "sets": {
+    "GEN": "General coverage across genre, language and vocal presentation.",
+    "TROT": "Anti-trot probes. Each prompt explicitly asks for restrained contemporary delivery. If the trot-like phrasing survives an explicit instruction not to do it, the bias is in the model rather than the prompt — which decides whether this is a prompting problem or a training problem.",
+    "KO": "Korean lyric stress set. Evaluation-only, never trainable. Expected lyrics are preserved verbatim so omission, reordering and phonetic corruption can be scored, and so ASR alignment can be added later without regenerating.",
+    "LONG": "Long-form structural integrity."
+  },
+  "prompts": [
+    {
+      "prompt_id": "GEN-01",
+      "set": "GEN",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["hook strength", "verse/chorus contrast", "vocal timbre"],
+      "prompt": "bright contemporary K-pop, clean female vocal, strong chorus lift, tight modern drums",
+      "lyrics": "[Verse]\n창문 너머 번지는 아침\n어제보다 조금 가벼워\n\n[Chorus]\n오늘은 내가 나를 믿어\n멀리 더 멀리 갈 거야"
+    },
+    {
+      "prompt_id": "GEN-02",
+      "set": "GEN",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["pitch stability", "emotional appropriateness", "low-mid clarity"],
+      "prompt": "modern Korean ballad, restrained male vocal, piano and strings, slow build",
+      "lyrics": "[Verse]\n비가 오면 네 생각이 나\n아직 그 자리에 서 있어\n\n[Chorus]\n괜찮다고 말하고 싶어\n조금 더 시간이 필요해"
+    },
+    {
+      "prompt_id": "GEN-03",
+      "set": "GEN",
+      "genre": "RNB",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["groove", "vocal naturalness", "stereo depth"],
+      "prompt": "smooth Korean R&B, warm female vocal, laid-back groove, rich electric piano",
+      "lyrics": "[Verse]\n느리게 흐르는 이 밤에\n네 목소리가 스며들어\n\n[Chorus]\n조금만 더 가까이 와\n이대로 멈춰도 좋아"
+    },
+    {
+      "prompt_id": "GEN-04",
+      "set": "GEN",
+      "genre": "INDIE",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["instrument realism", "transient quality", "genre appropriateness"],
+      "prompt": "Korean indie pop, jangly electric guitars, live drum feel, unpolished intimate male vocal",
+      "lyrics": "[Verse]\n골목 끝 낡은 간판 아래\n우리는 계속 걷고 있었지\n\n[Chorus]\n어디로 가는지 몰라도\n지금은 그냥 이대로"
+    },
+    {
+      "prompt_id": "GEN-05",
+      "set": "GEN",
+      "genre": "BAND",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["instrument separation", "energy progression", "harshness"],
+      "prompt": "Korean rock band, driving drums, distorted guitars, energetic male vocal, live room sound",
+      "lyrics": "[Verse]\n숨을 참고 달려온 하루\n무너질 것 같았지만\n\n[Chorus]\n소리쳐 봐 지금 여기서\n아직 끝난 게 아니야"
+    },
+    {
+      "prompt_id": "GEN-06",
+      "set": "GEN",
+      "genre": "POP",
+      "language": "en",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["commercial plausibility", "presence", "sibilance"],
+      "prompt": "contemporary English pop, bright female vocal, punchy chorus, modern polished production",
+      "lyrics": "[Verse]\nCounting all the quiet hours\nWaiting for the light to turn\n\n[Chorus]\nI can feel it coming closer\nEverything I had to learn"
+    },
+    {
+      "prompt_id": "GEN-07",
+      "set": "GEN",
+      "genre": "RNB",
+      "language": "en",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["vocal timbre", "low end", "depth"],
+      "prompt": "English R&B, soulful male vocal, deep bass, sparse arrangement, spacious reverb",
+      "lyrics": "[Verse]\nSlow down, the room is turning\nNothing here I need to prove\n\n[Chorus]\nStay a while, the night is early\nI'll be here when you move"
+    },
+    {
+      "prompt_id": "GEN-08",
+      "set": "GEN",
+      "genre": "ROCK",
+      "language": "en",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["transient quality", "high-frequency detail", "arrangement"],
+      "prompt": "guitar-driven alternative rock, raw male vocal, dynamic drums, natural room ambience",
+      "lyrics": "[Verse]\nBurning through the static\nEverything I never said\n\n[Chorus]\nHold the line a little longer\nRun it back inside my head"
+    },
+    {
+      "prompt_id": "GEN-09",
+      "set": "GEN",
+      "genre": "EDM",
+      "language": "en",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["stereo width", "high-frequency excess", "energy progression"],
+      "prompt": "melodic electronic dance, airy female vocal, wide synth pads, clean build and drop",
+      "lyrics": "[Verse]\nLights across the water\nMoving like a pulse\n\n[Chorus]\nTake me where the night begins\nEverything dissolves"
+    },
+    {
+      "prompt_id": "GEN-10",
+      "set": "GEN",
+      "genre": "LOFI",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "duration": 60,
+      "tests": ["timbral realism", "noise floor", "repetition control"],
+      "prompt": "lo-fi instrumental beat, dusty piano, soft drums, warm tape character",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "GEN-11",
+      "set": "GEN",
+      "genre": "JAZZ",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "duration": 60,
+      "tests": ["instrument realism", "separation", "dynamics"],
+      "prompt": "small jazz trio, upright bass, brushed drums, acoustic piano, natural dynamics",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "GEN-12",
+      "set": "GEN",
+      "genre": "ACOUSTIC",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["timbral realism", "vocal naturalness", "space"],
+      "prompt": "acoustic Korean folk pop, fingerpicked guitar, soft female vocal, intimate close recording",
+      "lyrics": "[Verse]\n작은 마당에 바람이 불면\n오래된 노래가 떠올라\n\n[Chorus]\n천천히 걸어가도 괜찮아\n길은 아직 남아 있으니"
+    },
+
+    {
+      "prompt_id": "TROT-01",
+      "set": "TROT",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["trot suppression under explicit instruction"],
+      "prompt": "contemporary restrained Korean pop vocal, minimal vibrato, no trot-like ornaments, straight modern phrasing, clean studio production",
+      "lyrics": "[Verse]\n조용한 아침 공기 속에서\n천천히 눈을 떠 봐\n\n[Chorus]\n서두르지 않아도 돼\n오늘은 나를 위한 날"
+    },
+    {
+      "prompt_id": "TROT-02",
+      "set": "TROT",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["trot suppression", "vibrato control"],
+      "prompt": "modern Korean ballad, understated male vocal, no exaggerated vibrato, no trot inflection, contemporary indie production",
+      "lyrics": "[Verse]\n말없이 앉아 있던 저녁\n창밖은 조용했어\n\n[Chorus]\n기다린다는 말 대신\n그냥 여기 있을게"
+    },
+    {
+      "prompt_id": "TROT-03",
+      "set": "TROT",
+      "genre": "RNB",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 60,
+      "tests": ["trot suppression", "melodic ornament control"],
+      "prompt": "Korean R&B with flat modern vocal delivery, no melisma, no trot ornamentation, dry close vocal, minimal arrangement",
+      "lyrics": "[Verse]\n반복되는 하루 끝에서\n한 번쯤 쉬어 가고 싶어\n\n[Chorus]\n아무 말 하지 않아도\n너는 알 것 같아서"
+    },
+    {
+      "prompt_id": "TROT-04",
+      "set": "TROT",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 60,
+      "tests": ["trot suppression", "baseline comparison against TROT-01"],
+      "prompt": "young contemporary Korean pop, natural speaking-level male vocal, no vibrato, no trot-like inflection, no old-fashioned ornaments, crisp modern mix",
+      "lyrics": "[Verse]\n버스 창에 기대어 앉아\n음악을 크게 틀었어\n\n[Chorus]\n어디든 갈 수 있을 것 같아\n지금 이 기분 그대로"
+    },
+
+    {
+      "prompt_id": "KO-01",
+      "set": "KO",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 30,
+      "tests": ["short lines", "lyric completeness"],
+      "prompt": "simple Korean pop, clear female vocal, sparse backing so every syllable is audible",
+      "lyrics": "[Verse]\n하늘이 맑아\n바람이 분다\n너를 생각해\n오늘도 웃어"
+    },
+    {
+      "prompt_id": "KO-02",
+      "set": "KO",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 30,
+      "tests": ["long lines", "phrase omission"],
+      "prompt": "slow Korean ballad, clear female vocal, minimal piano so the lyric is fully exposed",
+      "lyrics": "[Verse]\n오래전에 우리가 함께 걷던 그 길은 아직 그대로인데\n이제는 혼자서 그 길을 천천히 걸어가고 있어"
+    },
+    {
+      "prompt_id": "KO-03",
+      "set": "KO",
+      "genre": "HIPHOP",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 30,
+      "tests": ["dense syllables", "syllable timing", "rap-like density"],
+      "prompt": "Korean hip-hop, clear male rap delivery, simple beat, vocal well forward in the mix",
+      "lyrics": "[Verse]\n어제의 나와 오늘의 내가 다시 만나서 이야기해\n빠르게 흘러가는 시간 속에서 중심을 잡고 걸어가"
+    },
+    {
+      "prompt_id": "KO-04",
+      "set": "KO",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 30,
+      "tests": ["English words inside Korean", "code-switch pronunciation"],
+      "prompt": "Korean pop with English phrases, clear female vocal, clean modern production",
+      "lyrics": "[Verse]\n오늘 밤은 special해\nJust one more time 말해줘\n\n[Chorus]\nEvery day 너와 함께\n그걸로 충분해"
+    },
+    {
+      "prompt_id": "KO-05",
+      "set": "KO",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 30,
+      "tests": ["repeated chorus", "repetition fidelity", "wrong order"],
+      "prompt": "Korean pop with a repeating chorus, clear female vocal, consistent delivery each repeat",
+      "lyrics": "[Chorus]\n같이 가자 지금\n같이 가자 다시\n\n[Chorus]\n같이 가자 지금\n같이 가자 다시"
+    },
+    {
+      "prompt_id": "KO-06",
+      "set": "KO",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 30,
+      "tests": ["slow phrasing", "sustained vowels", "pronunciation under sustain"],
+      "prompt": "very slow Korean ballad, sustained male vocal notes, sparse piano only",
+      "lyrics": "[Verse]\n멀어져 가는 그 뒷모습을\n오래도록 바라보았어"
+    },
+    {
+      "prompt_id": "KO-07",
+      "set": "KO",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 30,
+      "tests": ["fast phrasing", "syllable compression"],
+      "prompt": "up-tempo Korean pop, fast clear female vocal delivery, driving beat",
+      "lyrics": "[Verse]\n조금 더 빠르게 조금 더 가볍게 지금 이 순간을 지나가\n뒤돌아보지 마 앞으로 계속 달려가 볼래"
+    },
+    {
+      "prompt_id": "KO-08",
+      "set": "KO",
+      "genre": "ACOUSTIC",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 30,
+      "tests": ["difficult consonant clusters", "phonetic corruption"],
+      "prompt": "quiet acoustic Korean song, very clear female vocal, single guitar, no reverb",
+      "lyrics": "[Verse]\n낯선 골목길 끝에서\n밝은 햇빛이 쏟아졌어\n짧은 순간이었지만\n깊게 남아 있어"
+    },
+
+    {
+      "prompt_id": "LONG-01",
+      "set": "LONG",
+      "genre": "KPOP",
+      "language": "ko",
+      "vocal_gender": "female",
+      "duration": 120,
+      "tests": ["structural drift", "late-song repetition"],
+      "prompt": "Korean pop with clear verse chorus verse chorus structure, female vocal, consistent energy",
+      "lyrics": "[Verse]\n하루가 지나가고 또 하루가 와\n변한 건 없는 것 같지만\n\n[Chorus]\n조금씩 자라고 있어\n보이지 않아도 괜찮아\n\n[Verse]\n어제의 걱정은 멀어지고\n새로운 아침이 밝아와\n\n[Chorus]\n조금씩 자라고 있어\n보이지 않아도 괜찮아"
+    },
+    {
+      "prompt_id": "LONG-02",
+      "set": "LONG",
+      "genre": "BALLAD",
+      "language": "ko",
+      "vocal_gender": "male",
+      "duration": 180,
+      "tests": ["long-form coherence", "energy collapse", "vocal degradation", "abrupt end"],
+      "prompt": "full-length Korean ballad, male vocal, gradual build from piano to full arrangement, clear ending",
+      "lyrics": "[Verse]\n처음 만난 그날의 공기를\n아직도 기억하고 있어\n\n[Chorus]\n시간이 흘러도 남아 있는\n작은 마음 하나\n\n[Verse]\n계절이 몇 번을 지나가고\n우리는 조금 달라졌지만\n\n[Chorus]\n시간이 흘러도 남아 있는\n작은 마음 하나\n\n[Bridge]\n돌아갈 수 없다는 걸 알아도\n그래도 괜찮아"
+    },
+    {
+      "prompt_id": "LONG-03",
+      "set": "LONG",
+      "genre": "EDM",
+      "language": "en",
+      "vocal_gender": "instrumental",
+      "duration": 180,
+      "tests": ["long-form drift", "repetition excess", "early fade"],
+      "prompt": "instrumental melodic electronic track with clear sections, evolving arrangement, defined ending",
+      "lyrics": ""
+    },
+    {
+      "prompt_id": "LONG-04",
+      "set": "LONG",
+      "genre": "ROCK",
+      "language": "en",
+      "vocal_gender": "male",
+      "duration": 120,
+      "tests": ["arrangement collapse", "energy progression"],
+      "prompt": "alternative rock with verse chorus bridge structure, male vocal, building dynamics, full band ending",
+      "lyrics": "[Verse]\nSomewhere past the quiet edge\nI stopped counting all the days\n\n[Chorus]\nAnd it carries on regardless\nEvery step a different way\n\n[Verse]\nMorning found me still awake\nHolding on to what I know\n\n[Chorus]\nAnd it carries on regardless\nNowhere left for it to go"
+    }
+  ]
+}
