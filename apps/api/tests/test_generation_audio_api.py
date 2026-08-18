@@ -13,6 +13,9 @@ import pytest
 from luber_api.routes.generations import build_download_filename
 from luber_audio_utils import AudioStorageError, LocalAudioStorage
 
+#: Fixture rows need an owner now; a stable pretend user.
+OWNER_FOR_TESTS = uuid.UUID("11111111-1111-4111-8111-111111111111")
+
 CREATE_PAYLOAD = {
     "title": "Midnight Window",
     "prompt": "Dreamy Korean indie pop",
@@ -85,7 +88,7 @@ async def test_generation_without_master_returns_404(client, app):
     from luber_schemas import GenerationStatus
 
     async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
+        repo = GenerationRepository(session, owner=OWNER_FOR_TESTS)
         generation = await repo.create_generation(
             title="No Audio",
             prompt="p",

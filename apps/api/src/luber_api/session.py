@@ -18,7 +18,6 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, Response, status
 
-from luber_api.dependencies import get_session_factory
 from luber_api.security import hash_session_token
 from luber_api.settings import ApiSettings, get_settings
 from luber_database import AuthRepository
@@ -78,7 +77,10 @@ def clear_session_cookie(response: Response, *, settings: ApiSettings) -> None:
 
 
 async def get_auth_repository(request: Request) -> AsyncIterator[AuthRepository]:
-    factory = get_session_factory(request)
+    # Read from app state directly rather than importing the dependency
+    # module: that module needs require_current_user from here, and one
+    # of the two edges has to go.
+    factory = request.app.state.session_factory
     async with factory() as session:
         yield AuthRepository(session)
 

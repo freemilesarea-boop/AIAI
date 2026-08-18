@@ -15,6 +15,9 @@ from luber_database import GenerationRepository
 from luber_database.models.generation import Generation
 from luber_schemas import GenerationStatus
 
+#: Fixture rows need an owner now; a stable pretend user.
+OWNER_FOR_TESTS = uuid.UUID("11111111-1111-4111-8111-111111111111")
+
 LEGACY_PAYLOAD = {
     "title": "PHASE 7 SONG",
     "prompt": "Dreamy Korean indie pop",
@@ -26,10 +29,15 @@ LEGACY_PAYLOAD = {
 }
 
 
-async def _insert_generation(app, **overrides) -> Generation:
-    """Insert a row directly, for states the API cannot create itself."""
+async def _insert_generation(app, owner=None, **overrides) -> Generation:
+    """Insert a row directly, for states the API cannot create itself.
+
+    Defaults to the owner the fixtures use so the authenticated client
+    can read it back; pass ``owner`` explicitly to build another user's
+    row for an ownership test.
+    """
     async with app.state.session_factory() as session:
-        repository = GenerationRepository(session)
+        repository = GenerationRepository(session, owner=owner or OWNER_FOR_TESTS)
         defaults = dict(
             title="DIRECT ROW",
             prompt="p",
@@ -67,8 +75,9 @@ async def test_legacy_request_without_advanced_controls_still_succeeds(client):
 
 
 async def test_legacy_row_predating_phase8_serializes_with_nulls(client, app):
-    # A Phase 3-7 row: advisories and trace were never written.
-    row = await _insert_generation(app, title="OLD ROW")
+    # A Phase 3-7 row: advisories and trace were never written. Owned by
+    # the caller, because an unowned row is now correctly a 404.
+    row = await _insert_generation(app, owner=uuid.UUID(client.user_id), title="OLD ROW")
     detail = (await client.get(f"/v1/generations/{row.id}")).json()
     assert detail["advisories"] == []
     assert detail["request_trace"] is None
@@ -321,15 +330,25 @@ async def test_inaccessible_parent_is_indistinguishable_from_a_missing_one(clien
 
 
 async def test_the_owner_may_use_their_own_generation_as_a_parent(client, app):
-    owner = uuid.uuid4()
-    owned = await _insert_generation(app, title="MINE", user_id=owner)
+    """Identity comes from the session, so no header is involved."""
+    owned = await _insert_generation(app, owner=uuid.UUID(client.user_id), title="MINE")
 
     resp = await client.post(
         "/v1/generations",
         json=dict(LEGACY_PAYLOAD, parent_generation_id=str(owned.id)),
-        headers={"X-User-Id": str(owner)},
     )
     assert resp.status_code == 202
+
+
+async def test_another_users_generation_cannot_be_used_as_a_parent(client, client_b, app):
+    """A foreign parent must fail as though it does not exist."""
+    theirs = await _insert_generation(app, owner=uuid.UUID(client_b.user_id), title="THEIRS")
+
+    resp = await client.post(
+        "/v1/generations",
+        json=dict(LEGACY_PAYLOAD, parent_generation_id=str(theirs.id)),
+    )
+    assert resp.status_code in (404, 422)
 
 
 async def test_variation_label_without_a_parent_is_rejected(client):

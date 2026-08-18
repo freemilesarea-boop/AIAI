@@ -51,13 +51,13 @@ from luber_api.schemas import (
     ReplaceRangeRequest,
     SectionSummary,
 )
+from luber_api.session import enforce_trusted_origin, require_current_user
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationHasDescendantsError, GenerationRepository
 from luber_database.models.generation import AudioAsset, Generation, GenerationQA, LyricLineQA
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
     FULL_SONG_THRESHOLD_SECONDS,
-    LEGACY_OWNER_ID,
     Advisory,
     AssetType,
     EditKind,
@@ -75,7 +75,14 @@ from luber_schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1/generations", tags=["generations"])
+router = APIRouter(
+    prefix="/v1/generations",
+    tags=["generations"],
+    # Every product route: a session, and for unsafe methods an origin
+    # this deployment serves. Applied at the router so a route added
+    # later is protected by default rather than by remembering.
+    dependencies=[Depends(require_current_user), Depends(enforce_trusted_origin)],
+)
 
 IDEMPOTENCY_KEY_MAX_LENGTH = 200
 
@@ -230,46 +237,6 @@ def serialize_generation(generation: Generation) -> GenerationResponse:
     )
 
 
-def caller_may_access(generation: Generation, caller: uuid.UUID | None) -> bool:
-    """Whether *caller* is allowed to read this generation's assets.
-
-    Pre-authentication data stays readable. That used to mean
-    ``user_id IS NULL``; since Phase 20A Part 2 the same rows carry the
-    internal legacy anchor instead, because the column is now NOT NULL
-    and every row needs an owner. The anchor *is* the "no real user
-    behind this" marker, so it is treated exactly as NULL was.
-
-    Without this the migration would have silently switched the product
-    off: every row would be owned, nobody can authenticate as the anchor,
-    and every anonymous read would 404.
-
-    Part 3 deletes this function. Once the session supplies the caller
-    and every route scopes its queries, "readable because it is old" is
-    not a rule the product should still have.
-    """
-    if generation.user_id is None or generation.user_id == LEGACY_OWNER_ID:
-        return True
-    return caller is not None and caller == generation.user_id
-
-
-def get_caller_user_id(
-    x_user_id: Annotated[str | None, Header(alias="X-User-Id")] = None,
-) -> uuid.UUID | None:
-    """Identity of the requesting user, if one was supplied.
-
-    A placeholder for the authentication phase: it establishes *where*
-    identity enters the request so the ownership check has something to
-    compare against. A malformed value is treated as anonymous rather
-    than as an error, so it can never be used to probe for valid ids.
-    """
-    if not x_user_id:
-        return None
-    try:
-        return uuid.UUID(x_user_id)
-    except ValueError:
-        return None
-
-
 @router.post(
     "",
     status_code=status.HTTP_202_ACCEPTED,
@@ -279,7 +246,6 @@ async def create_generation(
     payload: GenerationCreateRequest,
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
-    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> GenerationCreateResponse:
     if idempotency_key is not None and len(idempotency_key) > IDEMPOTENCY_KEY_MAX_LENGTH:
@@ -310,7 +276,7 @@ async def create_generation(
         # Lineage must not become an existence oracle for other people's
         # generations, and it must not let a caller attach their work to
         # a parent they cannot read.
-        if parent is None or not caller_may_access(parent, caller):
+        if parent is None:
             raise HTTPException(status_code=422, detail="parent generation not found")
 
     advisory_json = json.dumps([advisory.to_dict() for advisory in advisories], ensure_ascii=False)
@@ -514,7 +480,6 @@ async def get_generation_audio(
     generation_id: uuid.UUID,
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     storage: Annotated[AudioStorage, Depends(get_audio_storage)],
-    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
     asset: Annotated[AudioAssetKind, Query()] = AudioAssetKind.MASTER,
     download: Annotated[bool, Query()] = False,
 ) -> Response:
@@ -530,7 +495,7 @@ async def get_generation_audio(
     Authorization is identical in both cases and always happens first.
     """
     generation = await repository.get_generation(generation_id)
-    if generation is None or not caller_may_access(generation, caller):
+    if generation is None:
         # Same response for "absent" and "not yours": ownership is not
         # an existence oracle.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
@@ -620,7 +585,6 @@ async def _editable_parent(
     generation_id: uuid.UUID,
     repository: GenerationRepository,
     storage: AudioStorage,
-    caller: uuid.UUID | None,
     *,
     verb: str,
 ) -> tuple[Generation, float]:
@@ -637,7 +601,7 @@ async def _editable_parent(
     parent = await repository.get_generation(generation_id)
     # Same answer for "no such generation" and "not yours", matching the
     # rule this module already applies to audio reads and lineage.
-    if parent is None or not caller_may_access(parent, caller):
+    if parent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
 
     if parent.status != GenerationStatus.COMPLETED.value:
@@ -668,7 +632,6 @@ async def cover_generation(
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
     storage: Annotated[AudioStorage, Depends(get_audio_storage)],
-    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
 ) -> GenerationCreateResponse:
     """Create a new performance of a song in a different style.
 
@@ -683,7 +646,7 @@ async def cover_generation(
     the user supplies. No engine vocabulary appears in this contract.
     """
     parent, source_seconds = await _editable_parent(
-        generation_id, repository, storage, caller, verb="covered"
+        generation_id, repository, storage, verb="covered"
     )
     adherence = COVER_STRENGTH_TO_ADHERENCE[payload.strength]
 
@@ -726,7 +689,6 @@ async def replace_generation_range(
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
     storage: Annotated[AudioStorage, Depends(get_audio_storage)],
-    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
 ) -> GenerationCreateResponse:
     """Regenerate one interior span of a song and keep the rest.
 
@@ -740,7 +702,7 @@ async def replace_generation_range(
     in the engine's terms.
     """
     parent, source_seconds = await _editable_parent(
-        generation_id, repository, storage, caller, verb="edited"
+        generation_id, repository, storage, verb="edited"
     )
 
     if payload.end_seconds > source_seconds + ENGINE_LATENT_FRAME_SECONDS:
@@ -802,7 +764,6 @@ async def extend_generation(
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
     storage: Annotated[AudioStorage, Depends(get_audio_storage)],
-    caller: Annotated[uuid.UUID | None, Depends(get_caller_user_id)],
 ) -> GenerationCreateResponse:
     """Append newly generated music to the end of an existing song.
 
@@ -818,7 +779,7 @@ async def extend_generation(
     are exactly what conditioned the audio being continued.
     """
     parent, source_seconds = await _editable_parent(
-        generation_id, repository, storage, caller, verb="extended"
+        generation_id, repository, storage, verb="extended"
     )
     total_seconds = source_seconds + payload.seconds
     if total_seconds > EXTENSION_TOTAL_MAX_SECONDS:

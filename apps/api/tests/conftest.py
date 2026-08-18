@@ -86,10 +86,47 @@ async def app(tmp_path) -> FastAPI:
     await engine.dispose()
 
 
+#: Every authenticated fixture signs up through the real route, so the
+#: session under test is one the product actually issues. There is no
+#: test-only bypass: a suite that skips the session dependency cannot
+#: prove the boundary it exists to prove.
+TEST_PASSWORD = "correct horse battery staple"
+
+
+async def _sign_up(http: AsyncClient, email: str) -> str:
+    """Create an account and leave its session cookie on the client."""
+    response = await http.post("/v1/auth/signup", json={"email": email, "password": TEST_PASSWORD})
+    assert response.status_code == 201, response.text
+    return str(response.json()["id"])
+
+
 @pytest.fixture
-async def client(app: FastAPI):
+async def anon_client(app: FastAPI):
+    """No session. For asserting that product routes refuse anonymity."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        yield c
+
+
+@pytest.fixture
+async def client(app: FastAPI):
+    """The default product client: authenticated as user A.
+
+    Product routes require a session, so the ordinary fixture carries
+    one. Tests that care about anonymity ask for ``anon_client``.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        c.user_id = await _sign_up(c, "user-a@example.com")  # type: ignore[attr-defined]
+        yield c
+
+
+@pytest.fixture
+async def client_b(app: FastAPI):
+    """A second, unrelated account. The adversary in ownership tests."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        c.user_id = await _sign_up(c, "user-b@example.com")  # type: ignore[attr-defined]
         yield c
 
 

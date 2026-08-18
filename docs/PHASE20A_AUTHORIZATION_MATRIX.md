@@ -4,24 +4,41 @@ Every route the API serves, what it must require, and what it must
 answer. Built by enumerating the live OpenAPI schema — 32 operations, no
 route inferred from a filename.
 
-**This is the specification for Part 3, not a description of today.** The
-"current" column is what the running code does; the rest is what it must
-do. Nothing here is implemented yet.
+**Implemented and verified.** This was the Part 3 specification; it is
+now a record of enforced behaviour. Every row below is covered by an
+automated test, and the cross-user and legacy cases were additionally
+exercised against the running stack with two real browser-equivalent
+sessions.
 
 ---
 
-## Status today
+## Status
 
 | | |
 |---|---|
 | Authentication | works (Part 1) |
 | Ownership recorded in the database | yes (Part 2) |
-| **Ownership enforced by routes** | **no** |
+| **Ownership enforced by routes** | **yes (Part 3)** |
 
-26 product operations currently serve any caller. `caller_may_access`
-exists but treats the legacy anchor as public, so every one of the 55
-historical generations is readable, playable and downloadable by anyone
-who can reach the API.
+All 26 product operations require a session. `caller_may_access` and
+`get_caller_user_id` are deleted; `X-User-Id` is read nowhere. The 55
+historical generations belong to an account that cannot log in and are
+unreachable through every product route.
+
+### How enforcement works
+
+Scoping lives on the repository rather than in each route.
+`get_repository` builds `GenerationRepository(session, owner=user.id)`
+from the authenticated session, and every query adds
+`WHERE user_id = :owner`. A route cannot obtain an unscoped repository
+through the request dependency, so forgetting a filter is not a mistake a
+route is able to make. Seventeen methods each taking a `user_id` would
+have been seventeen chances to forget one.
+
+Unscoped construction still exists for the ARQ worker and maintenance
+tooling, which have no session and operate on rows the API already
+established ownership for. Creating a product row through an unscoped
+repository raises rather than inventing an owner.
 
 ## The matrix
 
@@ -50,9 +67,9 @@ and an auth failure would look like an outage.
 | POST | `/v1/auth/logout` | no | — | **yes** | 204 | — |
 | GET | `/v1/auth/me` | **yes** | self | — | **401** | — |
 
-Origin checking is already applied to this router (Part 1).
+Origin checking was applied to this router in Part 1 and is unchanged.
 
-### Generations — all must become authenticated and scoped
+### Generations — authenticated and scoped
 
 | Method | Path | AUTH | SCOPE | ORIGIN | ANON | CROSS |
 |---|---|---|---|---|---|---|
@@ -134,27 +151,27 @@ That is the correct outcome and it is intended. They are not reassigned
 to anybody. P20 verification uses direct database and storage tooling,
 which is what the benchmark scripts already do.
 
-## What Part 3 must change
+## What Part 3 changed
 
 1. **Router-level dependencies** — `require_current_user` and
    `enforce_trusted_origin` on the generations, projects and
-   reference-audio routers, so a new route is protected by default
-   rather than by remembering.
-2. **Owner-scoped repository methods** — roughly 15 of the 42 existing
-   methods gain a `user_id` parameter and a `WHERE` clause.
-3. **Delete three things**: `get_caller_user_id`, `caller_may_access`,
-   and the `LEGACY_OWNER_ID` fallbacks in `GenerationRepository`
-   (generations, projects, reference audio). Removing the fallback is
-   what stops new data being attributed to the anchor.
-4. **Update the tests.** 382 client calls across 14 product test files
-   are currently anonymous and will all return 401. They must be given
-   real sessions — not a testing bypass, which would leave the suite
-   unable to prove the boundary it exists to prove.
-5. **Add adversarial coverage** — two users, cross-user 404 on every
-   resource type, `X-User-Id` spoof, legacy corpus invisible, fresh user
-   sees an empty library.
+   reference-audio routers, so a route added later is protected by
+   default rather than by remembering.
+2. **Repository-level scoping** — the owner is bound once at
+   construction; `_owned()` adds the predicate to every query and
+   `_fetch_owned()` replaced fourteen `session.get` calls.
+3. **Deleted** `get_caller_user_id`, `caller_may_access`, and the
+   `LEGACY_OWNER_ID` creation fallbacks. Creation now takes the owner
+   from the session or raises.
+4. **Tests given real sessions** — `client` is authenticated,
+   `anon_client` is not, `client_b` is the adversary. No testing bypass:
+   the suite exercises the real session dependency.
+5. **Adversarial coverage** — 59 tests covering every product operation
+   anonymously, cross-user access to every resource type, header
+   spoofing, the legacy corpus, bulk safety and origin enforcement.
 
-Step 3 is the atomic part. Removing the fallback while any route still
-creates data without a session produces rows the database rejects; adding
-scoping to some routes and not others produces a product that looks
-private and is not. They land together or not at all.
+Step 3 was the atomic part, and it landed with steps 1 and 2 in one
+change: removing the fallback while any route still created data without
+a session would produce rows the database rejects, and scoping some
+routes and not others would produce a product that looks private and is
+not.

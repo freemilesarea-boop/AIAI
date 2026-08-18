@@ -202,8 +202,8 @@ class TestMe:
         assert response.status_code == 200
         assert response.json()["email"] == "a@example.com"
 
-    async def test_an_anonymous_caller_gets_401(self, client):
-        assert (await client.get("/v1/auth/me")).status_code == 401
+    async def test_an_anonymous_caller_gets_401(self, anon_client):
+        assert (await anon_client.get("/v1/auth/me")).status_code == 401
 
     async def test_a_made_up_cookie_gets_401(self, client):
         client.cookies.set(SESSION_COOKIE_NAME, "not-a-real-token")

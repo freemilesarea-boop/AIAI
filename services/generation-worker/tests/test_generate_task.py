@@ -5,6 +5,7 @@ Redis needed) — the same code path a real ARQ worker executes when the
 API enqueues a generation_id.
 """
 
+import uuid
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,9 @@ from luber_generation_worker.worker import (
     generate,
 )
 from luber_schemas import GenerationStatus
+
+#: Fixture rows need an owner now; a stable pretend user.
+OWNER_FOR_TESTS = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_WAV = REPO_ROOT / "tests" / "fixtures" / "mock_generation.wav"
@@ -50,7 +54,7 @@ def test_generate_task_is_registered():
 async def test_generate_task_completes_generation(engine, tmp_path):
     session_factory = create_session_factory(engine)
     async with session_factory() as session:
-        repo = GenerationRepository(session)
+        repo = GenerationRepository(session, owner=OWNER_FOR_TESTS)
         gen = await repo.create_generation(
             title="TEST SONG",
             prompt="Dreamy Korean indie pop",
@@ -77,7 +81,7 @@ async def test_generate_task_completes_generation(engine, tmp_path):
     assert result == "COMPLETED"
 
     async with session_factory() as session:
-        repo = GenerationRepository(session)
+        repo = GenerationRepository(session, owner=OWNER_FOR_TESTS)
         fetched = await repo.get_generation(gen.id)
         assert fetched.status == GenerationStatus.COMPLETED.value
         assets = await repo.get_audio_assets(gen.id)

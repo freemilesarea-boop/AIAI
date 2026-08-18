@@ -26,9 +26,17 @@ from luber_api.schemas import (
     ProjectListResponse,
     ProjectResponse,
 )
+from luber_api.session import enforce_trusted_origin, require_current_user
 from luber_database import GenerationRepository
 
-router = APIRouter(prefix="/v1/projects", tags=["projects"])
+router = APIRouter(
+    prefix="/v1/projects",
+    tags=["projects"],
+    # Every product route: a session, and for unsafe methods an origin
+    # this deployment serves. Applied at the router so a route added
+    # later is protected by default rather than by remembering.
+    dependencies=[Depends(require_current_user), Depends(enforce_trusted_origin)],
+)
 
 
 async def _to_response(repository: GenerationRepository, project: object) -> ProjectResponse:
@@ -127,7 +135,14 @@ async def list_project_generations(
     )
 
 
-assign_router = APIRouter(prefix="/v1/generations", tags=["projects"])
+assign_router = APIRouter(
+    prefix="/v1/generations",
+    tags=["projects"],
+    # Every product route: a session, and for unsafe methods an origin
+    # this deployment serves. Applied at the router so a route added
+    # later is protected by default rather than by remembering.
+    dependencies=[Depends(require_current_user), Depends(enforce_trusted_origin)],
+)
 
 
 @assign_router.put("/{generation_id}/project", response_model=GenerationResponse)

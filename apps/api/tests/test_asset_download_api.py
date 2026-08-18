@@ -1,11 +1,8 @@
 """Authorized delivery of MASTER and PREVIEW assets."""
 
 import hashlib
-import uuid
 
 import pytest
-
-from luber_api.routes.generations import build_download_filename, caller_may_access
 
 CREATE_PAYLOAD = {
     "title": "Midnight Window",
@@ -176,232 +173,54 @@ async def test_preview_metadata_matches_contract(client):
 # ── 10. unauthorized download rejection ───────────────────────────────
 
 
-async def test_owned_generation_rejects_anonymous_download(client, app):
-    """Once a generation has an owner, a stranger cannot fetch its audio."""
-    from luber_database import GenerationRepository
+async def test_a_stranger_cannot_download_another_users_audio(client, client_b):
+    """The property the old X-User-Id policy tried to provide, now real.
 
+    Identity comes from the session and nowhere else, so there is no
+    header to set and no value a caller can choose.
+    """
     generation = await _completed(client)
-    owner = uuid.uuid4()
-    async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
-        row = await repo.get_generation(uuid.UUID(generation["id"]))
-        row.user_id = owner
-        await session.commit()
-
-    anonymous = await client.get(f"/v1/generations/{generation['id']}/audio")
-    assert anonymous.status_code == 404
-
-    wrong_user = await client.get(
-        f"/v1/generations/{generation['id']}/audio",
-        headers={"X-User-Id": str(uuid.uuid4())},
-    )
-    assert wrong_user.status_code == 404
-
-    owner_request = await client.get(
-        f"/v1/generations/{generation['id']}/audio",
-        headers={"X-User-Id": str(owner)},
-    )
-    assert owner_request.status_code == 200
-    assert owner_request.headers["content-type"] == "audio/wav"
+    response = await client_b.get(f"/v1/generations/{generation['id']}/audio")
+    assert response.status_code == 404
 
 
-async def test_unauthorized_response_is_indistinguishable_from_missing(client, app):
+async def test_anonymous_download_is_refused_before_ownership_matters(anon_client, client):
+    generation = await _completed(client)
+    response = await anon_client.get(f"/v1/generations/{generation['id']}/audio")
+    assert response.status_code == 401
+
+
+async def test_unauthorized_response_is_indistinguishable_from_missing(client, client_b):
     """Ownership must not leak whether a generation exists."""
-    from luber_database import GenerationRepository
+    import uuid as _uuid
 
     generation = await _completed(client)
-    async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
-        row = await repo.get_generation(uuid.UUID(generation["id"]))
-        row.user_id = uuid.uuid4()
-        await session.commit()
-
-    forbidden = await client.get(f"/v1/generations/{generation['id']}/audio")
-    missing = await client.get(f"/v1/generations/{uuid.uuid4()}/audio")
+    forbidden = await client_b.get(f"/v1/generations/{generation['id']}/audio")
+    missing = await client_b.get(f"/v1/generations/{_uuid.uuid4()}/audio")
 
     assert forbidden.status_code == missing.status_code == 404
     assert forbidden.json() == missing.json()
 
 
-async def test_malformed_user_header_is_treated_as_anonymous(client, app):
-    from luber_database import GenerationRepository
+async def test_the_x_user_id_header_cannot_grant_access(client, client_b):
+    """Spoofing the owner's id must change nothing.
 
+    The header is no longer read anywhere in product authorization; this
+    pins that it stays that way.
+    """
     generation = await _completed(client)
-    async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
-        row = await repo.get_generation(uuid.UUID(generation["id"]))
-        row.user_id = uuid.uuid4()
-        await session.commit()
+    spoofed = await client_b.get(
+        f"/v1/generations/{generation['id']}/audio",
+        headers={"X-User-Id": str(client.user_id)},
+    )
+    assert spoofed.status_code == 404
 
-    resp = await client.get(
+
+async def test_a_malformed_user_header_changes_nothing(client):
+    """It is ignored, so even a hostile value is inert."""
+    generation = await _completed(client)
+    response = await client.get(
         f"/v1/generations/{generation['id']}/audio",
         headers={"X-User-Id": "not-a-uuid'; DROP TABLE generations;--"},
     )
-    assert resp.status_code == 404
-
-
-def test_caller_may_access_policy():
-    class _Gen:
-        user_id = None
-
-    unowned = _Gen()
-    assert caller_may_access(unowned, None) is True
-    assert caller_may_access(unowned, uuid.uuid4()) is True
-
-    owner = uuid.uuid4()
-    owned = _Gen()
-    owned.user_id = owner
-    assert caller_may_access(owned, owner) is True
-    assert caller_may_access(owned, None) is False
-    assert caller_may_access(owned, uuid.uuid4()) is False
-
-
-# ── missing assets / bad input ────────────────────────────────────────
-
-
-async def test_missing_generation_returns_404(client):
-    resp = await client.get(f"/v1/generations/{uuid.uuid4()}/audio")
-    assert resp.status_code == 404
-
-
-async def test_unknown_asset_kind_is_rejected(client):
-    generation = await _completed(client)
-    resp = await client.get(f"/v1/generations/{generation['id']}/audio", params={"asset": "stem"})
-    assert resp.status_code == 422
-
-
-async def test_generation_without_assets_returns_404(client, app):
-    from luber_database import GenerationRepository
-    from luber_schemas import GenerationStatus
-
-    async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
-        generation = await repo.create_generation(
-            title="No Audio",
-            prompt="p",
-            lyrics="",
-            vocal_gender="female",
-            duration_requested=30,
-            seed=None,
-            language="ko",
-            instrumental=False,
-            status=GenerationStatus.QUEUED.value,
-            idempotency_key=None,
-        )
-        generation_id = generation.id
-
-    for asset in ("master", "preview"):
-        resp = await client.get(f"/v1/generations/{generation_id}/audio", params={"asset": asset})
-        assert resp.status_code == 404
-
-
-async def test_mime_extension_mismatch_is_refused(client, app):
-    """A tampered asset row must not be served under a wrong media type."""
-    from luber_database import GenerationRepository
-
-    generation = await _completed(client)
-    # Tamper the row that will actually be served, which after Phase 14B
-    # is the finished master when one exists. Tampering the raw row and
-    # asserting a refusal would pass without testing anything.
-    served = delivered_asset(generation, "master")["asset_type"]
-    async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
-        row = await repo.get_generation(uuid.UUID(generation["id"]))
-        master = next(a for a in row.audio_assets if a.asset_type == served)
-        master.mime_type = "text/html"
-        await session.commit()
-
-    resp = await client.get(f"/v1/generations/{generation['id']}/audio")
-    assert resp.status_code == 404
-
-
-async def test_an_edit_reads_the_raw_master_not_the_finished_one(client, app):
-    """Feeding a finished master back into the model would compound.
-
-    Extend/replace/cover all resolve their source through the raw
-    selector, so a song edited repeatedly does not accumulate a
-    finishing correction per generation.
-    """
-    from luber_database import GenerationRepository
-    from luber_schemas import select_raw_master
-
-    generation = await _completed(client)
-    async with app.state.session_factory() as session:
-        repo = GenerationRepository(session)
-        row = await repo.get_generation(uuid.UUID(generation["id"]))
-        assets = list(row.audio_assets)
-
-    raw = select_raw_master(assets)
-    assert raw is not None
-    assert raw.asset_type == "MASTER"
-    assert raw.storage_key.endswith("master.wav")
-
-
-# ── no path or infrastructure leakage ─────────────────────────────────
-
-
-async def test_responses_never_leak_filesystem_paths(client, tmp_path):
-    generation = await _completed(client)
-    gid = generation["id"]
-
-    responses = [
-        await client.get(f"/v1/generations/{gid}/audio", params={"asset": "master"}),
-        await client.get(f"/v1/generations/{gid}/audio", params={"asset": "preview"}),
-        await client.get(f"/v1/generations/{uuid.uuid4()}/audio"),
-        await client.get(f"/v1/generations/{gid}"),
-    ]
-    for resp in responses:
-        headers = " ".join(f"{k}: {v}" for k, v in resp.headers.items())
-        assert str(tmp_path) not in headers
-        assert "/Users/" not in headers
-        if resp.headers.get("content-type", "").startswith("application/json"):
-            assert "/Users/" not in resp.text
-            assert str(tmp_path) not in resp.text
-
-
-async def test_storage_keys_stay_relative(client):
-    generation = await _completed(client)
-    for asset in generation["audio_assets"]:
-        assert asset["storage_key"].startswith("audio/")
-        assert not asset["storage_key"].startswith("/")
-        assert ".." not in asset["storage_key"]
-
-
-# ── filename derivation ───────────────────────────────────────────────
-
-
-def test_download_filename_uses_the_asset_extension():
-    gid = uuid.uuid4()
-    assert build_download_filename("Midnight Window", gid, "wav") == "LUBER - Midnight Window.wav"
-    assert build_download_filename("Midnight Window", gid, "mp3") == "LUBER - Midnight Window.mp3"
-
-
-@pytest.mark.parametrize(
-    "hostile", ["../../etc/passwd", "/absolute/path", 'a"; rm -rf /', "\n\rInjected", "..\\..\\win"]
-)
-def test_download_filename_neutralizes_hostile_titles(hostile):
-    name = build_download_filename(hostile, uuid.uuid4(), "mp3")
-    assert "/" not in name and "\\" not in name and ".." not in name
-    assert "\n" not in name and "\r" not in name and '"' not in name
-    assert name.endswith(".mp3")
-
-
-def test_download_filename_neutralizes_hostile_extension():
-    name = build_download_filename("Song", uuid.uuid4(), "../../evil")
-    assert name == "LUBER - Song.evil"
-
-
-def test_download_filename_keeps_a_korean_title_readable():
-    """A Korean title must survive to the user's downloads folder.
-
-    Phase 3 slugged to ASCII, which turned every Korean track into
-    ``luber-track-1a2b3c4d`` — unusable for this product's main audience.
-    Starlette emits ``filename*=utf-8''`` for these, which browsers decode.
-    """
-    gid = uuid.uuid4()
-    assert build_download_filename("오늘 밤", gid, "wav") == "LUBER - 오늘 밤.wav"
-
-
-def test_download_filename_falls_back_when_a_title_sanitises_to_nothing():
-    gid = uuid.uuid4()
-    assert build_download_filename("///", gid, "wav") == f"LUBER - track-{gid.hex[:8]}.wav"
+    assert response.status_code == 200

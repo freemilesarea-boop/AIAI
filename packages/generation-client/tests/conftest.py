@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
@@ -26,6 +28,11 @@ GENERATION_TABLES = [
 ]
 
 
+#: A fixed owner for fixtures. Product rows now require one, so tests
+#: create data as a stable pretend user rather than as nobody.
+TEST_OWNER = uuid.UUID("11111111-1111-4111-8111-111111111111")
+
+
 @pytest.fixture
 async def engine():
     engine = create_async_engine(
@@ -45,4 +52,4 @@ async def engine():
 async def repository(engine):
     factory = create_session_factory(engine)
     async with factory() as session:
-        yield GenerationRepository(session)
+        yield GenerationRepository(session, owner=TEST_OWNER)

@@ -3,12 +3,11 @@
 One constant, exported so the migration, the repository and the tests
 all name the same row rather than repeating a UUID.
 
-**This is a bridge, and it is meant to be removed.** Until Part 3 takes
-the owner from the authenticated session, rows created through
-unauthenticated product routes are attributed here — which is truthful,
-because that is exactly what they are: data with no user behind it. Part
-3 deletes :data:`LEGACY_OWNER_ID` from every call site, and the
-remaining references are the checklist for finishing the job.
+Part 3 removed the last product call site. Nothing creates data as this
+owner any more: the API takes the owner from the authenticated session,
+and an unscoped repository refuses to invent one. What remains is the
+identity itself — used by the migration that created it, and by tests
+that assert the historical corpus stays unreachable.
 """
 
 from __future__ import annotations

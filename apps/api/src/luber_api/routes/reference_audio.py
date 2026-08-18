@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from luber_api.dependencies import get_audio_storage, get_repository
+from luber_api.session import enforce_trusted_origin, require_current_user
 from luber_audio_utils import (
     AudioProcessingError,
     AudioStorage,
@@ -49,7 +50,14 @@ from luber_schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1/reference-audio", tags=["reference-audio"])
+router = APIRouter(
+    prefix="/v1/reference-audio",
+    tags=["reference-audio"],
+    # Every product route: a session, and for unsafe methods an origin
+    # this deployment serves. Applied at the router so a route added
+    # later is protected by default rather than by remembering.
+    dependencies=[Depends(require_current_user), Depends(enforce_trusted_origin)],
+)
 
 #: Read size. Small enough that the ceiling is enforced promptly, large
 #: enough not to make a 40 MB upload a million syscalls.

@@ -8,7 +8,7 @@ in an open transaction when a worker crashes mid-generation.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from sqlalchemy import CursorResult, delete, func, select
@@ -25,7 +25,9 @@ from luber_database.models.generation import (
     Project,
     ReferenceAudio,
 )
-from luber_schemas import LEGACY_OWNER_ID
+
+#: Any model with an ``id`` and an owner column.
+_Row = TypeVar("_Row")
 
 
 def _utcnow() -> datetime:
@@ -33,8 +35,62 @@ def _utcnow() -> datetime:
 
 
 class GenerationRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    """Generation-domain access, scoped to one owner.
+
+    The owner lives on the repository rather than being passed to each
+    method. Seventeen methods each taking a ``user_id`` is seventeen
+    chances for a route to forget one, and a forgotten filter is a
+    silent cross-user read — the failure mode that looks like working
+    software. Here, scoping is what the object *is*.
+
+    ``owner=None`` means unscoped and is reserved for trusted callers
+    with no session: the ARQ worker, which operates on a generation the
+    authenticated API already established ownership for, and maintenance
+    tooling. The API's request dependency always supplies an owner from
+    the session, and a test pins that it cannot do otherwise.
+    """
+
+    def __init__(self, session: AsyncSession, owner: UUID | None = None) -> None:
         self._session = session
+        self._owner = owner
+
+    @property
+    def owner(self) -> UUID | None:
+        return self._owner
+
+    def _owned(self, statement: Any, column: Any) -> Any:
+        """Add the ownership predicate, when this repository has one."""
+        if self._owner is None:
+            return statement
+        return statement.where(column == self._owner)
+
+    async def _fetch_owned(self, model: type[_Row], row_id: UUID, column: Any) -> _Row | None:
+        """Load a row only if this repository is allowed to see it.
+
+        Replaces ``session.get`` for the three owned models. An unscoped
+        repository behaves exactly as ``get`` did; a scoped one returns
+        None for somebody else's row, so a mutation path cannot act on
+        it even by accident.
+        """
+        # ``id`` is declared on Base, not on the TypeVar, so the lookup
+        # column is read dynamically while the return type stays exact.
+        identity = cast("Any", model).id
+        result = await self._session.execute(
+            self._owned(select(model).where(identity == row_id), column)
+        )
+        return cast("_Row | None", result.scalar_one_or_none())
+
+    def _require_owner(self) -> UUID:
+        """The owner a create must attribute the new row to.
+
+        An unscoped repository creating product data is a bug: it would
+        have to invent an owner, and the only value available would be
+        the legacy anchor — which is how new data silently becomes
+        historical data.
+        """
+        if self._owner is None:
+            raise ValueError("this repository is unscoped; product rows need an explicit owner")
+        return self._owner
 
     # ── generations ────────────────────────────────────────────────
 
@@ -93,10 +149,7 @@ class GenerationRepository:
             source_adherence=source_adherence,
             reference_audio_id=reference_audio_id,
             status=status,
-            # Part 3 will make this the session user and drop the
-            # fallback. Until then an unauthenticated create is genuinely
-            # ownerless, and the anchor records that rather than hiding it.
-            user_id=user_id if user_id is not None else LEGACY_OWNER_ID,
+            user_id=user_id if user_id is not None else self._require_owner(),
             idempotency_key=idempotency_key,
         )
         self._session.add(generation)
@@ -110,35 +163,50 @@ class GenerationRepository:
 
     async def get_generation(self, generation_id: UUID) -> Generation | None:
         result = await self._session.execute(
-            select(Generation)
-            .options(selectinload(Generation.audio_assets))
-            .where(Generation.id == generation_id)
+            self._owned(
+                select(Generation)
+                .options(selectinload(Generation.audio_assets))
+                .where(Generation.id == generation_id),
+                Generation.user_id,
+            )
         )
         return result.scalar_one_or_none()
 
     async def get_by_idempotency_key(self, idempotency_key: str) -> Generation | None:
         result = await self._session.execute(
-            select(Generation)
-            .options(selectinload(Generation.audio_assets))
-            .where(Generation.idempotency_key == idempotency_key)
+            self._owned(
+                select(Generation)
+                .options(selectinload(Generation.audio_assets))
+                .where(Generation.idempotency_key == idempotency_key),
+                Generation.user_id,
+            )
         )
         return result.scalar_one_or_none()
 
     async def list_generations(
         self, *, limit: int = 20, offset: int = 0
     ) -> tuple[list[Generation], int]:
-        total = (await self._session.execute(select(func.count(Generation.id)))).scalar_one()
+        # The total is scoped too. A correct-looking page with a global
+        # count still tells the caller how much other people have.
+        total = (
+            await self._session.execute(
+                self._owned(select(func.count(Generation.id)), Generation.user_id)
+            )
+        ).scalar_one()
         result = await self._session.execute(
-            select(Generation)
-            .options(selectinload(Generation.audio_assets))
-            .order_by(Generation.created_at.desc(), Generation.id.desc())
-            .limit(limit)
-            .offset(offset)
+            self._owned(
+                select(Generation)
+                .options(selectinload(Generation.audio_assets))
+                .order_by(Generation.created_at.desc(), Generation.id.desc())
+                .limit(limit)
+                .offset(offset),
+                Generation.user_id,
+            )
         )
         return list(result.scalars().all()), total
 
     async def update_status(self, generation_id: UUID, status: str) -> None:
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.status = status
@@ -152,7 +220,7 @@ class GenerationRepository:
         that finished perfectly well arrive at the client still carrying
         the reason its *first* attempt stopped.
         """
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.status = status
@@ -167,7 +235,7 @@ class GenerationRepository:
         Written *before* the provider runs, so a failed generation is as
         inspectable as a successful one.
         """
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.request_trace = trace
@@ -180,7 +248,7 @@ class GenerationRepository:
         generation with no finished master can still say which of those
         three happened.
         """
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.finishing_trace = trace
@@ -197,7 +265,7 @@ class GenerationRepository:
         model_version: str,
         seed: int | None,
     ) -> None:
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.status = status
@@ -218,7 +286,7 @@ class GenerationRepository:
         error_code: str,
         error_message: str,
     ) -> None:
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.status = status
@@ -238,12 +306,14 @@ class GenerationRepository:
         """
         chain: list[Generation] = []
         seen: set[UUID] = {generation_id}
-        current = await self._session.get(Generation, generation_id)
+        current = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         while current is not None and current.parent_generation_id is not None:
             if current.parent_generation_id in seen or len(chain) >= max_depth:
                 break
             seen.add(current.parent_generation_id)
-            parent = await self._session.get(Generation, current.parent_generation_id)
+            parent = await self._fetch_owned(
+                Generation, current.parent_generation_id, Generation.user_id
+            )
             if parent is None:
                 break
             chain.append(parent)
@@ -265,9 +335,12 @@ class GenerationRepository:
         depth = 0
         while frontier and depth < max_depth and len(collected) < max_nodes:
             result = await self._session.execute(
-                select(Generation)
-                .where(Generation.parent_generation_id.in_(frontier))
-                .order_by(Generation.created_at)
+                self._owned(
+                    select(Generation)
+                    .where(Generation.parent_generation_id.in_(frontier))
+                    .order_by(Generation.created_at),
+                    Generation.user_id,
+                )
             )
             children = [row for row in result.scalars().all() if row.id not in seen]
             if not children:
@@ -333,7 +406,7 @@ class GenerationRepository:
         returning a flag, so a caller cannot mistake the refusal for
         "already gone".
         """
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             return False
 
@@ -381,7 +454,7 @@ class GenerationRepository:
         favorite: bool | None = None,
     ) -> Generation:
         """Rename and/or (un)favourite. ``None`` means "leave alone"."""
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         if title is not None:
@@ -395,10 +468,13 @@ class GenerationRepository:
     async def list_generations_in_group(self, group_id: UUID) -> list[Generation]:
         """Siblings from one CREATE, in the order they were created."""
         result = await self._session.execute(
-            select(Generation)
-            .options(selectinload(Generation.audio_assets))
-            .where(Generation.generation_group_id == group_id)
-            .order_by(Generation.created_at.asc(), Generation.id.asc())
+            self._owned(
+                select(Generation)
+                .options(selectinload(Generation.audio_assets))
+                .where(Generation.generation_group_id == group_id)
+                .order_by(Generation.created_at.asc(), Generation.id.asc()),
+                Generation.user_id,
+            )
         )
         return list(result.scalars().all())
 
@@ -413,7 +489,13 @@ class GenerationRepository:
         rows = (
             (
                 await self._session.execute(
-                    select(Generation).where(Generation.id.in_(generation_ids))
+                    # Scoped, so a bulk request naming somebody else's id
+                    # simply does not see it. Nothing reports which ids
+                    # were skipped: that would confirm they exist.
+                    self._owned(
+                        select(Generation).where(Generation.id.in_(generation_ids)),
+                        Generation.user_id,
+                    )
                 )
             )
             .scalars()
@@ -519,8 +601,7 @@ class GenerationRepository:
             channels=channels,
             file_size=file_size,
             display_name=display_name,
-            # As on generations: Part 3 supplies the session user here.
-            user_id=user_id if user_id is not None else LEGACY_OWNER_ID,
+            user_id=user_id if user_id is not None else self._require_owner(),
         )
         self._session.add(reference)
         await self._session.commit()
@@ -528,7 +609,7 @@ class GenerationRepository:
         return reference
 
     async def get_reference_audio(self, reference_id: UUID) -> ReferenceAudio | None:
-        return await self._session.get(ReferenceAudio, reference_id)
+        return await self._fetch_owned(ReferenceAudio, reference_id, ReferenceAudio.user_id)
 
     async def find_abandoned_references(
         self, *, cutoff: datetime, limit: int
@@ -745,17 +826,21 @@ class GenerationRepository:
     # ── Projects (Phase 11) ───────────────────────────────────────────
 
     async def create_project(self, *, name: str, user_id: UUID | None = None) -> Project:
-        project = Project(name=name, user_id=user_id if user_id is not None else LEGACY_OWNER_ID)
+        project = Project(
+            name=name, user_id=user_id if user_id is not None else self._require_owner()
+        )
         self._session.add(project)
         await self._session.commit()
         await self._session.refresh(project)
         return project
 
     async def get_project(self, project_id: UUID) -> Project | None:
-        return await self._session.get(Project, project_id)
+        return await self._fetch_owned(Project, project_id, Project.user_id)
 
     async def list_projects(self) -> list[Project]:
-        result = await self._session.execute(select(Project).order_by(Project.created_at.desc()))
+        result = await self._session.execute(
+            self._owned(select(Project).order_by(Project.created_at.desc()), Project.user_id)
+        )
         return list(result.scalars().all())
 
     async def list_projects_with_counts(self) -> list[tuple[Project, int]]:
@@ -767,10 +852,13 @@ class GenerationRepository:
         ones a new user has.
         """
         result = await self._session.execute(
-            select(Project, func.count(Generation.id))
-            .outerjoin(Generation, Generation.project_id == Project.id)
-            .group_by(Project.id)
-            .order_by(Project.created_at.desc())
+            self._owned(
+                select(Project, func.count(Generation.id))
+                .outerjoin(Generation, Generation.project_id == Project.id)
+                .group_by(Project.id)
+                .order_by(Project.created_at.desc()),
+                Project.user_id,
+            )
         )
         return [(project, int(count)) for project, count in result.all()]
 
@@ -806,7 +894,7 @@ class GenerationRepository:
         self, generation_id: UUID, project_id: UUID | None
     ) -> Generation:
         """File a generation under a project, or unfile it with ``None``."""
-        generation = await self._session.get(Generation, generation_id)
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
         if generation is None:
             raise LookupError(f"generation not found: {generation_id}")
         generation.project_id = project_id
@@ -816,19 +904,25 @@ class GenerationRepository:
 
     async def list_generations_for_project(self, project_id: UUID) -> list[Generation]:
         result = await self._session.execute(
-            select(Generation)
-            .options(selectinload(Generation.audio_assets))
-            .where(Generation.project_id == project_id)
-            .order_by(Generation.created_at.desc())
+            self._owned(
+                select(Generation)
+                .options(selectinload(Generation.audio_assets))
+                .where(Generation.project_id == project_id)
+                .order_by(Generation.created_at.desc()),
+                Generation.user_id,
+            )
         )
         return list(result.scalars().all())
 
     async def list_children(self, generation_id: UUID) -> list[Generation]:
         """Generations created from *generation_id* (lineage, Phase 8)."""
         result = await self._session.execute(
-            select(Generation)
-            .options(selectinload(Generation.audio_assets))
-            .where(Generation.parent_generation_id == generation_id)
-            .order_by(Generation.created_at.asc())
+            self._owned(
+                select(Generation)
+                .options(selectinload(Generation.audio_assets))
+                .where(Generation.parent_generation_id == generation_id)
+                .order_by(Generation.created_at.asc()),
+                Generation.user_id,
+            )
         )
         return list(result.scalars().all())

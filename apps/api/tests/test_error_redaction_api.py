@@ -26,10 +26,15 @@ LEAKY_MESSAGE = (
 
 
 @pytest.fixture
-async def failed_generation(app):
-    """A FAILED row whose stored message leaks a path, as a real one would."""
+async def failed_generation(app, client):
+    """A FAILED row whose stored message leaks a path, as a real one would.
+
+    Owned by the authenticated client, because a row belonging to anyone
+    else is now correctly invisible — which would test 404 handling
+    rather than redaction.
+    """
     async with app.state.session_factory() as session:
-        repository = GenerationRepository(session)
+        repository = GenerationRepository(session, owner=uuid.UUID(client.user_id))
         generation = await repository.create_generation(
             title="Doomed",
             prompt="p",
@@ -72,7 +77,7 @@ class TestFailedGenerationResponse:
     async def test_the_operator_can_still_read_it_in_the_database(self, app, failed_generation):
         """Redaction is at the boundary, not destruction of the record."""
         async with app.state.session_factory() as session:
-            row = await GenerationRepository(session).get_generation(failed_generation)
+            row = await GenerationRepository(session, owner=None).get_generation(failed_generation)
         assert row.error_message == LEAKY_MESSAGE
 
 
