@@ -12,6 +12,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AppShell } from "@/components/shell/AppShell";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import { PlayerProvider, formatTime } from "@/components/player/PlayerProvider";
 import { hasTerm, toggleTerm } from "@/components/PromptChips";
 import LibraryPage from "@/app/library/page";
@@ -40,7 +41,13 @@ vi.mock("next/navigation", () => ({
  * during render.
  */
 function renderWithPlayer(ui: React.ReactNode) {
-  return render(<PlayerProvider>{ui}</PlayerProvider>);
+  // AuthProvider wraps the shell in the real layout, and AppShell reads
+  // it for the account control and the route gate.
+  return render(
+    <AuthProvider>
+      <PlayerProvider>{ui}</PlayerProvider>
+    </AuthProvider>,
+  );
 }
 
 function json(body: unknown) {
@@ -66,9 +73,11 @@ describe("app shell", () => {
   it("offers the three primary destinations", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [] })));
     render(
-      <PlayerProvider>
-        <AppShell>content</AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>content</AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
     expect(within(nav).getByRole("link", { name: "Create" })).toBeInTheDocument();
@@ -80,9 +89,11 @@ describe("app shell", () => {
     pathname = "/library";
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [] })));
     render(
-      <PlayerProvider>
-        <AppShell>content</AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>content</AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
     expect(within(nav).getByRole("link", { name: "Library" })).toHaveAttribute(
@@ -93,9 +104,11 @@ describe("app shell", () => {
   it("hides the player bar until something is loaded", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [] })));
     render(
-      <PlayerProvider>
-        <AppShell>content</AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>content</AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     // An empty strip would eat 84px of a phone screen for nothing.
     expect(screen.queryByRole("region", { name: "Player" })).toBeNull();
@@ -104,9 +117,11 @@ describe("app shell", () => {
   it("mounts exactly one audio element for the whole app", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [] })));
     const { container } = render(
-      <PlayerProvider>
-        <AppShell>content</AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>content</AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     // One element is what guarantees only one track can ever play.
     expect(container.querySelectorAll("audio")).toHaveLength(1);
@@ -120,11 +135,13 @@ describe("global player", () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [generation()], total: 1, limit: 20, offset: 0 })));
     render(
-      <PlayerProvider>
-        <AppShell>
-          <LibraryPage />
-        </AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>
+            <LibraryPage />
+          </AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     await user.click(await screen.findByRole("button", { name: "Play Midnight Window" }));
 
@@ -137,11 +154,13 @@ describe("global player", () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [generation()], total: 1, limit: 20, offset: 0 })));
     render(
-      <PlayerProvider>
-        <AppShell>
-          <LibraryPage />
-        </AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>
+            <LibraryPage />
+          </AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     await user.click(await screen.findByRole("button", { name: "Play Midnight Window" }));
     const player = await screen.findByRole("region", { name: "Player" });
@@ -153,11 +172,13 @@ describe("global player", () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [generation()], total: 1, limit: 20, offset: 0 })));
     const { container, rerender } = render(
-      <PlayerProvider>
-        <AppShell>
-          <LibraryPage />
-        </AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>
+            <LibraryPage />
+          </AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     await user.click(await screen.findByRole("button", { name: "Play Midnight Window" }));
     const before = container.querySelector("audio");
@@ -165,11 +186,13 @@ describe("global player", () => {
     // Simulate navigating to another page inside the same shell.
     pathname = "/projects";
     rerender(
-      <PlayerProvider>
-        <AppShell>
-          <div>another page</div>
-        </AppShell>
-      </PlayerProvider>,
+      <AuthProvider>
+        <PlayerProvider>
+          <AppShell>
+            <div>another page</div>
+          </AppShell>
+        </PlayerProvider>
+      </AuthProvider>,
     );
     // Same node identity => playback was never torn down.
     expect(container.querySelector("audio")).toBe(before);

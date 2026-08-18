@@ -207,6 +207,36 @@ export interface CreateGenerationResponse {
  * `code` is the backend's machine-readable `ErrorCode` when available.
  * Raw server text is deliberately not surfaced to users.
  */
+/**
+ * Notified when a product request finds the session gone.
+ *
+ * A module-level hook rather than a React import: this file is plain
+ * TypeScript used from server and client alike, and importing the
+ * provider here would invert the dependency and bind the transport to
+ * the UI. AuthProvider registers itself once at mount.
+ */
+let onSessionExpired: (() => void) | null = null;
+
+export function setSessionExpiredHandler(handler: (() => void) | null): void {
+  onSessionExpired = handler;
+}
+
+/**
+ * Route a 401 from a *product* request to the session handler.
+ *
+ * Only 401. A 403 is an origin refusal, a 404 is somebody else's
+ * resource or none at all, and 422/500 are the request or the server —
+ * treating any of them as a dead session would sign people out for
+ * typing a bad value.
+ *
+ * The auth routes call this deliberately not at all: `/v1/auth/me`
+ * answering 401 is the normal reply for a guest, and `login` answering
+ * 401 means a wrong password, not an expired session.
+ */
+function noteAuthFailure(status: number): void {
+  if (status === 401) onSessionExpired?.();
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | null;
@@ -262,6 +292,7 @@ export async function createGeneration(
     signal,
   });
   if (!res.ok) {
+    noteAuthFailure(res.status);
     throw new ApiError(
       `Create generation failed: ${res.status}`,
       res.status,
@@ -313,6 +344,7 @@ export async function getGeneration(
     { cache: "no-store", signal, credentials: "include" },
   );
   if (!res.ok) {
+    noteAuthFailure(res.status);
     throw new ApiError(
       `Get generation failed: ${res.status}`,
       res.status,
@@ -332,6 +364,7 @@ export async function listGenerations(
     { cache: "no-store", signal, credentials: "include" },
   );
   if (!res.ok) {
+    noteAuthFailure(res.status);
     throw new ApiError(
       `List generations failed: ${res.status}`,
       res.status,
@@ -661,6 +694,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!res.ok) {
+    noteAuthFailure(res.status);
     throw new ApiError(`${init?.method ?? "GET"} ${path} failed: ${res.status}`, res.status,
       await readErrorCode(res));
   }
@@ -757,4 +791,97 @@ export type LineageOperation =
  */
 export async function getLineage(generationId: string): Promise<Lineage> {
   return request<Lineage>(`/v1/generations/${encodeURIComponent(generationId)}/lineage`);
+}
+
+// ── authentication ────────────────────────────────────────────────────
+
+/** The public shape of a user. No hash, no session, nothing secret. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  display_name: string | null;
+  created_at: string;
+}
+
+/**
+ * The signed-in user, or `null` when there is no valid session.
+ *
+ * A 401 here is the normal answer for a guest, not an error, so it is
+ * translated rather than thrown — the bootstrap call happens on every
+ * page load and a rejected promise would make guests look broken.
+ */
+export async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/auth/me`, {
+    cache: "no-store",
+    credentials: "include",
+    signal,
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) throw new ApiError(`Session check failed: ${res.status}`, res.status);
+  return (await res.json()) as AuthUser;
+}
+
+export async function signup(
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE_URL}/v1/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      email,
+      password,
+      ...(displayName ? { display_name: displayName } : {}),
+    }),
+  });
+  if (!res.ok) {
+    throw new ApiError(await readAuthMessage(res), res.status);
+  }
+  return (await res.json()) as AuthUser;
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE_URL}/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    throw new ApiError(await readAuthMessage(res), res.status);
+  }
+  return (await res.json()) as AuthUser;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE_URL}/v1/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+/**
+ * A sentence to show the user, from whatever the server sent.
+ *
+ * The backend's `detail` is already written for humans and carries no
+ * internals — that is a Part 1 property. Anything unrecognised falls
+ * back to a generic line rather than rendering a raw body.
+ */
+async function readAuthMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") return body.detail;
+    if (Array.isArray(body.detail)) {
+      // FastAPI validation errors: surface the first readable message.
+      const first = body.detail[0] as { msg?: unknown } | undefined;
+      if (first && typeof first.msg === "string") return first.msg;
+    }
+  } catch {
+    /* fall through */
+  }
+  return res.status >= 500
+    ? "Something went wrong on our side. Please try again."
+    : "That did not work. Please check your details and try again.";
 }

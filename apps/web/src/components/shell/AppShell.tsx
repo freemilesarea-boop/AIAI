@@ -14,6 +14,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import { AccountMenu } from "@/components/auth/AccountMenu";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { PlayerBar } from "@/components/player/PlayerBar";
@@ -98,13 +101,31 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+//: Pages that exist precisely so a guest can reach them. Everything
+//: else in the product is private.
+const PUBLIC_ROUTES = new Set(["/login", "/signup"]);
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const { track } = usePlayer();
 
   // Close the slide-over on navigation, so a tap never leaves it hanging.
   useEffect(() => setMenuOpen(false), [pathname]);
+
+  // Auth pages get no sidebar, no player and no navigation: a signed-out
+  // visitor should not be looking at the furniture of a product they
+  // cannot use. Placed after every hook — an early return above one
+  // makes it conditional, which breaks the rules of hooks.
+  if (PUBLIC_ROUTES.has(pathname)) {
+    return (
+      <div className="min-h-screen bg-[var(--surface-base)]">
+        <main className="mx-auto flex min-h-screen max-w-md items-center px-4 py-10">
+          <div className="w-full">{children}</div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--surface-base)]">
@@ -116,9 +137,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mt-6">
           <NavLinks />
         </div>
-        <p className="mt-auto px-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
-          Generated music. Quality varies by prompt.
-        </p>
+        <div className="mt-auto">
+          <AccountMenu />
+          <p className="px-3 pt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+            Generated music. Quality varies by prompt.
+          </p>
+        </div>
       </aside>
 
       {/* Mobile top bar */}
@@ -150,6 +174,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="mt-6">
               <NavLinks onNavigate={() => setMenuOpen(false)} />
             </div>
+            <div className="mt-6">
+              <AccountMenu />
+            </div>
           </div>
         </div>
       )}
@@ -159,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         style={{ paddingBottom: track ? "calc(var(--player-height) + 16px)" : undefined }}
       >
         <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          {children}
+          <RequireAuth pathname={pathname}>{children}</RequireAuth>
         </div>
       </main>
 

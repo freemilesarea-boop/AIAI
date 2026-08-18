@@ -119,3 +119,19 @@ export function rememberGeneration(entry: RecentGenerationEntry): RecentGenerati
   store.setItem(RECENT_KEY, JSON.stringify(next));
   return next;
 }
+
+/**
+ * Forget everything this module remembers about the signed-in user.
+ *
+ * Called on sign-out and on session loss. These keys hold song ids and
+ * titles — private data — and a browser is shared: without this, the
+ * next person to sign in on the same machine sees the previous user's
+ * songs listed before any request is made. The API would refuse to
+ * serve them, but the titles alone are the leak.
+ */
+export function clearPrivateGenerationCache(): void {
+  const store = safeLocalStorage();
+  if (!store) return;
+  store.removeItem(ACTIVE_KEY);
+  store.removeItem(RECENT_KEY);
+}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import { PlayerProvider } from "@/components/player/PlayerProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -20,11 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
-        <PlayerProvider>
-          <ToastProvider>
-            <AppShell>{children}</AppShell>
-          </ToastProvider>
-        </PlayerProvider>
+        <AuthProvider>
+          <PlayerProvider>
+            <ToastProvider>
+              <AppShell>{children}</AppShell>
+            </ToastProvider>
+          </PlayerProvider>
+        </AuthProvider>
       </body>
     </html>
   );
