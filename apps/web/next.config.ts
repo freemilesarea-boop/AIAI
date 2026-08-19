@@ -19,8 +19,35 @@ import type { NextConfig } from "next";
  */
 const apiTarget = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000";
 
+/**
+ * Conservative headers only — ones that cannot break audio delivery,
+ * range requests or the same-origin API proxy.
+ *
+ * Deliberately absent: Content-Security-Policy and HSTS. A CSP tight
+ * enough to be worth having needs the app's real script/style/media
+ * origins measured under a production build, and a loose one is
+ * decoration. HSTS is meaningless until the deployment terminates TLS,
+ * and setting it on a localhost origin would be a nuisance to undo.
+ * Both are recorded as deployment work rather than guessed at here.
+ */
+const securityHeaders = [
+  // Nothing in LUBER is meant to be framed, and clickjacking a player
+  // that streams private audio is a real if modest risk.
+  { key: "X-Frame-Options", value: "DENY" },
+  // Stops a browser second-guessing a declared audio/wav or JSON type.
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  // Song ids live in URLs; a full referrer would leak them to any
+  // outbound link. Origin-only on cross-origin, full path same-origin.
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // No feature here needs these, and denying them costs nothing.
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+];
+
 const nextConfig: NextConfig = {
   transpilePackages: ["@luber/ui"],
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   async rewrites() {
     return [
       // `/api/*` is reserved for the backend. Next's own routes live

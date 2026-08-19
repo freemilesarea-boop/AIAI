@@ -28,6 +28,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { onSessionEnded } from "@/lib/session-events";
+
 import { getAudioAssetUrl, type Generation } from "@/lib/api";
 
 export interface PlayerTrack {
@@ -187,6 +189,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Wire element events once. The element itself never unmounts.
+  // A track carries a title — private data belonging to whoever was
+  // signed in. Playback stops and the metadata goes with the session.
+  useEffect(() => onSessionEnded(() => stop()), [stop]);
+
   useEffect(() => {
     const element = audioRef.current;
     if (!element) return;

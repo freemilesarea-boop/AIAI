@@ -15,7 +15,7 @@
  * signed-out state on first paint.
  */
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -28,6 +28,8 @@ import {
 } from "react";
 
 import { clearPrivateGenerationCache } from "@/lib/generationStorage";
+import { loginUrlFor } from "@/lib/redirect";
+import { emitSessionEnded } from "@/lib/session-events";
 import {
   type AuthUser,
   fetchCurrentUser,
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const router = useRouter();
+  const pathname = usePathname() ?? "/";
   // Guards against a burst of 401s from parallel requests each trying
   // to tear the session down and navigate.
   const expiring = useRef(false);
@@ -127,11 +130,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     // The server destroys the session first. Clearing only local state
     // would leave a live session any retained cookie could still use.
-    await logoutRequest();
-    // Private client cache goes with the session. The API already
-    // refuses to serve another user's songs, but cached titles would
-    // still be readable by whoever signs in next on this browser.
+    // The local session is discarded whether or not the server call
+    // succeeds. A failed request most often means the network is gone,
+    // and leaving someone apparently signed in on a shared machine is
+    // the worse outcome — the cookie is cleared by the server when it
+    // can be reached, and the session expires on its own regardless.
+    try {
+      await logoutRequest();
+    } catch {
+      /* deliberate: local state is cleared either way */
+    }
+    // Private client cache and in-memory state go with the session. The
+    // API already refuses to serve another user's songs, but a cached
+    // title is readable by whoever signs in next on this browser.
     clearPrivateGenerationCache();
+    emitSessionEnded();
     setUser(null);
     setStatus("unauthenticated");
     // replace, not push: Back must not return to a private page.
@@ -142,10 +155,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (expiring.current) return;
     expiring.current = true;
     clearPrivateGenerationCache();
+    emitSessionEnded();
     setUser(null);
     setStatus("unauthenticated");
-    router.replace("/login");
-  }, [router]);
+    // An expiry mid-session should not also lose the user's place.
+    // loginUrlFor applies the same open-redirect rules as every other
+    // destination and refuses to bounce back to an auth page.
+    router.replace(loginUrlFor(pathname));
+  }, [router, pathname]);
 
   sessionExpiredRef.current = sessionExpired;
 

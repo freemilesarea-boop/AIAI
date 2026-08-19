@@ -112,6 +112,15 @@ function Probe() {
   return <span data-testid="state">{`${status}:${user?.email ?? "none"}`}</span>;
 }
 
+//: Lets a test drive the context directly — the expiry path is
+//: triggered by the transport, not by anything a user clicks.
+let lastContext: ReturnType<typeof useAuth> | null = null;
+
+function Capture() {
+  lastContext = useAuth();
+  return null;
+}
+
 describe("session bootstrap", () => {
   it("asks the server who is signed in", async () => {
     const calls = stubApi({ me: { status: 200, body: USER } });
@@ -453,3 +462,158 @@ describe("private cache does not survive the session", () => {
     expect(JSON.stringify({ ...localStorage })).not.toContain("USER A PRIVATE SONG");
   });
 });
+
+// ── Part 5 hardening ──────────────────────────────────────────────────
+
+describe("session expiry keeps the user's place", () => {
+  it("sends an expiring user to login with a safe return destination", async () => {
+    const { setSessionExpiredHandler } = await import("@/lib/api");
+    stubApi({ me: { status: 200, body: USER } });
+
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(lastContext?.status).toBe("authenticated"));
+
+    // usePathname is mocked to /library, which is the default landing
+    // page, so the URL carries no redundant ?next.
+    lastContext!.sessionExpired();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+    setSessionExpiredHandler(null);
+  });
+
+  it("clears private storage when the session expires", async () => {
+    stubApi({ me: { status: 200, body: USER } });
+    localStorage.setItem(
+      "luber.recentGenerations",
+      JSON.stringify([{ id: "x", title: "EXPIRED USER SONG" }]),
+    );
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(lastContext?.status).toBe("authenticated"));
+    lastContext!.sessionExpired();
+    await waitFor(() =>
+      expect(JSON.stringify({ ...localStorage })).not.toContain("EXPIRED USER SONG"),
+    );
+  });
+
+  it("only a 401 ends the session", async () => {
+    const { setSessionExpiredHandler } = await import("@/lib/api");
+    const ended = vi.fn();
+    setSessionExpiredHandler(ended);
+
+    const { listGenerations } = await import("@/lib/api");
+    for (const status of [403, 404, 422, 500]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({ ok: false, status, json: async () => ({}) })),
+      );
+      await listGenerations().catch(() => {});
+    }
+    expect(ended).not.toHaveBeenCalled();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) })),
+    );
+    await listGenerations().catch(() => {});
+    expect(ended).toHaveBeenCalled();
+    setSessionExpiredHandler(null);
+  });
+});
+
+describe("in-memory private state", () => {
+  it("announces the end of a session so holders can drop private data", async () => {
+    const { onSessionEnded, emitSessionEnded } = await import("@/lib/session-events");
+    const cleared = vi.fn();
+    const off = onSessionEnded(cleared);
+    emitSessionEnded();
+    expect(cleared).toHaveBeenCalledTimes(1);
+    off();
+    emitSessionEnded();
+    expect(cleared).toHaveBeenCalledTimes(1);
+  });
+
+  it("one failing listener does not stop the others", async () => {
+    const { onSessionEnded, emitSessionEnded } = await import("@/lib/session-events");
+    const second = vi.fn();
+    const offA = onSessionEnded(() => {
+      throw new Error("player blew up");
+    });
+    const offB = onSessionEnded(second);
+    emitSessionEnded();
+    expect(second).toHaveBeenCalled();
+    offA();
+    offB();
+  });
+
+  it("signing out announces it", async () => {
+    const { onSessionEnded } = await import("@/lib/session-events");
+    const cleared = vi.fn();
+    const off = onSessionEnded(cleared);
+    stubApi({ me: { status: 200, body: USER } });
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(lastContext?.status).toBe("authenticated"));
+    await lastContext!.signOut();
+    expect(cleared).toHaveBeenCalled();
+    off();
+  });
+});
+
+describe("logout when the network is gone", () => {
+  it("still signs the user out locally", async () => {
+    // The safe failure: a shared machine must not be left apparently
+    // signed in because a request failed.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/v1/auth/me")) {
+          return { ok: true, status: 200, json: async () => USER };
+        }
+        throw new Error("network down");
+      }),
+    );
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(lastContext?.status).toBe("authenticated"));
+    await lastContext!.signOut();
+    // The captured context updates on the next render.
+    await waitFor(() => expect(lastContext?.status).toBe("unauthenticated"));
+    expect(replace).toHaveBeenCalledWith("/login");
+  });
+});
+
+describe("credentials cannot reach the URL", () => {
+  it.each([
+    ["login", LoginPage],
+    ["signup", SignupPage],
+  ])("the %s form posts rather than defaulting to GET", async (_name, Page) => {
+    // A form with no method is a GET form. If a submit ever escapes the
+    // React handler — before hydration, or with JS broken — a GET would
+    // serialise the password into the query string.
+    stubApi({ me: { status: 401 } });
+    const { container } = render(
+      <AuthProvider>
+        <Page />
+      </AuthProvider>,
+    );
+    const form = await waitFor(() => {
+      const found = container.querySelector("form");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(form.getAttribute("method")).toBe("post");
+  });
+})

@@ -2,15 +2,14 @@
 
 How a person proves who they are, and what the product does with that.
 
-**Parts 1 and 2 of Phase 20A.** Authentication works end to end, and
-every row of product data now has an owner in the database.
-**Authorization still does not exist** — every generation, project and
-reference is still visible to every caller, exactly as before. That is
-deliberate: enforcement is Part 3, and shipping it half-done would be
-worse than not starting, because the product would appear to isolate
-users while leaking.
+**Phase 20A, complete.** A person can create an account in a browser,
+use a private workspace, and be certain nobody else can reach it.
+Authentication, ownership and enforcement are all in place; what follows
+describes the system that exists, not a plan.
 
-Nobody's songs are private yet.
+Songs are private. The boundary is the API: every product route requires
+a session and every query is scoped to the caller, so what the browser
+chooses to render cannot widen access.
 
 ---
 
@@ -147,6 +146,20 @@ data. No scheduler was introduced.
 
 ---
 
+## The boundary, in one place
+
+| Question | Answer |
+|---|---|
+| Who is calling? | The server-side session, resolved from an HttpOnly cookie. Nothing else — `X-User-Id` is read nowhere |
+| What can they see? | Only rows whose `user_id` matches, filtered in SQL rather than after loading |
+| What happens to a guest? | 401 on every product route |
+| What happens to a foreign UUID? | 404, byte-identical to one that does not exist |
+| Where is the check? | `require_current_user` on the router, `GenerationRepository(owner=…)` on the query |
+
+Frontend route protection exists for UX and request hygiene. It prevents
+a guest's page from rendering and firing private requests; it is not the
+security boundary and does not need to be.
+
 ## Legacy ownership
 
 Pre-authentication data belongs to one internal anchor rather than to
@@ -190,6 +203,60 @@ temporary pieces close that gap, and both are meant to be deleted:
 
 Grepping `LEGACY_OWNER_ID` lists everything Part 3 has to replace with
 the session user.
+
+## Browser experience
+
+`AuthProvider` asks `/v1/auth/me` on every load. There is no token to
+persist, so nothing about the session is kept client-side. Three states:
+`loading` means "not asked yet" and `unauthenticated` means "asked, and
+nobody" — collapsing them would flash the signed-out UI on first paint.
+
+`RequireAuth` renders a placeholder rather than the page until the
+session resolves. Rendering children first would fire their private
+requests on a guest's behalf and briefly paint a page shaped like
+somebody's library.
+
+**401 recovery.** A 401 from a *product* request ends the session
+through the same path a manual sign-out uses: private storage cleared,
+in-memory state dropped, redirect to login carrying a safe return
+destination. Only 401 — a 403 is an origin refusal and a 404 is somebody
+else's resource, and treating either as an expired session would sign
+people out for touching the wrong thing.
+
+**Return destinations** are treated as attacker-controlled. Absolute
+URLs, scheme-relative `//host`, `javascript:`, backslash variants and
+control characters are refused rather than sanitised: a value that needs
+cleaning to be safe is a value to reject.
+
+**Private state does not outlive a session.** Two localStorage keys
+(`luber.activeGenerationId`, `luber.recentGenerations`) hold song ids and
+titles, and the global player holds a track title. All are cleared on
+sign-out and on expiry. The player learns about it through a small
+`session-events` broadcast, because `AuthProvider` sits above
+`PlayerProvider` and cannot call into it directly.
+
+**Logout is local-first-safe.** If the network call fails the local
+session is discarded anyway: leaving someone apparently signed in on a
+shared machine is the worse outcome, and the server session expires on
+its own regardless.
+
+**Auth forms post.** `method="post"` is a safety net rather than a
+feature — the submit handler prevents default, so it is never used. But
+a form with no method defaults to GET, and a submit escaping the React
+handler would put the password in the URL, the history and every access
+log in between.
+
+## Security headers
+
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin`, and a
+`Permissions-Policy` denying camera, microphone and geolocation.
+
+Deliberately absent: **Content-Security-Policy** and **HSTS**. A CSP
+tight enough to be worth having needs the app's real script, style and
+media origins measured under production; a loose one is decoration. HSTS
+is meaningless until the deployment terminates TLS. Both are deployment
+work, recorded rather than guessed at.
 
 ## Not implemented
 

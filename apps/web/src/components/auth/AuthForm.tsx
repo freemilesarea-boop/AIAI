@@ -90,7 +90,20 @@ export function AuthForm({
       <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{title}</h1>
       <p className="mt-1.5 text-sm text-[var(--text-secondary)]">{subtitle}</p>
 
-      <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-4" noValidate>
+      {/*
+        method="post" is a safety net, not a feature. The submit handler
+        calls preventDefault, so this method is never actually used — but
+        a form with no method defaults to GET, and a submit that happens
+        before React hydrates (or with JS broken) would then put the
+        password in the URL, the browser history and every access log in
+        between. One attribute removes that entire failure mode.
+      */}
+      <form
+        onSubmit={onSubmit}
+        method="post"
+        className="mt-7 flex flex-col gap-4"
+        noValidate
+      >
         <div className="flex flex-col gap-1.5">
           <label htmlFor="email" className="text-xs font-medium text-[var(--text-secondary)]">
             Email
