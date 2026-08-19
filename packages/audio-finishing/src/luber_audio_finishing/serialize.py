@@ -18,6 +18,7 @@ from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from luber_audio_finishing.acceptance import AcceptanceVerdict
 from luber_audio_finishing.analysis import AudioAnalysis, Distribution
 from luber_audio_finishing.decision import FinishingPlan
 from luber_audio_finishing.report import AudioAnalysisReport
@@ -73,4 +74,37 @@ def plan_to_dict(plan: FinishingPlan) -> dict[str, Any]:
         "risks": [_clean(finding) for finding in plan.risks],
         "actions": [_clean(action) for action in plan.actions],
         "deferred": [_clean(item) for item in plan.deferred],
+        # Corrections the rules called for and the engine declined. Kept
+        # because an empty action list has two very different meanings —
+        # nothing was wrong, or something was wrong and was left alone —
+        # and only this tells them apart.
+        "suppressed": [_clean(item) for item in plan.suppressed],
+    }
+
+
+def verdict_to_dict(verdict: AcceptanceVerdict) -> dict[str, Any]:
+    """Why a render was kept or thrown away.
+
+    Every check is recorded, not only the failures. A verdict that lists
+    two objections tells you what went wrong; one that lists eighteen
+    passes and two objections also tells you what was examined, which is
+    what makes a later "why was this accepted?" answerable.
+    """
+    return {
+        "outcome": verdict.outcome.value,
+        "accepted": verdict.accepted,
+        "summary": verdict.summary(),
+        "failed_checks": [check.name for check in verdict.failures],
+        "checks": [
+            {
+                "kind": check.kind.value,
+                "name": check.name,
+                "passed": check.passed,
+                "detail": check.detail,
+                "source_value": _clean(check.source_value),
+                "finished_value": _clean(check.finished_value),
+                "tolerance": _clean(check.tolerance),
+            }
+            for check in verdict.checks
+        ],
     }

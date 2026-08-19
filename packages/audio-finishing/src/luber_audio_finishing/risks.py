@@ -36,6 +36,7 @@ class RiskFlag(StrEnum):
     PRESENCE_DEFICIT = "PRESENCE_DEFICIT"
     HIGH_FREQUENCY_DEFICIT = "HIGH_FREQUENCY_DEFICIT"
     AIR_DEFICIT = "AIR_DEFICIT"
+    EXCESSIVE_BRIGHTNESS = "EXCESSIVE_BRIGHTNESS"
     HARSHNESS_RISK = "HARSHNESS_RISK"
     SIBILANCE_RISK = "SIBILANCE_RISK"
     TRANSIENT_FLATNESS = "TRANSIENT_FLATNESS"
@@ -43,8 +44,13 @@ class RiskFlag(StrEnum):
     STEREO_TOO_WIDE = "STEREO_TOO_WIDE"
     STEREO_IMBALANCE = "STEREO_IMBALANCE"
     LOW_END_PHASE_RISK = "LOW_END_PHASE_RISK"
+    BROADBAND_PHASE_RISK = "BROADBAND_PHASE_RISK"
     CLIPPING_PRESENT = "CLIPPING_PRESENT"
     DC_OFFSET_PRESENT = "DC_OFFSET_PRESENT"
+    #: Not a defect. A heavy low end that is clean and mono-compatible is
+    #: a production choice, and this records that the engine recognised
+    #: it as one — see ``low_end_is_intentional``.
+    LOW_END_INTENTIONAL = "LOW_END_INTENTIONAL"
 
 
 # ── Thresholds ───────────────────────────────────────────────────────
@@ -68,6 +74,25 @@ LOW_MID_MUD_DB = 5.5
 #: energy there — the corpus median is 0.47 — so only the top of the
 #: range qualifies as excess.
 LOW_END_EXCESS_SHARE = 0.70
+
+# Bright is not the absence of dark, so it gets its own two conditions
+# rather than an inverted threshold. Both must hold, because either alone
+# is ambiguous: a shallow slope can come from a thin low end, and a high
+# air ratio can come from a mix that is simply quiet in the mids.
+#
+# 10-16 kHz relative to the midrange. Corpus median -25.7 dB, p90 -18.3,
+# maximum -12.9. -16 sits above the ninetieth percentile.
+EXCESSIVE_BRIGHTNESS_AIR_DB = -16.0
+#: Corpus slope runs -11.2 to -3.5 with a median of -6.2. Pink noise
+#: falls at -3 dB/octave and dense mixes sit steeper, so a master barely
+#: steeper than pink noise is tilted up relative to its own material.
+#: Together these two fire on 3 of the 57-master corpus.
+BRIGHT_SLOPE_DB_PER_OCTAVE = -5.0
+
+#: Bass this well correlated between channels survives a mono fold-down
+#: intact, which is most of what separates deliberate weight from a
+#: low-end problem.
+INTENTIONAL_LOW_END_CORRELATION = 0.90
 
 # Harshness and sibilance are judged by how far the band *spikes* above
 # its own median, not by absolute level: 6-9 kHz holds cymbals, string
@@ -93,6 +118,23 @@ STEREO_WIDE_WIDTH = 0.45
 STEREO_IMBALANCE_DB = 0.8
 #: Correlation below 120 Hz. Below this, bass partially cancels in mono.
 LOW_END_PHASE_CORRELATION = 0.90
+#: Broadband correlation. The corpus runs 0.37 to 0.94, so this fires on
+#: nothing here by design: it is not describing LUBER output, it is a
+#: tripwire for a master that would partially cancel in mono across the
+#: whole spectrum, which no amount of EQ can repair and which must never
+#: be widened further.
+BROADBAND_PHASE_CORRELATION = 0.20
+#: Widening is refused below this. The side channel is what a mono
+#: fold-down cancels, so boosting it on already-decorrelated material
+#: trades a narrow image for a hollow one.
+#:
+#: Structurally this should never bind: width is side/(mid+side), so
+#: decorrelated channels measure as *wide*, and a track narrow enough to
+#: widen has high correlation by construction. It is a floor under the
+#: widening rule rather than a rule of its own — the guarantee that no
+#: future change to how width is measured can turn widening loose on
+#: material that would collapse in mono.
+SAFE_TO_WIDEN_CORRELATION = 0.50
 #: Crest factor over 50 ms windows. The corpus sits at 7.0-9.3 dB, so
 #: this fires on nothing here; it exists to detect a future regression.
 TRANSIENT_FLAT_CREST_DB = 6.5
@@ -122,6 +164,35 @@ class RiskFinding:
 def _band_share(analysis: AudioAnalysis, name: str) -> float | None:
     band = analysis.frequency.band(name)
     return None if band is None else band.share
+
+
+def low_end_is_intentional(analysis: AudioAnalysis) -> bool:
+    """Is a heavy low end a production choice rather than a problem?
+
+    Bass-forward is an entire aesthetic, and a share threshold alone
+    cannot tell a deliberately weighted mix from a boomy one — both put
+    most of their energy below 150 Hz. What separates them is whether
+    that energy is *controlled*, and two measurements say so:
+
+    *It does not smear upward.* Deliberate weight stays in the sub and
+    bass bands. A low-end problem bleeds into 150-400 Hz, which is what
+    the mud measurement already detects and what actually obscures
+    everything else.
+
+    *It survives mono.* Deliberate weight is close to mono to begin
+    with; decorrelated bass is an accident of how the audio was made.
+
+    On the 57-master corpus, 7 tracks exceed the excess threshold and 5
+    of them pass both tests. Cutting those 5 would remove the point of
+    the track. The remaining 2 are thick and uncontrolled, and they are
+    the ones the low-shelf rule exists for.
+    """
+    if analysis.frequency.low_mid_ratio_db.p50 > LOW_MID_MUD_DB:
+        return False
+    correlation = analysis.stereo.low_band_correlation
+    if correlation is not None and correlation < INTENTIONAL_LOW_END_CORRELATION:
+        return False
+    return True
 
 
 def evaluate_risks(analysis: AudioAnalysis) -> tuple[RiskFinding, ...]:
@@ -171,6 +242,30 @@ def evaluate_risks(analysis: AudioAnalysis) -> tuple[RiskFinding, ...]:
             )
         )
 
+    # The opposite condition, detected on its own terms rather than as
+    # the absence of the one above. A bright master is tilted up across
+    # the top *steadily*; a harsh or sibilant one spikes in a band. The
+    # two need opposite responses — a shelf trim against the first, no
+    # shelf at all against the second — so they must not be conflated.
+    if (
+        air_present
+        and not math.isnan(slope)
+        and air > EXCESSIVE_BRIGHTNESS_AIR_DB
+        and slope > BRIGHT_SLOPE_DB_PER_OCTAVE
+    ):
+        findings.append(
+            RiskFinding(
+                flag=RiskFlag.EXCESSIVE_BRIGHTNESS,
+                metric="frequency.air_ratio_db.p50",
+                value=air,
+                threshold=EXCESSIVE_BRIGHTNESS_AIR_DB,
+                detail=(
+                    f"10-16 kHz sits {air:.1f} dB from the body with the spectrum "
+                    f"falling only {slope:.2f} dB/octave"
+                ),
+            )
+        )
+
     presence = frequency.presence_ratio_db.p50
     if presence < PRESENCE_DEFICIT_DB:
         findings.append(
@@ -209,6 +304,23 @@ def evaluate_risks(analysis: AudioAnalysis) -> tuple[RiskFinding, ...]:
                     detail=f"{low_share:.0%} of banded energy sits below 150 Hz",
                 )
             )
+            # Recorded alongside the excess, not instead of it. The
+            # measurement is real either way; what this adds is that the
+            # weight looks deliberate, which is the decision engine's
+            # cue to leave it alone.
+            if low_end_is_intentional(analysis):
+                findings.append(
+                    RiskFinding(
+                        flag=RiskFlag.LOW_END_INTENTIONAL,
+                        metric="frequency.bands.sub+bass.share",
+                        value=low_share,
+                        threshold=LOW_END_EXCESS_SHARE,
+                        detail=(
+                            "the low end is clean and mono-compatible, so its weight "
+                            "reads as a production choice rather than a defect"
+                        ),
+                    )
+                )
 
     if (
         sibilance.harshness_peak_excess_db > HARSHNESS_PEAK_EXCESS_DB
@@ -316,6 +428,19 @@ def _stereo_risks(analysis: AudioAnalysis) -> list[RiskFinding]:
                 value=balance,
                 threshold=STEREO_IMBALANCE_DB,
                 detail=f"left is {balance:+.2f} dB relative to right",
+            )
+        )
+    if stereo.correlation is not None and stereo.correlation < BROADBAND_PHASE_CORRELATION:
+        findings.append(
+            RiskFinding(
+                flag=RiskFlag.BROADBAND_PHASE_RISK,
+                metric="stereo.correlation",
+                value=stereo.correlation,
+                threshold=BROADBAND_PHASE_CORRELATION,
+                detail=(
+                    f"channels correlate at {stereo.correlation:.2f} broadband, so much "
+                    "of the material cancels in mono"
+                ),
             )
         )
     if low_correlation is not None and low_correlation < LOW_END_PHASE_CORRELATION:

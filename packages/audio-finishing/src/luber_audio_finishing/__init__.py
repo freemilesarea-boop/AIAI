@@ -12,6 +12,13 @@ writes elsewhere, so the source stays available for A/B comparison,
 future model evaluation, and reprocessing under a later engine version.
 """
 
+from luber_audio_finishing.acceptance import (
+    AcceptanceCheck,
+    AcceptanceOutcome,
+    AcceptanceVerdict,
+    CheckKind,
+    adjudicate,
+)
 from luber_audio_finishing.analysis import (
     AudioAnalysis,
     BandMeasurement,
@@ -33,6 +40,7 @@ from luber_audio_finishing.decision import (
     FinishingAction,
     FinishingDecisionEngine,
     FinishingPlan,
+    SuppressedAction,
 )
 from luber_audio_finishing.loudness import LoudnessMeasurement, measure_loudness
 from luber_audio_finishing.processor import (
@@ -44,14 +52,27 @@ from luber_audio_finishing.processor import (
     read_finishing_stamp,
 )
 from luber_audio_finishing.report import AudioAnalysisReport, build_report
-from luber_audio_finishing.risks import RiskFinding, RiskFlag, evaluate_risks
-from luber_audio_finishing.serialize import analysis_to_dict, plan_to_dict, report_to_dict
+from luber_audio_finishing.risks import (
+    RiskFinding,
+    RiskFlag,
+    evaluate_risks,
+    low_end_is_intentional,
+)
+from luber_audio_finishing.serialize import (
+    analysis_to_dict,
+    plan_to_dict,
+    report_to_dict,
+    verdict_to_dict,
+)
 from luber_audio_finishing.version import FINISHING_VERSION, finishing_stamp
 
 __all__ = [
     "BAND_EDGES",
     "BAND_NAMES",
     "FINISHING_VERSION",
+    "AcceptanceCheck",
+    "AcceptanceOutcome",
+    "AcceptanceVerdict",
     "ActionKind",
     "AlreadyFinishedError",
     "AudioAnalysis",
@@ -59,6 +80,7 @@ __all__ = [
     "AudioLoadError",
     "BandCoverage",
     "BandMeasurement",
+    "CheckKind",
     "DeferredDecision",
     "Distribution",
     "FinishingAction",
@@ -75,8 +97,10 @@ __all__ = [
     "SibilanceMetrics",
     "SpatialProxies",
     "StereoMetrics",
+    "SuppressedAction",
     "TechnicalProperties",
     "TransientMetrics",
+    "adjudicate",
     "analysis_to_dict",
     "analyze_audio",
     "band_coverage",
@@ -86,8 +110,10 @@ __all__ = [
     "finish_audio",
     "finishing_stamp",
     "load_audio",
+    "low_end_is_intentional",
     "measure_loudness",
     "plan_to_dict",
     "read_finishing_stamp",
     "report_to_dict",
+    "verdict_to_dict",
 ]

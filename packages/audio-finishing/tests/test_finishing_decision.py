@@ -9,11 +9,14 @@ that is both dull and sibilant does not get brightened into pain.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from conftest import add_bursts, stereo, write_wav
 
 from luber_audio_finishing.analysis import analyze_audio
 from luber_audio_finishing.decision import (
+    MAX_HIGH_SHELF_CUT_DB,
     MAX_HIGH_SHELF_DB,
     MAX_WIDTH_ADJUST_DB,
     MIN_ACTION_DB,
@@ -43,10 +46,15 @@ class TestHealthyAudio:
         assert plan.actions == ()
         assert plan.risks == ()
 
-    def test_a_bright_mix_is_also_left_alone(self, tmp_path):
-        """Bright is not a defect; only dull and harsh are."""
-        plan = plan_for(tmp_path, stereo(slope_db_per_octave=-2.0))
+    def test_no_action_still_records_what_was_examined(self, tmp_path, healthy_stereo):
+        """NO_ACTION has to be a finding, not an empty response.
+
+        A plan with no actions and no record of having looked is
+        indistinguishable from an engine that never ran.
+        """
+        plan = plan_for(tmp_path, healthy_stereo)
         assert plan.is_no_action
+        assert plan.deferred != ()
 
     def test_no_action_still_records_the_engine_version(self, tmp_path, healthy_stereo):
         assert plan_for(tmp_path, healthy_stereo).finishing_version == FINISHING_VERSION
@@ -231,3 +239,171 @@ class TestAuditability:
         engine = FinishingDecisionEngine()
         first, second = engine.plan(analysis), engine.plan(analysis)
         assert first == second
+
+
+class TestBrightAudio:
+    """The opposite of dull, handled on its own terms.
+
+    Phase 14 could only add high end. That made "bright" mean "nothing to
+    do", which is fine until the model produces something genuinely
+    tilted up — at which point the only adaptive engine in the pipeline
+    has no response to half of the axis it measures.
+    """
+
+    def bright(self):
+        return stereo(band_gains=((10_000.0, 24_000.0, 10.0),))
+
+    def test_a_bright_track_is_recognised_as_bright(self, tmp_path):
+        assert RiskFlag.EXCESSIVE_BRIGHTNESS in plan_for(tmp_path, self.bright()).flags
+
+    def test_a_bright_track_gets_a_high_shelf_cut(self, tmp_path):
+        action = plan_for(tmp_path, self.bright()).action(ActionKind.HIGH_SHELF_CUT)
+        assert action is not None
+        assert action.gain_db is not None and action.gain_db < 0
+
+    def test_the_cut_is_bounded(self, tmp_path):
+        """Cutting is destructive in a way lifting is not.
+
+        A lift cannot remove information; a trim that overshoots throws
+        away detail nothing downstream can restore. So the trim carries a
+        tighter ceiling than the lift, and it holds however bright the
+        input is.
+        """
+        extreme = stereo(band_gains=((10_000.0, 24_000.0, 24.0),))
+        action = plan_for(tmp_path, extreme).action(ActionKind.HIGH_SHELF_CUT)
+        assert action is not None
+        assert action.gain_db is not None
+        assert abs(action.gain_db) <= MAX_HIGH_SHELF_CUT_DB
+        assert MAX_HIGH_SHELF_CUT_DB < MAX_HIGH_SHELF_DB
+
+    def test_the_cut_is_partial(self, tmp_path):
+        """The engine moves the track toward neutral, never onto it."""
+        action = plan_for(tmp_path, self.bright()).action(ActionKind.HIGH_SHELF_CUT)
+        assert action is not None
+        assert action.requested_gain_db is not None
+        distance = abs(action.measured_value - action.threshold)
+        assert abs(action.requested_gain_db) < distance
+
+    def test_a_sibilant_track_is_not_treated_as_bright(self, tmp_path):
+        """A spike is not a tilt, and a shelf is the wrong tool for it.
+
+        Sibilance sits in a band; brightness is spread across the top. A
+        shelf aimed at a spike pulls down the cymbals and string texture
+        with it and still leaves the spike proud of everything around it.
+        """
+        plan = plan_for(
+            tmp_path, add_bursts(stereo(), low_hz=6_000.0, high_hz=9_000.0, gain_db=6.0)
+        )
+        assert RiskFlag.SIBILANCE_RISK in plan.flags
+        assert RiskFlag.EXCESSIVE_BRIGHTNESS not in plan.flags
+        assert plan.action(ActionKind.HIGH_SHELF_CUT) is None
+
+    def test_a_track_is_never_both_lifted_and_cut(self, tmp_path):
+        for samples in (self.bright(), stereo(band_gains=((4_000.0, 24_000.0, -24.0),))):
+            plan = plan_for(tmp_path, samples)
+            lifted = plan.action(ActionKind.HIGH_SHELF_LIFT) is not None
+            cut = plan.action(ActionKind.HIGH_SHELF_CUT) is not None
+            assert not (lifted and cut)
+
+
+class TestIntentionalLowEnd:
+    """Bass-forward is a genre, not a fault.
+
+    The share threshold alone cannot tell a deliberately weighted mix
+    from a boomy one — both put most of their energy below 150 Hz. Five
+    of the seven real masters over that threshold are the former, and
+    cutting them would remove the point of the track.
+    """
+
+    def heavy_clean(self):
+        """Weight in the sub and bass, nothing smeared upward."""
+        return stereo(band_gains=((20.0, 150.0, 16.0),))
+
+    def heavy_muddy(self):
+        """The same weight, plus the 150-400 Hz thickness that obscures."""
+        return stereo(band_gains=((20.0, 150.0, 16.0), (150.0, 400.0, 12.0)))
+
+    def test_the_excess_is_still_measured(self, tmp_path):
+        """Recognising intent must not mean failing to notice."""
+        assert RiskFlag.LOW_END_EXCESS in plan_for(tmp_path, self.heavy_clean()).flags
+
+    def test_a_clean_heavy_low_end_is_not_cut(self, tmp_path):
+        plan = plan_for(tmp_path, self.heavy_clean())
+        assert RiskFlag.LOW_END_INTENTIONAL in plan.flags
+        assert plan.action(ActionKind.LOW_SHELF_CUT) is None
+
+    def test_declining_to_cut_is_recorded_with_its_reason(self, tmp_path):
+        """Otherwise "we decided not to" reads as "the rule never fired"."""
+        plan = plan_for(tmp_path, self.heavy_clean())
+        suppressed = [s for s in plan.suppressed if s.kind is ActionKind.LOW_SHELF_CUT]
+        assert len(suppressed) == 1
+        assert suppressed[0].trigger is RiskFlag.LOW_END_EXCESS
+        assert "deliberate" in suppressed[0].reason
+
+    def test_a_muddy_low_end_is_still_corrected(self, tmp_path):
+        """The guard must not become a blanket exemption for heavy bass."""
+        plan = plan_for(tmp_path, self.heavy_muddy())
+        assert RiskFlag.LOW_END_INTENTIONAL not in plan.flags
+        assert plan.action(ActionKind.LOW_MID_CUT) is not None
+
+
+class TestPhaseSafety:
+    """The opposite of narrow, and the guard that keeps them apart.
+
+    Width and correlation are two readings of one thing: width is
+    side/(mid+side), and anti-correlated channels put almost all their
+    energy in the side. So a track cannot be both narrow and out of
+    phase — inverting one channel of a narrow mix produces a *wide*
+    measurement, not a narrower one. The two conditions therefore need
+    genuinely opposite responses rather than one rule with a sign.
+    """
+
+    def out_of_phase(self):
+        samples = stereo(decorrelation=0.02)
+        samples[:, 1] *= -1.0
+        return samples
+
+    def test_a_phase_unsafe_track_is_recognised(self, tmp_path):
+        plan = plan_for(tmp_path, self.out_of_phase())
+        assert RiskFlag.BROADBAND_PHASE_RISK in plan.flags
+
+    def test_a_phase_unsafe_track_is_narrowed_not_widened(self, tmp_path):
+        plan = plan_for(tmp_path, self.out_of_phase())
+        width = plan.action(ActionKind.STEREO_WIDTH)
+        assert width is not None and width.gain_db is not None
+        assert width.gain_db < 0
+
+    def test_a_phase_unsafe_track_gets_its_bass_summed_to_mono(self, tmp_path):
+        """The part of the damage that survives into mono as missing bass."""
+        plan = plan_for(tmp_path, self.out_of_phase())
+        assert plan.action(ActionKind.LOW_FREQUENCY_MONO) is not None
+
+    def test_a_narrow_but_coherent_track_is_still_widened(self, tmp_path):
+        """The guard is about phase, not about width."""
+        plan = plan_for(tmp_path, stereo(decorrelation=0.02))
+        width = plan.action(ActionKind.STEREO_WIDTH)
+        assert width is not None
+        assert width.gain_db is not None and width.gain_db > 0
+
+    def test_widening_is_refused_on_decorrelated_material(self, tmp_path):
+        """Tested on a constructed analysis, because audio cannot be both.
+
+        Narrow-and-decorrelated is unreachable from real signals — the
+        measurements contradict each other — so the only way to exercise
+        the guard is to hand the engine the contradiction directly. It
+        exists because the day some future analysis change makes the two
+        measurements disagree is not the day to discover that widening
+        had no floor under it.
+        """
+        analysis = analyze_audio(
+            write_wav(tmp_path / "n.wav", stereo(decorrelation=0.02)), measure_r128=False
+        )
+        decorrelated = replace(analysis, stereo=replace(analysis.stereo, correlation=0.1))
+        plan = FinishingDecisionEngine().plan(decorrelated)
+
+        assert RiskFlag.STEREO_TOO_NARROW in plan.flags
+        width = plan.action(ActionKind.STEREO_WIDTH)
+        assert width is None or (width.gain_db or 0.0) <= 0.0
+        suppressed = [s for s in plan.suppressed if s.kind is ActionKind.STEREO_WIDTH]
+        assert len(suppressed) == 1
+        assert suppressed[0].trigger is RiskFlag.STEREO_TOO_NARROW

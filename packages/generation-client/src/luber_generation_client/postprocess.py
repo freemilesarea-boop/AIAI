@@ -51,6 +51,7 @@ from luber_audio_finishing import (
     FinishingError,
     finish_audio,
     plan_to_dict,
+    verdict_to_dict,
 )
 from luber_audio_utils import (
     MASTER_FILE_EXTENSION,
@@ -112,6 +113,11 @@ class FinishingRecord:
     #: Serialised plan: risks, actions, ceilings, deferrals. ``None``
     #: when the engine raised before producing one.
     plan: dict[str, object] | None = None
+    #: How the render was judged against the raw master: every check, its
+    #: numbers, and the verdict. ``None`` when nothing was rendered.
+    #: Kept for REJECTED and FINISHED alike, because "why was this one
+    #: accepted?" is as much a question as "why was that one refused?".
+    verdict: dict[str, object] | None = None
     #: Present only for FAILED, and never shown to users.
     error: str | None = None
 
@@ -205,6 +211,28 @@ async def _finish_master(
         )
 
     plan = plan_to_dict(result.plan)
+    verdict = None if result.verdict is None else verdict_to_dict(result.verdict)
+
+    if result.rejected:
+        # The engine rendered, measured its own output and judged the raw
+        # master better. Logged at info: this is the safeguard working,
+        # not a fault, and warning-level noise would train people to
+        # ignore it.
+        logger.info(
+            "finishing was rejected on review; delivering the raw master",
+            extra={
+                "generation_id": str(generation_id),
+                "reasons": list(result.rejection_reasons),
+            },
+        )
+        return None, FinishingRecord(
+            outcome=FinishingOutcome.REJECTED,
+            finishing_version=result.finishing_version,
+            source_sha256=master_sha256,
+            plan=plan,
+            verdict=verdict,
+        )
+
     if not result.changed or result.output_path is None:
         logger.info(
             "finishing took no action; delivering the raw master",
@@ -222,6 +250,7 @@ async def _finish_master(
         finishing_version=result.finishing_version,
         source_sha256=master_sha256,
         plan=plan,
+        verdict=verdict,
     )
 
 

@@ -71,13 +71,21 @@ class FinishingOutcome(StrEnum):
 
     Recorded durably so that "the engine looked and found nothing to do"
     stays distinguishable from "the engine never ran" (no record at all)
-    and from "the engine failed" — three states that an absent
+    and from "the engine failed" — states that an absent
     ``FINISHED_MASTER`` asset alone cannot tell apart.
     """
 
     FINISHED = "FINISHED"
     NO_ACTION = "NO_ACTION"
     FAILED = "FAILED"
+    #: The engine corrected the audio, measured what it had produced, and
+    #: judged the raw master better. Deliberately not FAILED: nothing went
+    #: wrong, and the two call for opposite responses — a failure is a bug
+    #: to chase, a rejection is the safeguard working. Deliberately not
+    #: NO_ACTION either, because something *was* wrong and the engine
+    #: could not fix it without making something else worse, which is
+    #: exactly the signal worth acting on when tuning the rules.
+    REJECTED = "REJECTED"
 
 
 class EditKind(StrEnum):

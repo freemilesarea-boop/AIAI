@@ -34,10 +34,12 @@ from enum import StrEnum
 from luber_audio_finishing.analysis import AudioAnalysis
 from luber_audio_finishing.risks import (
     AIR_DEFICIT_DB,
+    EXCESSIVE_BRIGHTNESS_AIR_DB,
     HIGH_FREQUENCY_DEFICIT_AIR_DB,
     LOW_END_EXCESS_SHARE,
     LOW_MID_MUD_DB,
     PRESENCE_DEFICIT_DB,
+    SAFE_TO_WIDEN_CORRELATION,
     STEREO_IMBALANCE_DB,
     STEREO_NARROW_WIDTH,
     STEREO_WIDE_WIDTH,
@@ -53,6 +55,11 @@ from luber_audio_finishing.version import FINISHING_VERSION
 # a clamped decision is visible in the plan rather than looking like a
 # considered choice.
 MAX_HIGH_SHELF_DB = 3.0
+#: Trimming brightness is held to a tighter ceiling than adding it. A
+#: dark master is missing information and a lift cannot remove any; a
+#: bright one has the information, and cutting too far throws away detail
+#: that no later stage can put back.
+MAX_HIGH_SHELF_CUT_DB = 2.0
 MAX_PRESENCE_LIFT_DB = 2.0
 MAX_LOW_MID_CUT_DB = 2.5
 MAX_LOW_SHELF_CUT_DB = 1.5
@@ -105,6 +112,7 @@ class ActionKind(StrEnum):
     LOW_MID_CUT = "LOW_MID_CUT"
     PRESENCE_LIFT = "PRESENCE_LIFT"
     HIGH_SHELF_LIFT = "HIGH_SHELF_LIFT"
+    HIGH_SHELF_CUT = "HIGH_SHELF_CUT"
     STEREO_WIDTH = "STEREO_WIDTH"
     LOW_FREQUENCY_MONO = "LOW_FREQUENCY_MONO"
 
@@ -130,6 +138,25 @@ class FinishingAction:
 
 
 @dataclass(frozen=True)
+class SuppressedAction:
+    """A correction the rules called for, and the engine declined.
+
+    Distinct from ``DeferredDecision``, which is a standing choice about
+    a whole area of processing. This is per-track and evidenced: the
+    measurement said to act, something else said not to, and the second
+    won. Recording it is what keeps the plan honest — a rule that
+    silently returns nothing is indistinguishable from a rule that never
+    fired, and the two mean opposite things about the audio.
+    """
+
+    kind: ActionKind
+    trigger: RiskFlag | None
+    reason: str
+    metric: str
+    measured_value: float
+
+
+@dataclass(frozen=True)
 class DeferredDecision:
     """Something deliberately not done, and why.
 
@@ -147,6 +174,9 @@ class FinishingPlan:
     actions: tuple[FinishingAction, ...]
     risks: tuple[RiskFinding, ...]
     deferred: tuple[DeferredDecision, ...]
+    #: Corrections the rules called for and the engine declined, each
+    #: with the evidence that overrode it.
+    suppressed: tuple[SuppressedAction, ...] = ()
     #: Peak ceiling the processor must respect, in dBFS.
     output_ceiling_dbfs: float = OUTPUT_CEILING_DBFS
     #: Match the finished loudness to the source's, so an A/B comparison
@@ -236,23 +266,25 @@ class FinishingDecisionEngine:
         risks = evaluate_risks(analysis)
         present = {finding.flag: finding for finding in risks}
         actions: list[FinishingAction] = []
+        suppressed: list[SuppressedAction] = []
 
         # Order matters and is the order of the rendered chain: balance,
         # then subtractive EQ, then additive EQ, then the stereo stage.
         # Cutting before boosting means the boost is applied to audio
         # that has already lost its excess rather than compounding it.
         actions.extend(self._balance(analysis, present))
-        actions.extend(self._low_shelf_cut(analysis, present))
+        actions.extend(self._low_shelf_cut(analysis, present, suppressed))
         actions.extend(self._low_mid_cut(analysis, present))
-        actions.extend(self._presence_lift(analysis, present))
+        actions.extend(self._presence_lift(analysis, present, suppressed))
         actions.extend(self._high_shelf(analysis, present))
-        actions.extend(self._stereo(analysis, present))
+        actions.extend(self._stereo(analysis, present, suppressed))
 
         return FinishingPlan(
             finishing_version=self._version,
             actions=tuple(actions),
             risks=risks,
             deferred=(DEFERRED_DYNAMIC_EQ, DEFERRED_TRANSIENT, DEFERRED_SPATIAL),
+            suppressed=tuple(suppressed),
         )
 
     # ── individual rules ─────────────────────────────────────────────
@@ -286,10 +318,31 @@ class FinishingDecisionEngine:
         ]
 
     def _low_shelf_cut(
-        self, analysis: AudioAnalysis, present: dict[RiskFlag, RiskFinding]
+        self,
+        analysis: AudioAnalysis,
+        present: dict[RiskFlag, RiskFinding],
+        suppressed: list[SuppressedAction],
     ) -> list[FinishingAction]:
         finding = present.get(RiskFlag.LOW_END_EXCESS)
         if finding is None:
+            return []
+        # A heavy low end that is clean and mono-compatible is the point
+        # of the track, not a fault in it. Five of the seven corpus
+        # masters over the excess threshold are in that position.
+        intentional = present.get(RiskFlag.LOW_END_INTENTIONAL)
+        if intentional is not None:
+            suppressed.append(
+                SuppressedAction(
+                    kind=ActionKind.LOW_SHELF_CUT,
+                    trigger=RiskFlag.LOW_END_EXCESS,
+                    reason=(
+                        "the low end is clean and mono-compatible, so its weight is "
+                        "treated as deliberate rather than corrected away"
+                    ),
+                    metric=finding.metric,
+                    measured_value=finding.value,
+                )
+            )
             return []
         # Share is a fraction, so it is converted to dB by how far past
         # the threshold it sits: 10 dB of correction per unit of share.
@@ -347,7 +400,10 @@ class FinishingDecisionEngine:
         ]
 
     def _presence_lift(
-        self, analysis: AudioAnalysis, present: dict[RiskFlag, RiskFinding]
+        self,
+        analysis: AudioAnalysis,
+        present: dict[RiskFlag, RiskFinding],
+        suppressed: list[SuppressedAction],
     ) -> list[FinishingAction]:
         finding = present.get(RiskFlag.PRESENCE_DEFICIT)
         if finding is None:
@@ -356,6 +412,18 @@ class FinishingDecisionEngine:
             # The harshness band is 2.5-5 kHz and the presence band is
             # 2-5 kHz. Lifting one is lifting the other, so a track that
             # spikes here does not get a presence lift at all.
+            suppressed.append(
+                SuppressedAction(
+                    kind=ActionKind.PRESENCE_LIFT,
+                    trigger=RiskFlag.PRESENCE_DEFICIT,
+                    reason=(
+                        "2.5-5 kHz already spikes, and the presence band overlaps it; "
+                        "lifting one would lift the other"
+                    ),
+                    metric=finding.metric,
+                    measured_value=finding.value,
+                )
+            )
             return []
         requested = (PRESENCE_DEFICIT_DB - finding.value) * CORRECTION_FRACTION
         gain, clamped = _clamped_gain(requested, MAX_PRESENCE_LIFT_DB)
@@ -385,7 +453,10 @@ class FinishingDecisionEngine:
         air = present.get(RiskFlag.AIR_DEFICIT)
         finding = broad or air
         if finding is None:
-            return []
+            # Dark and bright are mutually exclusive by construction —
+            # their thresholds are 11 dB apart — so reaching the trim
+            # rule means no deficit fired.
+            return self._high_shelf_trim(analysis, present)
 
         measured_air = analysis.frequency.air_ratio_db.p50
         anchor = HIGH_FREQUENCY_DEFICIT_AIR_DB if broad is not None else AIR_DEFICIT_DB
@@ -427,8 +498,53 @@ class FinishingDecisionEngine:
             )
         ]
 
-    def _stereo(
+    def _high_shelf_trim(
         self, analysis: AudioAnalysis, present: dict[RiskFlag, RiskFinding]
+    ) -> list[FinishingAction]:
+        """The mirror of the lift: a steadily over-bright master, trimmed.
+
+        Only steady brightness qualifies. A track that spikes in 6-9 kHz
+        is sibilant, not bright, and a shelf is the wrong tool for it —
+        it would pull down the cymbals and string texture along with the
+        sibilants and still leave the spikes proud of everything else.
+        That is why the brightness flag requires a shallow slope as well
+        as a high air ratio, and why nothing here reads the spike bands.
+        """
+        finding = present.get(RiskFlag.EXCESSIVE_BRIGHTNESS)
+        if finding is None:
+            return []
+
+        measured_air = analysis.frequency.air_ratio_db.p50
+        requested = (EXCESSIVE_BRIGHTNESS_AIR_DB - measured_air) * CORRECTION_FRACTION
+        gain, clamped = _clamped_gain(requested, MAX_HIGH_SHELF_CUT_DB)
+        if abs(gain) < MIN_ACTION_DB:
+            return []
+        return [
+            FinishingAction(
+                kind=ActionKind.HIGH_SHELF_CUT,
+                trigger=RiskFlag.EXCESSIVE_BRIGHTNESS,
+                reason="high frequencies sit above the body of the mix",
+                metric="frequency.air_ratio_db.p50",
+                measured_value=measured_air,
+                threshold=EXCESSIVE_BRIGHTNESS_AIR_DB,
+                gain_db=gain,
+                requested_gain_db=requested,
+                ceiling_db=MAX_HIGH_SHELF_CUT_DB,
+                clamped=clamped,
+                frequency_hz=AIR_SHELF_HZ,
+                q=SHELF_Q,
+                notes=(
+                    "corner at 10 kHz, above the presence range, so the trim does "
+                    "not touch vocal intelligibility",
+                ),
+            )
+        ]
+
+    def _stereo(
+        self,
+        analysis: AudioAnalysis,
+        present: dict[RiskFlag, RiskFinding],
+        suppressed: list[SuppressedAction],
     ) -> list[FinishingAction]:
         stereo = analysis.stereo
         if not stereo.is_stereo or stereo.width is None:
@@ -438,6 +554,31 @@ class FinishingDecisionEngine:
         narrow = present.get(RiskFlag.STEREO_TOO_NARROW)
         wide = present.get(RiskFlag.STEREO_TOO_WIDE)
         width_finding = narrow if narrow is not None else wide
+        # Widening boosts the side channel, which is precisely what a
+        # mono fold-down cancels. On material whose channels already
+        # disagree that trades a narrow image for a hollow one, so the
+        # phase measurement outranks the width measurement.
+        if narrow is not None:
+            correlation = stereo.correlation
+            unsafe = RiskFlag.BROADBAND_PHASE_RISK in present or (
+                correlation is not None and correlation < SAFE_TO_WIDEN_CORRELATION
+            )
+            if unsafe:
+                suppressed.append(
+                    SuppressedAction(
+                        kind=ActionKind.STEREO_WIDTH,
+                        trigger=RiskFlag.STEREO_TOO_NARROW,
+                        reason=(
+                            "the channels are already too decorrelated to widen safely; "
+                            "boosting the side channel would cost mono compatibility"
+                        ),
+                        metric="stereo.correlation",
+                        measured_value=(correlation if correlation is not None else float("nan")),
+                    )
+                )
+                narrow = None
+                width_finding = wide
+
         if width_finding is not None:
             widening = narrow is not None
             target = TARGET_NARROW_WIDTH if widening else TARGET_WIDE_WIDTH

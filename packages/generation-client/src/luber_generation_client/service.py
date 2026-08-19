@@ -76,6 +76,11 @@ def _finishing_trace_json(record: FinishingRecord) -> str:
     }
     if record.plan is not None:
         payload["plan"] = record.plan
+    if record.verdict is not None:
+        # What the engine measured in its own output and concluded. Kept
+        # whole for the same reason as the plan: a rejection is only
+        # actionable if the numbers behind it survive.
+        payload["verdict"] = record.verdict
     if record.error is not None:
         payload["error"] = record.error
     return json.dumps(payload, sort_keys=True)

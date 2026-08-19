@@ -9,6 +9,7 @@ the audio.
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -16,7 +17,11 @@ from conftest import add_bursts, stereo, write_wav
 
 from luber_audio_finishing.analysis import analyze_audio
 from luber_audio_finishing.audiofile import load_audio
-from luber_audio_finishing.decision import ActionKind, FinishingDecisionEngine
+from luber_audio_finishing.decision import (
+    ActionKind,
+    FinishingAction,
+    FinishingDecisionEngine,
+)
 from luber_audio_finishing.processor import (
     AlreadyFinishedError,
     FinishingError,
@@ -24,7 +29,7 @@ from luber_audio_finishing.processor import (
     finish_audio,
     read_finishing_stamp,
 )
-from luber_audio_finishing.risks import STEREO_IMBALANCE_DB
+from luber_audio_finishing.risks import STEREO_IMBALANCE_DB, RiskFlag
 from luber_audio_finishing.version import FINISHING_VERSION
 
 pytestmark = pytest.mark.skipif(
@@ -193,3 +198,101 @@ class TestContradictoryRender:
             - result.source_analysis.sibilance.sibilance_ratio_db.p90
         )
         assert moved <= 1.5
+
+
+class TestRawFallback:
+    """The engine has to be willing to throw its own work away.
+
+    Everything else in the design exists to make this possible: the raw
+    master is never written to, so refusing a render costs nothing and
+    always leaves a correct deliverable.
+    """
+
+    def rejecting_engine(self):
+        """An engine whose filter does not do what its rule claims.
+
+        The plan says "lift 2-5 kHz by 2 dB"; the filter it carries is a
+        bell at 30 Hz. The render is entirely safe — right duration,
+        right channels, under the ceiling — and the presence ratio it was
+        supposed to move does not move. That is the failure the Phase 14
+        checks could not see, reproduced through the real render path
+        rather than a stubbed verdict.
+
+        Note what it takes to construct: the graph is built *from* the
+        plan, so plan and render cannot disagree by accident. The
+        mismatch has to be injected deliberately, which is a property of
+        the design worth stating rather than a gap in the test.
+        """
+        misplaced = FinishingAction(
+            kind=ActionKind.PRESENCE_LIFT,
+            trigger=RiskFlag.PRESENCE_DEFICIT,
+            reason="test double: claims presence, filters sub-bass",
+            metric="frequency.presence_ratio_db.p50",
+            measured_value=-24.0,
+            threshold=-21.0,
+            gain_db=2.0,
+            requested_gain_db=2.0,
+            ceiling_db=2.0,
+            clamped=False,
+            frequency_hz=30.0,
+            q=0.8,
+        )
+
+        class _Misplaced(FinishingDecisionEngine):
+            def plan(self, analysis):
+                return replace(super().plan(analysis), actions=(misplaced,))
+
+        return _Misplaced()
+
+    def test_a_render_that_fails_review_is_not_delivered(self, tmp_path, dull_stereo):
+        source = write_wav(tmp_path / "raw.wav", dull_stereo)
+        result = finish_audio(source, tmp_path / "out.wav", engine=self.rejecting_engine())
+        assert result.rejected
+        assert result.output_path is None
+        assert not result.changed
+
+    def test_the_rejected_file_is_removed_from_disk(self, tmp_path, dull_stereo):
+        """A rejected render left lying around is one read away from shipping."""
+        source = write_wav(tmp_path / "raw.wav", dull_stereo)
+        destination = tmp_path / "out.wav"
+        finish_audio(source, destination, engine=self.rejecting_engine())
+        assert not destination.exists()
+
+    def test_the_raw_master_survives_a_rejection_untouched(self, tmp_path, dull_stereo):
+        source = write_wav(tmp_path / "raw.wav", dull_stereo)
+        before = source.read_bytes()
+        finish_audio(source, tmp_path / "out.wav", engine=self.rejecting_engine())
+        assert source.read_bytes() == before
+
+    def test_a_rejection_says_why(self, tmp_path, dull_stereo):
+        source = write_wav(tmp_path / "raw.wav", dull_stereo)
+        result = finish_audio(source, tmp_path / "out.wav", engine=self.rejecting_engine())
+        assert result.rejection_reasons
+        assert result.verdict is not None
+        assert result.verdict.failures
+
+    def test_a_rejection_is_not_an_exception(self, tmp_path, dull_stereo):
+        """Rejection is a verdict, and the caller needs the evidence.
+
+        Raising would collapse "the engine judged its output worse" into
+        the same channel as "ffmpeg is missing", and the analysis that
+        justified the decision would be lost with the stack frame.
+        """
+        source = write_wav(tmp_path / "raw.wav", dull_stereo)
+        result = finish_audio(source, tmp_path / "out.wav", engine=self.rejecting_engine())
+        assert result.finished_analysis is not None
+        assert result.plan.actions != ()
+
+    def test_a_good_render_still_passes_review(self, tmp_path, dull_stereo):
+        """The guard must not reject everything and call it safety."""
+        result = finish_audio(write_wav(tmp_path / "d.wav", dull_stereo), tmp_path / "out.wav")
+        assert result.verdict is not None
+        assert result.verdict.accepted, result.verdict.summary()
+        assert result.changed
+
+    def test_no_action_is_not_a_rejection(self, tmp_path, healthy_stereo):
+        """Three ways to deliver the raw master, and they mean different things."""
+        result = finish_audio(write_wav(tmp_path / "h.wav", healthy_stereo), tmp_path / "out.wav")
+        assert result.plan.is_no_action
+        assert not result.rejected
+        assert result.verdict is None

@@ -168,7 +168,10 @@ class TestFrequency:
         assert dark.frequency.spectral_centroid_hz.p50 < light.frequency.spectral_centroid_hz.p50
 
     def test_the_measured_slope_matches_the_constructed_one(self, tmp_path):
-        samples = stereo(slope_db_per_octave=-5.0)
+        # Without the baseline top trim: this is a test of the analyser's
+        # fidelity to a constructed spectrum, so the spectrum has to be
+        # the one that was asked for.
+        samples = stereo(slope_db_per_octave=-5.0, neutral_top=False)
         analysis = analyze_audio(write_wav(tmp_path / "s.wav", samples), measure_r128=False)
         assert analysis.frequency.spectral_slope_db_per_octave == pytest.approx(-5.0, abs=0.5)
 

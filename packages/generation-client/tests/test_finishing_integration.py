@@ -15,6 +15,7 @@ fixture cannot produce both outcomes at once.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import uuid
 import wave
@@ -58,13 +59,22 @@ def healthy_wav(path: Path, seconds: float = 4.0, seed: int = 3) -> Path:
     """A mix with nothing wrong with it, so the engine declines.
 
     Shaped in the frequency domain at -4 dB/octave: steeper than pink
-    noise, well clear of every deficit threshold, and decorrelated only
-    above 200 Hz so the bass stays coherent.
+    noise, and decorrelated only above 200 Hz so the bass stays coherent.
+
+    The trim above 10 kHz is what makes it healthy rather than merely
+    deficit-free. Broadband noise at this slope carries far more top end
+    than music does — it measures an air ratio around -9 dB, brighter
+    than any real master in the corpus — which was invisible while the
+    engine could only detect darkness. Now that it detects brightness
+    too, an untrimmed baseline provokes a high-shelf cut and this fixture
+    stops testing what it claims to. Mirrors ``NEUTRAL_TOP_TRIM`` in the
+    audio-finishing conftest.
     """
     length = int(seconds * RATE)
     freqs = np.fft.rfftfreq(length, 1.0 / RATE)
     shape = np.zeros_like(freqs)
     shape[freqs > 0] = freqs[freqs > 0] ** (-4.0 / 3.0103 / 2.0)
+    shape[freqs >= 10_000.0] *= 10.0 ** (-8.0 / 20.0)
 
     def component(component_seed: int, highpass: float = 0.0) -> np.ndarray:
         rng = np.random.default_rng(component_seed)
@@ -418,3 +428,109 @@ class TestServiceIntegration:
         # duration, so it must still match the raw master.
         raw = select_raw_master(await repository.get_audio_assets(gen.id))
         assert fetched.duration_actual == pytest.approx(raw.duration, abs=0.01)
+
+
+# ── Phase 22: a render the engine judged worse than the raw master ────
+
+
+class TestRejectionPolicy:
+    """Rejection is a fourth outcome, not a dressed-up failure.
+
+    Four ways to end up delivering the raw master, and the pipeline has
+    to keep them apart: the engine never ran, it found nothing to do, it
+    could not run, or it ran and judged its own output worse. Only the
+    third is a fault; only the fourth says the rules need work.
+    """
+
+    def _rejecting(self, monkeypatch):
+        """Patch the engine to reject whatever it renders.
+
+        The real filter chain does not currently produce a render worth
+        rejecting, which is the point of it — so the verdict is forced
+        here rather than waited for.
+        """
+        import luber_generation_client.postprocess as postprocess
+        from luber_audio_finishing import finish_audio as real_finish
+        from luber_audio_finishing.acceptance import (
+            AcceptanceCheck,
+            AcceptanceOutcome,
+            AcceptanceVerdict,
+            CheckKind,
+        )
+
+        refused = AcceptanceVerdict(
+            outcome=AcceptanceOutcome.REJECTED,
+            checks=(
+                AcceptanceCheck(
+                    kind=CheckKind.REGRESSION,
+                    name="sibilance not worsened",
+                    passed=False,
+                    detail="6-9 kHz peak excess worsened by +2.10, past the 0.75 tolerance",
+                ),
+            ),
+        )
+
+        def rejecting(source, destination, **kwargs):
+            result = real_finish(source, destination, **kwargs)
+            destination.unlink(missing_ok=True)
+            return dataclasses.replace(result, output_path=None, verdict=refused)
+
+        monkeypatch.setattr(postprocess, "finish_audio", rejecting)
+
+    async def test_a_rejected_render_delivers_the_raw_master(self, storage, monkeypatch):
+        self._rejecting(monkeypatch)
+        gid = uuid.uuid4()
+        result = await produce_delivery_assets(gid, FIXTURE, storage)
+
+        assert result.finished is None
+        assert result.finishing.outcome is FinishingOutcome.REJECTED
+        assert await storage.exists(master_storage_key(gid))
+        assert await storage.exists(preview_storage_key(gid))
+
+    async def test_no_finished_object_survives_a_rejection(self, storage, monkeypatch):
+        """The rejected audio must not be reachable by any key."""
+        self._rejecting(monkeypatch)
+        gid = uuid.uuid4()
+        result = await produce_delivery_assets(gid, FIXTURE, storage)
+        assert not await storage.exists(finished_master_storage_key(gid))
+        assert all(a.asset_type is not AssetType.FINISHED_MASTER for a in result.assets)
+
+    async def test_the_preview_comes_from_the_raw_master(self, storage, monkeypatch):
+        """A preview cut from audio the engine refused would ship it anyway."""
+        self._rejecting(monkeypatch)
+        gid = uuid.uuid4()
+        result = await produce_delivery_assets(gid, FIXTURE, storage)
+        assert result.delivery_master is result.master
+
+    async def test_a_rejection_is_not_recorded_as_a_failure(self, storage, monkeypatch):
+        self._rejecting(monkeypatch)
+        result = await produce_delivery_assets(uuid.uuid4(), FIXTURE, storage)
+        assert result.finishing.outcome is not FinishingOutcome.FAILED
+        assert result.finishing.error is None
+
+    async def test_the_reasons_are_kept(self, storage, monkeypatch):
+        """A rejection nobody can explain cannot be acted on."""
+        self._rejecting(monkeypatch)
+        result = await produce_delivery_assets(uuid.uuid4(), FIXTURE, storage)
+        verdict = result.finishing.verdict
+        assert verdict is not None
+        assert verdict["outcome"] == "REJECTED"
+        assert verdict["failed_checks"] == ["sibilance not worsened"]
+
+    async def test_the_verdict_reaches_the_durable_trace(
+        self, repository, storage, tmp_path, monkeypatch
+    ):
+        """It has to survive the process, not just the function call."""
+        import json
+
+        self._rejecting(monkeypatch)
+        gen = await _queued(repository)
+        service = GenerationService(
+            repository, MockGenerationProvider(healthy_wav(tmp_path / "h.wav")), storage
+        )
+        await service.execute(gen.id, worker_id="w")
+
+        fetched = await repository.get_generation(gen.id)
+        trace = json.loads(fetched.finishing_trace)
+        assert trace["outcome"] == FinishingOutcome.REJECTED.value
+        assert trace["verdict"]["failed_checks"] == ["sibilance not worsened"]

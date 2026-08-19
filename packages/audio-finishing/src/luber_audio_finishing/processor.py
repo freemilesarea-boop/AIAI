@@ -1,4 +1,4 @@
-"""Rendering a finishing plan, and proving the render was safe.
+"""Rendering a finishing plan, and judging whether to keep it.
 
 The raw generation is the only copy of what the model produced, so the
 processor never writes to its input and never accepts its own output as
@@ -17,6 +17,12 @@ under the ceiling. Peak safety wins when they disagree, which can leave
 the finished file slightly quieter than the raw. That is deliberate. The
 alternative is a limiter, and a limiter would change the dynamics of the
 comparison the listening test is supposed to be about.
+
+Rendering is not the end of the decision. What comes out is measured and
+put to ``acceptance.adjudicate``, which asks whether it is genuinely
+safer or better than the raw master — not merely technically sound. A
+render that fails is deleted and the raw master stands. Because the raw
+master is never touched, refusing is always an option.
 """
 
 from __future__ import annotations
@@ -24,9 +30,10 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+from luber_audio_finishing.acceptance import AcceptanceVerdict, adjudicate
 from luber_audio_finishing.analysis import AudioAnalysis, analyze_audio
 from luber_audio_finishing.decision import (
     MAX_BALANCE_CORRECTION_DB,
@@ -35,7 +42,6 @@ from luber_audio_finishing.decision import (
     FinishingDecisionEngine,
     FinishingPlan,
 )
-from luber_audio_finishing.risks import STEREO_IMBALANCE_DB
 from luber_audio_finishing.version import (
     FINISHING_STAMP_KEY,
     FINISHING_VERSION,
@@ -45,21 +51,17 @@ from luber_audio_finishing.version import (
 
 #: How far the finished loudness may be moved to match the source.
 MAX_LOUDNESS_MATCH_DB = 3.0
-#: True peak is allowed this much slack above the ceiling before the
-#: render is rejected, covering inter-sample estimation differences
-#: between the measuring and rendering passes.
-PEAK_TOLERANCE_DB = 0.1
-#: Every filter in the chain is a zero-delay biquad or a channel-matrix
-#: operation, so any duration change beyond a rounding error means
-#: something is wrong.
-DURATION_TOLERANCE_SECONDS = 0.01
 #: Residual imbalance smaller than this is left alone: it is inaudible,
 #: and correcting it would add a stage to every stereo render.
 MIN_BALANCE_CORRECTION_DB = 0.25
 
 
 class FinishingError(Exception):
-    """Raised when a file cannot be finished, or the result is unsafe."""
+    """Raised when a file cannot be finished at all.
+
+    Not raised for a render that turns out worse than its source: that
+    is a verdict, not an error, and it is returned rather than thrown.
+    """
 
 
 class AlreadyFinishedError(FinishingError):
@@ -73,7 +75,7 @@ class AlreadyFinishedError(FinishingError):
 
 @dataclass(frozen=True)
 class FinishingResult:
-    """What was decided, what was rendered, and the proof it is safe."""
+    """What was decided, what was rendered, and how it was judged."""
 
     finishing_version: str
     plan: FinishingPlan
@@ -91,10 +93,28 @@ class FinishingResult:
     balance_correction_db: float
     #: The exact ffmpeg filter graph, kept for audit.
     filter_graph: str
+    #: How the render was judged against the raw master. ``None`` when
+    #: the plan was NO_ACTION and there was nothing to judge.
+    verdict: AcceptanceVerdict | None = None
 
     @property
     def changed(self) -> bool:
         return self.output_path is not None
+
+    @property
+    def rejected(self) -> bool:
+        """Rendered, judged against the raw master, and turned down.
+
+        Distinct from both NO_ACTION — where nothing was rendered because
+        nothing needed correcting — and from a raised ``FinishingError``,
+        where the engine could not produce a result at all. All three
+        deliver the raw master, for three different reasons.
+        """
+        return self.verdict is not None and not self.verdict.accepted
+
+    @property
+    def rejection_reasons(self) -> tuple[str, ...]:
+        return () if self.verdict is None else self.verdict.reasons
 
 
 def _require(binary: str) -> str:
@@ -182,6 +202,9 @@ def build_filter_graph(
     for kind, filter_name in (
         (ActionKind.LOW_SHELF_CUT, "lowshelf"),
         (ActionKind.LOW_MID_CUT, "equalizer"),
+        # The brightness trim is subtractive, so it belongs with the
+        # cuts, before anything additive.
+        (ActionKind.HIGH_SHELF_CUT, "highshelf"),
         (ActionKind.PRESENCE_LIFT, "equalizer"),
         (ActionKind.HIGH_SHELF_LIFT, "highshelf"),
     ):
@@ -268,41 +291,6 @@ def _output_codec(analysis: AudioAnalysis) -> str:
     return "pcm_s24le"
 
 
-def _verify(source: AudioAnalysis, finished: AudioAnalysis, ceiling_dbfs: float) -> None:
-    problems: list[str] = []
-    if finished.level.clipped_samples > 0:
-        problems.append(f"{finished.level.clipped_samples} clipped samples")
-    true_peak = finished.loudness.true_peak_dbfs
-    if true_peak is not None and true_peak > ceiling_dbfs + PEAK_TOLERANCE_DB:
-        problems.append(f"true peak {true_peak:.2f} dBFS exceeds the {ceiling_dbfs:.2f} ceiling")
-    if finished.level.peak_dbfs > ceiling_dbfs + PEAK_TOLERANCE_DB:
-        problems.append(
-            f"sample peak {finished.level.peak_dbfs:.2f} dBFS exceeds "
-            f"the {ceiling_dbfs:.2f} ceiling"
-        )
-    drift = abs(finished.technical.duration_seconds - source.technical.duration_seconds)
-    if drift > DURATION_TOLERANCE_SECONDS:
-        problems.append(f"duration moved by {drift:.4f} s")
-    if finished.technical.sample_rate != source.technical.sample_rate:
-        problems.append(
-            f"sample rate changed {source.technical.sample_rate} -> "
-            f"{finished.technical.sample_rate}"
-        )
-    if finished.technical.channels != source.technical.channels:
-        problems.append(
-            f"channel count changed {source.technical.channels} -> {finished.technical.channels}"
-        )
-    # The engine must never leave a file more off-centre than the amount
-    # it treats as a defect in the first place. The mid/side stage can
-    # shift balance as a side effect, so this is checked rather than
-    # assumed.
-    finished_balance = finished.stereo.lr_balance_db
-    if finished_balance is not None and abs(finished_balance) > STEREO_IMBALANCE_DB:
-        problems.append(f"output balance {finished_balance:+.2f} dB is off centre")
-    if problems:
-        raise FinishingError("finishing produced unsafe output: " + "; ".join(problems))
-
-
 def finish_audio(
     source: Path,
     destination: Path,
@@ -376,13 +364,9 @@ def finish_audio(
         )
 
     finished = analyze_audio(destination)
-    try:
-        _verify(source_analysis, finished, plan.output_ceiling_dbfs)
-    except FinishingError:
-        destination.unlink(missing_ok=True)
-        raise
+    verdict = adjudicate(plan, source_analysis, finished, ceiling_dbfs=plan.output_ceiling_dbfs)
 
-    return FinishingResult(
+    rendered = FinishingResult(
         finishing_version=plan.finishing_version,
         plan=plan,
         source_analysis=source_analysis,
@@ -393,7 +377,16 @@ def finish_audio(
         peak_safety_reduction_db=min(0.0, headroom),
         balance_correction_db=balance,
         filter_graph=build_filter_graph(plan, output_gain_db=gain, balance_correction_db=balance),
+        verdict=verdict,
     )
+    if verdict.accepted:
+        return rendered
+
+    # The render lost. Deleting it is what makes the fallback real: a
+    # rejected file left on disk is one mistaken read away from being
+    # delivered as if it had been accepted.
+    destination.unlink(missing_ok=True)
+    return replace(rendered, output_path=None)
 
 
 def _residual_balance_correction(filtered: AudioAnalysis) -> float:

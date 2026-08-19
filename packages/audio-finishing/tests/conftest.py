@@ -24,9 +24,33 @@ RATE = 48_000
 #: a full test run stays a few seconds.
 SECONDS = 6.0
 
-#: Pink noise falls at -3 dB/octave; -4 is a plausible healthy mix and
-#: comfortably clear of every deficit threshold.
+#: Pink noise falls at -3 dB/octave; -4 is a plausible healthy mix.
 HEALTHY_SLOPE = -4.0
+
+#: Trim applied above 10 kHz to make the baseline spectrally *neutral*
+#: rather than merely deficit-free.
+#:
+#: Broadband noise at -4 dB/octave carries far more top end than music
+#: does: it measures an air ratio of -9.2 dB, brighter than any of the 57
+#: real masters, whose maximum is -12.9. That was invisible while the
+#: engine only detected darkness, and the original constant was chosen
+#: "comfortably clear of every deficit threshold" — clear on one side
+#: only. With brightness now detected too, an untrimmed baseline is an
+#: over-bright one, and every fixture built on it would carry a defect it
+#: was not meant to have.
+#:
+#: -8 dB above 10 kHz lands the baseline at a slope of -6.04 dB/octave
+#: and an air ratio of -17.2 dB. That clears the dark rule's slope
+#: condition (-6.5) and the bright rule's air condition (-16.0)
+#: *separately*, so the fixture does not depend on one half of an AND to
+#: stay healthy. Trimming further would widen the air margin but push the
+#: slope past -6.5, which is the wrong trade: it would leave the baseline
+#: one condition away from reading as dark.
+#:
+#: Applied to the whole stereo helper rather than to the healthy fixture
+#: alone, so a fixture built to be muddy or sibilant is muddy or sibilant
+#: and nothing else.
+NEUTRAL_TOP_TRIM = (10_000.0, 24_000.0, -8.0)
 
 
 def _spectrum_shape(freqs: np.ndarray, slope_db_per_octave: float) -> np.ndarray:
@@ -96,6 +120,7 @@ def stereo(
     rate: int = RATE,
     slope_db_per_octave: float = HEALTHY_SLOPE,
     band_gains: tuple[tuple[float, float, float], ...] = (),
+    neutral_top: bool = True,
 ) -> np.ndarray:
     """A stereo pair with a controlled image.
 
@@ -104,11 +129,14 @@ def stereo(
     low-end phase rule on every test that meant to be about something
     else.
     """
+    # The neutral trim goes first so an explicit band_gain can override
+    # it: a fixture that means to be bright says so and wins.
+    gains = (NEUTRAL_TOP_TRIM, *band_gains) if neutral_top else band_gains
     shape = {
         "seconds": seconds,
         "rate": rate,
         "slope_db_per_octave": slope_db_per_octave,
-        "band_gains": band_gains,
+        "band_gains": gains,
     }
     common = shaped_noise(seed=seed, **shape)
     left_only = shaped_noise(seed=seed + 101, highpass_hz=decorrelation_highpass_hz, **shape)
