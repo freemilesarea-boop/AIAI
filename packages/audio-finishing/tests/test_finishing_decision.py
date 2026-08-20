@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from conftest import add_bursts, stereo, write_wav
+from finishing_fixtures import add_bursts, stereo, write_wav
 
 from luber_audio_finishing.analysis import analyze_audio
 from luber_audio_finishing.decision import (
@@ -202,7 +202,7 @@ class TestStereoDecisions:
         assert balance.gain_db < 0
 
     def test_a_mono_file_gets_no_stereo_corrections(self, tmp_path):
-        from conftest import shaped_noise
+        from finishing_fixtures import shaped_noise
 
         plan = plan_for(tmp_path, shaped_noise() * 0.4)
         assert plan.action(ActionKind.STEREO_WIDTH) is None

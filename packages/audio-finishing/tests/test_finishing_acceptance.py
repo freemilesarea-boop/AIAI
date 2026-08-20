@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from conftest import stereo, write_wav
+from finishing_fixtures import stereo, write_wav
 
 from luber_audio_finishing.acceptance import (
     MAX_LOUDNESS_INCREASE_LU,

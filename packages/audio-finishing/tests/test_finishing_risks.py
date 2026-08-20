@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from conftest import add_bursts, shaped_noise, stereo, write_wav
+from finishing_fixtures import add_bursts, shaped_noise, stereo, write_wav
 
 from luber_audio_finishing.analysis import analyze_audio
 from luber_audio_finishing.risks import (

@@ -8,7 +8,7 @@ one. Both failures produce output that looks like analysis and is not.
 from __future__ import annotations
 
 import pytest
-from conftest import dominated_by_one_artist, record, sparse_genre
+from intelligence_fixtures import dominated_by_one_artist, record, sparse_genre
 
 from luber_dataset.factory.intelligence import concentration, distributions, findings, targets
 from luber_dataset.factory.intelligence import profile as profile_module
@@ -168,7 +168,7 @@ class TestConcentration:
 
 class TestFamilyPressure:
     def test_a_large_family_is_measured(self):
-        from conftest import one_big_duplicate_family
+        from intelligence_fixtures import one_big_duplicate_family
 
         profile = build(one_big_duplicate_family(family_size=20, others=10))
         pressure = profile.family_pressure
@@ -183,7 +183,7 @@ class TestFamilyPressure:
         assert profile.family_pressure.largest_family == 1
 
     def test_tracks_over_the_cap_are_counted(self):
-        from conftest import one_big_duplicate_family
+        from intelligence_fixtures import one_big_duplicate_family
 
         profile = build(one_big_duplicate_family(family_size=20, others=2), duplicate_family_cap=1)
         assert profile.family_pressure.tracks_over_cap == 19

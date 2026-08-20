@@ -14,7 +14,7 @@ from itertools import pairwise
 
 import numpy as np
 import pytest
-from conftest import RATE, shaped_noise, stereo, write_wav
+from finishing_fixtures import RATE, shaped_noise, stereo, write_wav
 
 from luber_audio_finishing.analysis import analyze_audio
 from luber_audio_finishing.audiofile import AudioLoadError, load_audio

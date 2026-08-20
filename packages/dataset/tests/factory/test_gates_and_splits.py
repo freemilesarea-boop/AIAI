@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import tone, write_sidecar, write_wav
+from factory_fixtures import tone, write_sidecar, write_wav
 
 from luber_dataset.factory.classification import assess_language, assess_text, assess_vocals
 from luber_dataset.factory.config import SplitConfig

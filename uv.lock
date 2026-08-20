@@ -16,6 +16,7 @@ members = [
     "luber-audio-worker",
     "luber-database",
     "luber-dataset",
+    "luber-evaluation",
     "luber-generation-client",
     "luber-generation-worker",
     "luber-music-ai",
@@ -954,6 +955,21 @@ dependencies = [
 requires-dist = [
     { name = "luber-audio-finishing", editable = "packages/audio-finishing" },
     { name = "numpy", specifier = ">=2.1" },
+]
+
+[[package]]
+name = "luber-evaluation"
+version = "0.1.0"
+source = { editable = "packages/evaluation" }
+dependencies = [
+    { name = "luber-audio-finishing" },
+    { name = "luber-training" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "luber-audio-finishing", editable = "packages/audio-finishing" },
+    { name = "luber-training", editable = "packages/training" },
 ]
 
 [[package]]

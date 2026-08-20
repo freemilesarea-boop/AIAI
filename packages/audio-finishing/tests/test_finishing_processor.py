@@ -13,7 +13,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from conftest import add_bursts, stereo, write_wav
+from finishing_fixtures import add_bursts, stereo, write_wav
 
 from luber_audio_finishing.analysis import analyze_audio
 from luber_audio_finishing.audiofile import load_audio

@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import curated_record, manifest_record
+from training_fixtures import curated_record, manifest_record
 
 from luber_training.config import TrainingConfig, preset
 from luber_training.entities import TrainingDatasetRef

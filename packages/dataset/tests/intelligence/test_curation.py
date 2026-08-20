@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import (
+from intelligence_fixtures import (
     dominated_by_one_artist,
     mixed_rights,
     one_big_duplicate_family,

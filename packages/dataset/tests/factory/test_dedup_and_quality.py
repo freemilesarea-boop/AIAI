@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import RATE, pulse, requires_ffmpeg, tone, transcode, write_wav
+from factory_fixtures import RATE, pulse, requires_ffmpeg, tone, transcode, write_wav
 
 from luber_audio_finishing import load_audio
 from luber_dataset.factory.audio_analysis import TechnicalAnalysis

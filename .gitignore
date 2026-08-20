@@ -77,3 +77,12 @@ datasets/
 training_runs/
 training-registry/
 worker_capabilities.json
+
+# Evaluation outputs. Generated audio, metric streams and verdict
+# records are operator state: large, often not ours to redistribute, and
+# reproducible from the recorded suite and lineage. The sample digests
+# live in the artifact record, so audio discarded here can still be
+# checked against what was measured.
+evaluations/
+evaluation-runs/
+evaluation-output/

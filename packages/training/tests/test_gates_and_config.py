@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import build_locked_dataset, manifest_record
+from training_fixtures import build_locked_dataset, manifest_record
 
 from luber_training import config as config_module
 from luber_training.config import ConfigError, TrainingConfig, from_dict, preset, validate
@@ -29,7 +29,7 @@ from luber_training.gates import (
 
 
 def curated(records):
-    from conftest import curated_record
+    from training_fixtures import curated_record
 
     return [curated_record(record) for record in records]
 
@@ -187,7 +187,7 @@ class TestRightsGate:
 
     def test_unselected_tracks_are_not_judged(self):
         """A track curation excluded is not going to be trained on."""
-        from conftest import curated_record
+        from training_fixtures import curated_record
 
         record = curated_record(
             manifest_record("trk_bad", permission="FALSE"), action="EXCLUDE_POLICY"

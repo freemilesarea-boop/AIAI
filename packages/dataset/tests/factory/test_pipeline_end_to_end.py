@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import tone, write_garbage, write_sidecar, write_wav
+from factory_fixtures import tone, write_garbage, write_sidecar, write_wav
 
 from luber_dataset.factory import manifest as manifest_io
 from luber_dataset.factory.config import FactoryConfig, QualityThresholds

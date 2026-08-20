@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import build_locked_dataset, manifest_record
+from training_fixtures import build_locked_dataset, manifest_record
 
 from luber_training.backends import (
     DRY_RUN,
