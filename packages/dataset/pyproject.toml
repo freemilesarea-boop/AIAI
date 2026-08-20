@@ -3,7 +3,10 @@ name = "luber-dataset"
 version = "0.1.0"
 description = "Authorized training dataset schema, rights gate, and quality gates"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["numpy>=2.1", "luber-audio-finishing"]
+
+[tool.uv.sources]
+luber-audio-finishing = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

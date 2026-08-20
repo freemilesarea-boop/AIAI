@@ -90,6 +90,8 @@ select = [
 # Developer CLI tools: stdout is their user interface.
 "scripts/**" = ["T20"]
 "services/audio-worker/src/luber_audio_worker/reference_cleanup.py" = ["T20"]
+# The dataset factory CLI: stdout is its user interface, same as scripts/.
+"packages/dataset/src/luber_dataset/factory/cli.py" = ["T20"]
 "benchmarks/*/scripts/*.py" = ["T20"]
 # Embedded HTML/JS template: wrapping would alter the rendered page.
 "benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]
