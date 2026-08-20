@@ -20,6 +20,7 @@ members = [
     "packages/audio-utils",
     "packages/dataset",
     "packages/audio-finishing",
+    "packages/training",
 ]
 
 [dependency-groups]
@@ -46,6 +47,7 @@ testpaths = [
     "packages/generation-client/tests",
     "packages/audio-utils/tests",
     "packages/dataset/tests",
+    "packages/training/tests",
     "benchmarks/music_quality/tests",
     "benchmarks/reference_audio/tests",
     "benchmarks/audio_finishing/tests",
@@ -65,6 +67,7 @@ src = [
     "packages/generation-client/src",
     "packages/audio-utils/src",
     "packages/dataset/src",
+    "packages/training/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
@@ -92,6 +95,8 @@ select = [
 "services/audio-worker/src/luber_audio_worker/reference_cleanup.py" = ["T20"]
 # The dataset factory CLI: stdout is its user interface, same as scripts/.
 "packages/dataset/src/luber_dataset/factory/cli.py" = ["T20"]
+# Operator training CLI: stdout is its user interface.
+"packages/training/src/luber_training/cli.py" = ["T20"]
 "benchmarks/*/scripts/*.py" = ["T20"]
 # Embedded HTML/JS template: wrapping would alter the rendered page.
 "benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]
@@ -114,6 +119,7 @@ mypy_path = [
     "packages/generation-client/src",
     "packages/audio-utils/src",
     "packages/dataset/src",
+    "packages/training/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",

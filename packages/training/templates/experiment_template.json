@@ -1,0 +1,63 @@
+{
+  "template_schema_version": "luber-experiment-template/1",
+  "name": "TEMPLATE-KO-PHRASING",
+  "status": "DRAFT",
+  "blocked_reason": "BLOCKED_DATASET: no authorized curated dataset exists yet",
+
+  "hypothesis": "LoRA adaptation on authorized modern Korean vocal material shifts the model's phrasing prior away from trot-like delivery.",
+
+  "hypothesis_evidence_status": "UNPROVEN",
+  "hypothesis_notes": [
+    "This is a hypothesis, not a finding. The Phase 20 objective baseline measured spectral and stereo properties; it did not measure stylistic phrasing.",
+    "The Phase 20H blind human listening that would bear on this was deliberately deferred and has zero scores recorded. Nothing quantitative supports or refutes the hypothesis today.",
+    "The anti-trot probe prompts (TROT-01..04) exist in the P20 benchmark, but that benchmark is evaluation material and must never enter training."
+  ],
+
+  "target_failure_mode": "trot-like stylistic prior in Korean vocal delivery",
+
+  "dataset_profile_requirements": {
+    "language": {"ko": {"min": 0.30}},
+    "vocal_class": {"VOCAL": {"min": 0.60}},
+    "quality_tier": {"REJECT": {"max": 0.0}},
+    "rights": "every selected track must carry commercial_training_allowed = TRUE",
+    "self_generated": "ALLOW_SELF_GENERATED = false",
+    "notes": [
+      "Genre and mood targets are omitted deliberately: those fields come from operator sidecars and coverage is currently too sparse for a target to be evaluated.",
+      "No trot/non-trot label exists in the manifest, so the target failure mode cannot yet be measured directly in the dataset profile."
+    ]
+  },
+
+  "training_strategy": {
+    "strategy": "LORA",
+    "preset": "LORA_SMALL",
+    "rationale": "start small; the installed trainer supports LoRA and LoKR only, and no full fine-tune entry point exists.",
+    "sequence": [
+      "SMOKE first, to prove plumbing on the rented host",
+      "LORA_SMALL to see whether the dataset moves the model at all",
+      "LORA_STANDARD only after the small run produces a loadable checkpoint"
+    ]
+  },
+
+  "evaluation_requirements": [
+    "Blind A/B listening against the frozen P20 baseline using the existing Phase 20H rubric and tooling.",
+    "The P20 benchmark set must be registered as evaluation-only so the leakage gate bars it from training.",
+    "Objective finishing-engine measurements are not a substitute for listening on a stylistic hypothesis."
+  ],
+
+  "promotion_criteria_placeholders": {
+    "status": "NOT_SET",
+    "reason": "Numeric thresholds set before any evidence exists would be arbitrary, and would then be treated as targets. They are defined in the evaluation phase, from a measured baseline distribution.",
+    "required_before_setting": [
+      "a completed blind human baseline on the current model",
+      "an agreed rubric dimension that captures the target failure mode",
+      "a measured inter-run variance, so a threshold can distinguish signal from noise"
+    ]
+  },
+
+  "prohibitions": [
+    "no P20 benchmark material in training",
+    "no self-model output in training",
+    "no rights-unknown material in training",
+    "no automatic promotion on run completion"
+  ]
+}

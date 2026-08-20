@@ -70,3 +70,10 @@ benchmarks/music_quality/results/p20_objective_baseline.json
 datasets/
 *.ckpt
 *.safetensors
+
+# Training orchestration outputs. Run artifacts, checkpoints, metrics and
+# registries are operator state, often large, and sometimes describe a
+# private library. They are never committed.
+training_runs/
+training-registry/
+worker_capabilities.json

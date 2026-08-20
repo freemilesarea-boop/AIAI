@@ -21,6 +21,7 @@ members = [
     "luber-music-ai",
     "luber-schemas",
     "luber-shared",
+    "luber-training",
 ]
 
 [[package]]
@@ -943,6 +944,17 @@ requires-dist = [
 name = "luber-dataset"
 version = "0.1.0"
 source = { editable = "packages/dataset" }
+dependencies = [
+    { name = "luber-audio-finishing" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "luber-audio-finishing", editable = "packages/audio-finishing" },
+    { name = "numpy", specifier = ">=2.1" },
+]
 
 [[package]]
 name = "luber-generation-client"
@@ -1049,6 +1061,17 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pydantic-settings", specifier = ">=2.7" },
 ]
+
+[[package]]
+name = "luber-training"
+version = "0.1.0"
+source = { editable = "packages/training" }
+dependencies = [
+    { name = "luber-dataset" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "luber-dataset", editable = "packages/dataset" }]
 
 [[package]]
 name = "mako"
