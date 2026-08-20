@@ -552,6 +552,12 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_create.add_argument("--notes")
     candidate_create.set_defaults(func=cmd_candidate_create)
 
+    # Remote GPU execution. In its own module because these verbs move
+    # data to a machine somebody else owns.
+    from luber_training.remote_cli import add_remote_parser
+
+    add_remote_parser(sub)
+
     sub.add_parser("presets", help="available training presets").set_defaults(func=cmd_presets)
     sub.add_parser("verify", help="registry integrity").set_defaults(func=cmd_verify)
     return parser

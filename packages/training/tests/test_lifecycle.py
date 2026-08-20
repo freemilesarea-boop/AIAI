@@ -20,8 +20,6 @@ from training_fixtures import build_locked_dataset, manifest_record
 from luber_training.backends import (
     DRY_RUN,
     LocalDryRunBackend,
-    RemoteGpuBackend,
-    RemoteGpuBackendNotImplementedError,
     capability_check,
 )
 from luber_training.config import preset
@@ -611,19 +609,30 @@ class TestWorkerLost:
 
 
 class TestRemoteBackendContract:
-    def test_every_execution_method_refuses(self):
-        backend = RemoteGpuBackend(host_ref="host-1", credential_ref="ssh-key-name")
-        for call in ("status", "cancel", "cleanup", "collect_metrics", "collect_checkpoints"):
-            with pytest.raises(RemoteGpuBackendNotImplementedError):
-                getattr(backend, call)(None)
-        for call in ("prepare_run", "start"):
-            with pytest.raises(RemoteGpuBackendNotImplementedError):
-                getattr(backend, call)(None, None)
+    """The remote backend is implemented, and it lives in one place.
 
-    def test_it_holds_references_never_secrets(self):
-        backend = RemoteGpuBackend(host_ref="host-1", credential_ref="prod-ssh-key")
-        assert backend.credential_ref == "prod-ssh-key"
-        assert "BEGIN" not in backend.credential_ref
+    Phase 25 shipped a placeholder that raised from every method. Phase
+    27 replaced it, and the placeholder was removed rather than kept as
+    an alias — two classes with one name, one of them raising, is how
+    the wrong one gets imported at the wrong moment.
+    """
+
+    def test_the_placeholder_is_gone(self):
+        import luber_training.backends as backends
+
+        assert not hasattr(backends, "RemoteGpuBackend")
+        assert not hasattr(backends, "RemoteGpuBackendNotImplementedError")
+        assert backends.REMOTE_BACKEND_MODULE == "luber_training.remote.backend"
+
+    def test_the_real_backend_requires_a_transport_and_a_client(self):
+        """It cannot be constructed as a bare stub any more."""
+        import inspect
+
+        from luber_training.remote.backend import RemoteGpuBackend
+
+        parameters = inspect.signature(RemoteGpuBackend.__init__).parameters
+        assert "client" in parameters
+        assert "transport" in parameters
 
     def test_capability_matching_still_works(self, orchestrator, baseline, mac_worker, dataset_ref):
         """The one thing it can do without a transport."""
@@ -634,8 +643,9 @@ class TestRemoteBackendContract:
             experiment_id=experiment.experiment_id, dataset_ref=dataset_ref, config=preset("SMOKE")
         )
         plan = orchestrator.compile_plan(run.run_id)
-        backend = RemoteGpuBackend(host_ref="h", credential_ref="c")
-        assert not backend.validate_environment(plan, mac_worker).ok
+        # Capability matching is provider-independent arithmetic over
+        # reported facts, so it works with no transport at all.
+        assert not capability_check(plan, mac_worker).ok
 
 
 class TestCheckpointFinalization:

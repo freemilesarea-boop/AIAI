@@ -86,3 +86,16 @@ worker_capabilities.json
 evaluations/
 evaluation-runs/
 evaluation-output/
+
+# Remote GPU execution. Staged transfers hold copies of licensed audio;
+# worker roots, run directories and caches hold the same plus trained
+# weights and logs. All of it is operator state, all of it is large, and
+# none of it is ours to redistribute. The manifests that describe it are
+# reproducible from the dataset and curation locks.
+remote_staging/
+remote_runs/
+remote_cache/
+transfer_temp/
+collected_checkpoints/
+luber-worker/
+*.luber-partial

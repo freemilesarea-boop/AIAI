@@ -15,9 +15,11 @@ real checkpoint can return it by accident. A dry run that produced
 something indistinguishable from a trained adapter would be the single
 most dangerous thing in this package.
 
-**RemoteGpuBackend** is a contract with no implementation. Phase 25
-connects to nothing. The class exists so the interface is settled before
-a provider is chosen, and every method raises rather than pretending.
+The remote GPU backend is **not** here. It needs a transport, a worker
+client and a secret resolver, all of which are Phase 27 concerns, so it
+lives in `luber_training.remote.backend` and this module keeps only what
+every backend shares — the interface, and the capability arithmetic that
+decides whether a worker can run a plan.
 """
 
 from __future__ import annotations
@@ -257,76 +259,14 @@ class LocalDryRunBackend(TrainingExecutionBackend):
         self._state.pop(plan.run_id, None)
 
 
-class RemoteGpuBackendNotImplementedError(NotImplementedError):
-    """Raised by every RemoteGpuBackend method.
-
-    Phase 25 establishes the contract and connects to nothing. A
-    partially-working remote backend would be worse than none: it would
-    invite someone to try it.
-    """
-
-
-class RemoteGpuBackend(TrainingExecutionBackend):
-    """The contract a future GPU host will satisfy.
-
-    Deliberately provider-neutral. RunPod, Vast.ai, Lambda, AWS and a
-    bare SSH box differ in provisioning and billing, not in what
-    orchestration needs from them: validate, stage, start, poll, cancel,
-    collect, clean up. Binding those seven verbs now means choosing a
-    provider later is a configuration decision rather than a rewrite.
-
-    Implementing it will require, at minimum:
-
-    * a transport (SSH or a provider API) resolved from a
-      ``credential_ref``, never from a value stored here;
-    * artifact transfer in both directions — dataset out, checkpoints
-      and metrics back;
-    * a heartbeat, so a vanished worker becomes ``LOST`` rather than
-      silently ``RUNNING`` forever;
-    * graceful cancellation that terminates the trainer without
-      destroying completed checkpoints or logs.
-    """
-
-    name = REMOTE_GPU
-
-    def __init__(self, *, host_ref: str, credential_ref: str) -> None:
-        # References only. If this constructor ever accepts a key or a
-        # token, the secrets boundary has been broken.
-        self.host_ref = host_ref
-        self.credential_ref = credential_ref
-
-    def _unimplemented(self, what: str) -> BackendStatus:
-        raise RemoteGpuBackendNotImplementedError(
-            f"RemoteGpuBackend.{what} is a Phase 25 contract with no implementation; "
-            "no remote host is contacted in this phase"
-        )
-
-    def validate_environment(self, plan: TrainingPlan, worker: TrainingWorker) -> EnvironmentCheck:
-        # The one method with real behaviour: capability matching is
-        # provider-independent arithmetic over reported facts, and
-        # having it work lets the scheduler reject a mismatch before any
-        # transport exists.
-        return capability_check(plan, worker)
-
-    def prepare_run(self, plan: TrainingPlan, worker: TrainingWorker) -> None:
-        self._unimplemented("prepare_run")
-
-    def start(self, plan: TrainingPlan, worker: TrainingWorker) -> BackendStatus:
-        return self._unimplemented("start")
-
-    def status(self, plan: TrainingPlan) -> BackendStatus:
-        return self._unimplemented("status")
-
-    def cancel(self, plan: TrainingPlan) -> BackendStatus:
-        return self._unimplemented("cancel")
-
-    def collect_metrics(self, plan: TrainingPlan) -> list[MetricEvent]:
-        self._unimplemented("collect_metrics")
-        return []
-
-    def collect_checkpoints(self, plan: TrainingPlan) -> list[dict[str, Any]]:
-        self._unimplemented("collect_checkpoints")
-        return []
-
-    def cleanup(self, plan: TrainingPlan) -> None:
-        self._unimplemented("cleanup")
+#: Where the remote backend actually lives.
+#:
+#: Phase 25 declared this contract and connected to nothing; the class
+#: that stood here raised from every method. Phase 27 implements it in
+#: `luber_training.remote.backend`, against a worker client, an artifact
+#: transport and a secret resolver.
+#:
+#: The placeholder is gone rather than kept as an alias. Two classes
+#: with one name — one of them raising — is precisely the ambiguity that
+#: gets the wrong one imported at the wrong moment.
+REMOTE_BACKEND_MODULE = "luber_training.remote.backend"
