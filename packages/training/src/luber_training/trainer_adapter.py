@@ -38,6 +38,7 @@ TRAINER_SUBCOMMAND = "fixed"
 #: Lyrics the trainer expects for material with no vocal.
 INSTRUMENTAL_MARKER = "[Instrumental]"
 
+
 class AdapterError(ValueError):
     """Raised when a record cannot be represented for the trainer."""
 
