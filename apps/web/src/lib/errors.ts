@@ -20,6 +20,8 @@ export type ErrorCodeLike =
   | "UPLOAD_FAILED"
   | "ENCODING_FAILED"
   | "QUEUE_FAILED"
+  | "QUALITY_CHECK_FAILED"
+  | "QUALITY_RETRY_EXHAUSTED"
   | "UNKNOWN_GENERATION_ERROR";
 
 const CODE_MESSAGES: Record<string, string> = {
@@ -44,6 +46,14 @@ const CODE_MESSAGES: Record<string, string> = {
   ENCODING_FAILED: "The track could not be prepared for playback. Please try again.",
   QUEUE_FAILED:
     "The generation service is busy and could not accept your request. Please try again.",
+  // Phase 29. Every attempt failed a technical check — silent audio, a
+  // track that stopped early, the wrong length. The copy stays general
+  // on purpose: "candidate 2 was rejected for early collapse" is an
+  // implementation detail, and the operator trace already holds it.
+  QUALITY_CHECK_FAILED:
+    "This track could not be produced to a usable standard. Please try generating again.",
+  QUALITY_RETRY_EXHAUSTED:
+    "This track could not be produced to a usable standard. Please try generating again.",
   UNKNOWN_GENERATION_ERROR:
     "Something went wrong while creating your track. Please try again.",
 };

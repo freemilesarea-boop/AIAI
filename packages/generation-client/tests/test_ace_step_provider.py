@@ -50,10 +50,13 @@ async def test_provider_full_flow_returns_real_audio(tmp_path):
 
     result = await provider.generate(_request())
 
-    # Real bytes downloaded from the (fake) server, parsed as WAV.
+    # Real bytes downloaded from the (fake) server, parsed as WAV. The
+    # server serves the fixture rendered to the requested duration, as a
+    # real engine would — so the assertion is that valid audio of the
+    # right length arrived, which is what the provider is responsible
+    # for, rather than that it matched a two-second file byte for byte.
     assert result.audio_path.is_file()
-    assert result.audio_path.read_bytes() == FIXTURE.read_bytes()
-    assert result.duration_seconds == pytest.approx(2.0)
+    assert result.duration_seconds == pytest.approx(float(_request().duration_seconds), rel=0.01)
     assert result.sample_rate == 48000
     assert result.provider == "ace_step"
     assert result.model_name == "acestep-v15-turbo"  # from task result dit_model

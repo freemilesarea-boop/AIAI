@@ -59,6 +59,9 @@ async def generate(ctx: dict[str, Any], generation_id: str) -> str:
             GenerationRepository(session),
             provider_from_settings(config),
             storage_from_settings(config),
+            qc_policy=config.inference_qc_policy,
+            qc_enabled=config.inference_qc_enabled,
+            candidate_workspace_dir=config.candidate_workspace_dir,
         )
         status = await service.execute(uuid.UUID(generation_id), worker_id=ctx.get("worker_id"))
     return status.value

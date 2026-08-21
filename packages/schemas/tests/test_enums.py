@@ -45,4 +45,9 @@ def test_error_codes_are_stable_strings():
     assert ErrorCode.GENERATION_HAS_DERIVED_VERSIONS.value == "GENERATION_HAS_DERIVED_VERSIONS"
     assert ErrorCode.GENERATION_INTERRUPTED.value == "GENERATION_INTERRUPTED"
     assert ErrorCode.PROVIDER_BUSY.value == "PROVIDER_BUSY"
-    assert len(ErrorCode) == 12
+    # Phase 29 added the two quality-control outcomes. They are distinct
+    # because they mean different things to a user: one candidate was
+    # judged unusable, versus every attempt the budget allowed was.
+    assert ErrorCode.QUALITY_CHECK_FAILED.value == "QUALITY_CHECK_FAILED"
+    assert ErrorCode.QUALITY_RETRY_EXHAUSTED.value == "QUALITY_RETRY_EXHAUSTED"
+    assert len(ErrorCode) == 14

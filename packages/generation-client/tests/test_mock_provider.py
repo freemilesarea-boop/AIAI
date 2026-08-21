@@ -31,9 +31,12 @@ async def test_mock_provider_returns_real_fixture_audio():
     provider = MockGenerationProvider(FIXTURE)
     result = await provider.generate(_request(seed=42))
 
-    assert result.audio_path == FIXTURE
+    # A rendering of the fixture rather than the fixture itself: the
+    # provider honours the requested duration, and a double whose output
+    # ignored the request would not satisfy the contract it claims to.
     assert result.audio_path.is_file()
-    assert result.duration_seconds > 0
+    assert result.audio_path.suffix == ".wav"
+    assert result.duration_seconds == pytest.approx(_request().duration_seconds, rel=0.01)
     assert result.sample_rate == 48000
     assert result.seed_used == 42
     # Honest self-identification — never masquerades as a real model.

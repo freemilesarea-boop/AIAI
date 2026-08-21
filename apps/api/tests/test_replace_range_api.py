@@ -39,11 +39,12 @@ async def _replace(client, parent_id: str, **body):
     return await client.post(f"/v1/generations/{parent_id}/replace-range", json=body)
 
 
-#: The committed fixture is 2.0s, so the interior span used throughout is
-#: 0.5-1.5s: a full second replaced with a full second preserved, which is
-#: exactly the minimum the validator allows. Ranges are written relative
-#: to these names rather than hard-coded, so a longer fixture would not
-#: silently invalidate the suite.
+#: The interior span used throughout: a full second replaced, which is
+#: exactly the minimum the validator allows, starting far enough in that
+#: a full second is preserved on either side. Ranges are written relative
+#: to these names, and the boundary cases below are written relative to
+#: the parent's measured length, so neither a longer nor a shorter
+#: rendering silently invalidates the suite.
 SPAN_START = 0.5
 SPAN_END = 1.5
 
@@ -178,7 +179,8 @@ async def test_a_span_shorter_than_the_crossfade_is_rejected(client):
 async def test_a_range_past_the_end_of_the_song_is_rejected(client):
     """That would be an extension wearing the wrong name."""
     parent = await _completed(client)
-    resp = await _replace(client, parent["id"], start_seconds=1.0, end_seconds=9.0)
+    beyond = parent["duration_actual"] + 5.0
+    resp = await _replace(client, parent["id"], start_seconds=1.0, end_seconds=beyond)
     assert resp.status_code == 422
     assert "ends after the song does" in resp.json()["detail"]
 
@@ -186,7 +188,9 @@ async def test_a_range_past_the_end_of_the_song_is_rejected(client):
 async def test_replacing_the_whole_song_is_rejected(client):
     """Preserving nothing is a regeneration, not an edit."""
     parent = await _completed(client)
-    resp = await _replace(client, parent["id"], start_seconds=0, end_seconds=2.0)
+    resp = await _replace(
+        client, parent["id"], start_seconds=0, end_seconds=parent["duration_actual"]
+    )
     assert resp.status_code == 422
     assert str(MIN_PRESERVED_SECONDS) in resp.text
 

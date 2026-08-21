@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import tempfile
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from pathlib import Path
 from uuid import UUID
@@ -38,6 +39,13 @@ from luber_generation_client.audio_to_audio import (
     AudioToAudioProvider,
     AudioToAudioRequest,
 )
+from luber_generation_client.candidates import (
+    as_controller_failure,
+    expectation_for,
+    expectation_for_edit,
+    is_retryable_task,
+    policy_for_generation,
+)
 from luber_generation_client.editing import (
     AudioEditingProvider,
     AudioEditKind,
@@ -47,9 +55,13 @@ from luber_generation_client.errors import GenerationProviderError
 from luber_generation_client.postprocess import FinishingRecord, produce_delivery_assets
 from luber_generation_client.provider import (
     GenerationRequest,
+    GenerationResult,
     MusicGenerationProvider,
     ReferenceAudioInput,
 )
+from luber_inference_qc import Budget, CandidatePolicy, QCTrace, RequestExpectation, request_digest
+from luber_inference_qc.controller import CandidateGenerationController, ControllerResult
+from luber_inference_qc.workspace import CandidateWorkspace
 from luber_schemas import (
     AssetType,
     EditKind,
@@ -86,16 +98,87 @@ def _finishing_trace_json(record: FinishingRecord) -> str:
     return json.dumps(payload, sort_keys=True)
 
 
+def _last_failure_detail(result: ControllerResult) -> str | None:
+    """The most recent critical finding's own words."""
+    for candidate in reversed(result.trace.candidates):
+        for finding in candidate.critical_findings:
+            return finding.detail
+    return None
+
+
+class QualityControlFailed(Exception):
+    """Every candidate was measured and none could be delivered.
+
+    Carries the controller result so the caller can pick the right error
+    code — "nothing further would have helped" and "nothing further was
+    tried" are different facts and an operator tuning budgets needs to
+    tell them apart.
+    """
+
+    def __init__(self, result: ControllerResult) -> None:
+        # The message an operator reads is the last thing that actually
+        # went wrong, not the loop's own summary of having given up.
+        # "the provider crashed" is actionable; "two consecutive
+        # failures" is a description of this module.
+        super().__init__(
+            _last_failure_detail(result)
+            or result.trace.outcome_detail
+            or "no candidate was eligible"
+        )
+        self.result = result
+
+    @property
+    def error_code(self) -> ErrorCode:
+        """The code that describes what actually went wrong.
+
+        A provider that never produced audio did not fail a quality
+        check — it failed to answer. Reporting that as
+        QUALITY_CHECK_FAILED would tell an operator the model is
+        producing bad songs when the truth is that it is unreachable, or
+        timing out, or misconfigured, and each of those has a different
+        fix.
+        """
+        last = self.result.trace.candidates[-1] if self.result.trace.candidates else None
+        if last is not None and any(
+            finding.code.startswith("PROVIDER_") for finding in last.critical_findings
+        ):
+            if last.provider_error_code:
+                try:
+                    return ErrorCode(last.provider_error_code)
+                except ValueError:
+                    return ErrorCode.UNKNOWN_GENERATION_ERROR
+            # The provider raised something this package does not
+            # recognise. It still never produced audio, so it is not a
+            # quality failure.
+            return ErrorCode.UNKNOWN_GENERATION_ERROR
+        return (
+            ErrorCode.QUALITY_RETRY_EXHAUSTED
+            if self.result.trace.exhausted
+            else ErrorCode.QUALITY_CHECK_FAILED
+        )
+
+
 class GenerationService:
     def __init__(
         self,
         repository: GenerationRepository,
         provider: MusicGenerationProvider,
         storage: AudioStorage,
+        *,
+        qc_policy: str = "STANDARD",
+        qc_enabled: bool = True,
+        candidate_workspace_dir: str = "data/generation-candidates",
     ) -> None:
         self._repository = repository
         self._provider = provider
         self._storage = storage
+        # Phase 29. Off restores the pre-Phase-29 behaviour exactly: one
+        # provider call, no candidate QC, no retry. It exists so a QC
+        # regression that rejects good output can be switched off and
+        # then fixed, rather than fixed under pressure.
+        self._qc_enabled = qc_enabled
+        self._qc_policy = qc_policy
+        self._candidate_workspace_dir = Path(candidate_workspace_dir)
 
     async def _retract_stale_finished_master(
         self, repo: GenerationRepository, generation_id: UUID
@@ -402,6 +485,190 @@ class GenerationService:
                 exc_info=True,
             )
 
+    # ── the candidate phase ──────────────────────────────────────────
+    #
+    # The one place Phase 29 inserts itself. Everything above is the
+    # request; everything below is delivery. This is where a single
+    # provider call became a loop that may make more than one.
+
+    def _policy_for(self, generation: Generation) -> CandidatePolicy:
+        return policy_for_generation(
+            self._qc_policy,
+            retryable_task=is_retryable_task(edit_kind=generation.edit_kind),
+        )
+
+    def _workspace_for(self, generation_id: UUID) -> CandidateWorkspace:
+        return CandidateWorkspace(self._candidate_workspace_dir, str(generation_id))
+
+    async def _produce_audio(
+        self, generation: Generation, stack: AsyncExitStack
+    ) -> tuple[GenerationResult | None, ControllerResult | None]:
+        """Get deliverable audio, through the candidate controller or not.
+
+        Returns the provider result and, when QC ran, the controller's
+        outcome. With QC disabled the second is ``None`` and the
+        behaviour is exactly what it was before Phase 29 — one call, no
+        measurement, no retry.
+        """
+        generation_id = generation.id
+        repo = self._repository
+
+        # The request is built and traced before anything runs, exactly
+        # as it was: a failed generation stays as inspectable as a
+        # successful one, and the trace must not depend on QC.
+        call, expectation, digest = await self._prepare_call(generation, stack)
+        await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
+
+        if not self._qc_enabled:
+            return await call(generation.seed), None
+
+        policy = self._policy_for(generation)
+        workspace = self._workspace_for(generation_id)
+
+        async def persist(trace: QCTrace, budget: Budget) -> None:
+            # After every attempt, not once at the end. The record of an
+            # expensive call has to survive the process that made it, or
+            # a resumed job pays for it twice.
+            await repo.record_inference_qc_trace(generation_id, trace=trace.to_json(budget))
+
+        controller = CandidateGenerationController(
+            policy=policy,
+            workspace=workspace,
+            on_trace=persist,
+        )
+
+        async def guarded(seed: int | None) -> GenerationResult:
+            try:
+                return await call(seed)
+            except Exception as exc:
+                raise as_controller_failure(exc) from exc
+
+        outcome = await controller.run(
+            generation_id=str(generation_id),
+            request_sha256=digest,
+            expectation=expectation,
+            generate=guarded,
+            base_seed=generation.seed,
+            resume_from=self._prior_attempts(generation),
+        )
+
+        if not outcome.selected:
+            return None, outcome
+
+        # The winner's audio is the workspace copy, not the provider's
+        # own path: the provider may clean its up, and this one is the
+        # file that was hashed and measured.
+        assert outcome.winner_result is not None
+        assert outcome.winner_path is not None
+        return (
+            outcome.winner_result.model_copy(update={"audio_path": outcome.winner_path}),
+            outcome,
+        )
+
+    @staticmethod
+    def _prior_attempts(generation: Generation) -> list[dict[str, object]]:
+        """Attempts a previous execution of this job already paid for.
+
+        Read from the durable trace, because the in-memory state of the
+        process that made them is gone. Each one whose audio is still in
+        the workspace and still matches its digest is reused.
+        """
+        if not generation.inference_qc_trace:
+            return []
+        try:
+            trace = json.loads(generation.inference_qc_trace)
+        except json.JSONDecodeError:
+            return []
+        attempts = trace.get("attempts")
+        return attempts if isinstance(attempts, list) else []
+
+    async def _prepare_call(
+        self, generation: Generation, stack: AsyncExitStack
+    ) -> tuple[Callable[[int | None], Awaitable[GenerationResult]], RequestExpectation, str]:
+        """Build the provider call for this task, once.
+
+        The request is constructed and traced here rather than per
+        attempt: every candidate is an attempt at the *same* request, and
+        rebuilding it each time would be the one place a retry could
+        silently become a different question.
+        """
+        generation_id = generation.id
+
+        if generation.edit_kind == EditKind.COVER.value:
+            # A cover is source-conditioned generation, not an edit.
+            # Routing it through edit() would claim repaint's
+            # preservation guarantee, and routing it through generate()
+            # would drop the source entirely. Neither is a legal
+            # fallback: if this provider cannot do it, the run fails.
+            if not isinstance(self._provider, AudioToAudioProvider):
+                raise GenerationProviderError(
+                    "configured provider cannot generate from audio",
+                    error_code=ErrorCode.MODEL_LOAD_FAILED,
+                )
+            cover_request = await self._to_cover_request(generation, stack)
+            await self._record_cover_trace(generation_id, cover_request)
+            provider = self._provider
+
+            async def run_cover(_seed: int | None) -> GenerationResult:
+                # The seed is ignored: a cover runs once, so there is
+                # never a second attempt for a different one to vary.
+                return await provider.create_from_audio(cover_request)
+
+            return (
+                run_cover,
+                RequestExpectation(),
+                request_digest(cover_request, extra={"task": "cover"}),
+            )
+
+        if generation.edit_kind is not None:
+            # An audio edit must reach an editing provider or fail.
+            # Falling back to generate() would quietly hand the user a
+            # new, unrelated song in place of the edit they asked for —
+            # the exact substitution this feature exists to rule out.
+            if not isinstance(self._provider, AudioEditingProvider):
+                raise GenerationProviderError(
+                    "configured provider cannot edit audio",
+                    error_code=ErrorCode.MODEL_LOAD_FAILED,
+                )
+            edit_request = await self._to_edit_request(generation, stack)
+            await self._record_edit_trace(generation_id, edit_request)
+            editor = self._provider
+
+            async def run_edit(_seed: int | None) -> GenerationResult:
+                # As above: an edit runs once.
+                return await editor.edit(edit_request)
+
+            return (
+                run_edit,
+                expectation_for_edit(edit_request),
+                request_digest(edit_request, extra={"task": "edit"}),
+            )
+
+        reference = await self._resolve_reference_audio(generation, stack)
+        request = self._to_provider_request(generation).model_copy(
+            update={"reference_audio": reference}
+        )
+        await self._record_trace(generation_id, request)
+        engine = self._provider
+
+        async def run_generate(seed: int | None) -> GenerationResult:
+            # The seed is the only thing a retry changes. Everything
+            # else — prompt, lyrics, duration, key, and the reference
+            # track — is carried across untouched.
+            return await engine.generate(request.model_copy(update={"seed": seed}))
+
+        return (
+            run_generate,
+            expectation_for(request),
+            request_digest(
+                request,
+                extra={
+                    "task": "generate",
+                    "reference_sha256": reference.sha256 if reference else None,
+                },
+            ),
+        )
+
     async def execute(
         self, generation_id: UUID, *, worker_id: str | None = None
     ) -> GenerationStatus:
@@ -437,45 +704,16 @@ class GenerationService:
             await repo.mark_started(generation_id, status=GenerationStatus.STARTING.value)
 
             async with AsyncExitStack() as stack:
-                if generation.edit_kind == EditKind.COVER.value:
-                    # A cover is source-conditioned generation, not an
-                    # edit. Routing it through edit() would claim repaint's
-                    # preservation guarantee, and routing it through
-                    # generate() would drop the source entirely. Neither
-                    # is a legal fallback: if this provider cannot do it,
-                    # the run fails.
-                    if not isinstance(self._provider, AudioToAudioProvider):
-                        raise GenerationProviderError(
-                            "configured provider cannot generate from audio",
-                            error_code=ErrorCode.MODEL_LOAD_FAILED,
-                        )
-                    cover_request = await self._to_cover_request(generation, stack)
-                    await self._record_cover_trace(generation_id, cover_request)
-                    await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
-                    result = await self._provider.create_from_audio(cover_request)
-                elif generation.edit_kind is not None:
-                    # An audio edit must reach an editing provider or fail.
-                    # Falling back to generate() would quietly hand the
-                    # user a new, unrelated song in place of the edit they
-                    # asked for — the exact substitution this feature
-                    # exists to rule out.
-                    if not isinstance(self._provider, AudioEditingProvider):
-                        raise GenerationProviderError(
-                            "configured provider cannot edit audio",
-                            error_code=ErrorCode.MODEL_LOAD_FAILED,
-                        )
-                    edit_request = await self._to_edit_request(generation, stack)
-                    await self._record_edit_trace(generation_id, edit_request)
-                    await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
-                    result = await self._provider.edit(edit_request)
-                else:
-                    reference = await self._resolve_reference_audio(generation, stack)
-                    request = self._to_provider_request(generation).model_copy(
-                        update={"reference_audio": reference}
-                    )
-                    await self._record_trace(generation_id, request)
-                    await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
-                    result = await self._provider.generate(request)
+                result, qc_result = await self._produce_audio(generation, stack)
+
+            if qc_result is not None and not qc_result.selected:
+                # Every attempt was measured and none could be
+                # delivered. Raising rather than returning keeps this on
+                # the same path as any other generation failure, so the
+                # row, the job and the log all get the same treatment.
+                raise QualityControlFailed(qc_result)
+
+            assert result is not None
 
             # POST_PROCESSING and UPLOADING both happen inside
             # produce_delivery_assets; the status is advanced around it
@@ -516,6 +754,14 @@ class GenerationService:
             await repo.record_finishing_trace(
                 generation_id, trace=_finishing_trace_json(produced.finishing)
             )
+            if qc_result is not None:
+                # What the finishing engine did, recorded on the QC trace
+                # as well, so one document answers the whole question of
+                # why this file was delivered.
+                qc_result.trace.finishing_outcome = produced.finishing.outcome.value
+                await repo.record_inference_qc_trace(
+                    generation_id, trace=qc_result.trace.to_json(qc_result.budget)
+                )
             # COMPLETED only after every required asset is stored and
             # recorded — a post-processing or upload failure raises above
             # and lands in the FAILED branch instead.
@@ -530,6 +776,12 @@ class GenerationService:
             )
             if job is not None:
                 await repo.mark_job_finished(job.id, status=GenerationStatus.COMPLETED.value)
+            # Delivery has read the winner and stored it. Candidate
+            # audio exists only to be measured and, for one of them,
+            # delivered — so it goes. A rejected candidate's bytes are
+            # deliberately not retained; the trace records the digest of
+            # what was discarded.
+            self._workspace_for(generation_id).cleanup()
             logger.info(
                 "generation completed",
                 extra={
@@ -560,6 +812,10 @@ class GenerationService:
                     error_code=ErrorCode.GENERATION_INTERRUPTED.value,
                     error_message="generation was interrupted before it finished",
                 )
+            # The workspace is deliberately *not* cleaned here. An
+            # interrupted run is the case the queue retries, and the
+            # candidate that was already paid for is exactly what the
+            # retry should reuse rather than buy again.
             logger.warning(
                 "generation interrupted",
                 extra={"generation_id": str(generation_id), "worker_id": worker_id},
@@ -580,6 +836,8 @@ class GenerationService:
                     error_code=error_code.value,
                     error_message=str(exc),
                 )
+            # Terminal, so nothing will read the candidates again.
+            self._workspace_for(generation_id).cleanup()
             logger.exception(
                 "generation failed",
                 extra={
@@ -592,6 +850,11 @@ class GenerationService:
 
     @staticmethod
     def _translate_error(exc: Exception) -> ErrorCode:
+        if isinstance(exc, QualityControlFailed):
+            # "Nothing further would have helped" and "nothing further
+            # was tried" are different facts, and an operator tuning
+            # budgets needs to tell them apart.
+            return exc.error_code
         if isinstance(exc, GenerationProviderError):
             return exc.error_code
         if isinstance(exc, WavValidationError):

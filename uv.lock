@@ -19,6 +19,7 @@ members = [
     "luber-evaluation",
     "luber-generation-client",
     "luber-generation-worker",
+    "luber-inference-qc",
     "luber-music-ai",
     "luber-schemas",
     "luber-shared",
@@ -1022,6 +1023,26 @@ requires-dist = [
     { name = "luber-generation-client", editable = "packages/generation-client" },
     { name = "luber-schemas", editable = "packages/schemas" },
     { name = "luber-shared", editable = "packages/shared" },
+]
+
+[[package]]
+name = "luber-inference-qc"
+version = "0.1.0"
+source = { editable = "packages/inference-qc" }
+dependencies = [
+    { name = "luber-audio-finishing" },
+    { name = "luber-dataset" },
+    { name = "luber-schemas" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "luber-audio-finishing", editable = "packages/audio-finishing" },
+    { name = "luber-dataset", editable = "packages/dataset" },
+    { name = "luber-schemas", editable = "packages/schemas" },
+    { name = "numpy", specifier = ">=2.1" },
 ]
 
 [[package]]

@@ -62,6 +62,30 @@ class BaseServiceSettings(BaseSettings):
     ace_step_output_dir: str = "data/raw-model-output"
     ace_step_inference_steps: int = 8
     ace_step_thinking: bool = False
+    # ── Inference quality control (Phase 29) ──────────────────────
+    #
+    # Which candidate policy a generation runs under. STANDARD generates
+    # one candidate and spends a second inference only when the first
+    # one failed a measurable check. STRICT_REPRODUCIBLE makes exactly
+    # one provider call and reports a quality failure as a failure —
+    # someone who supplied a seed gets that seed's output or an honest
+    # error, never a different song.
+    #
+    # See docs/INFERENCE_QUALITY_CONTROL.md for what each profile costs.
+    inference_qc_policy: str = "STANDARD"
+
+    # Set false to run generations exactly as they ran before Phase 29:
+    # one provider call, no candidate QC, no retry. The escape hatch for
+    # a QC regression that is rejecting good output — flip it, ship, then
+    # fix the threshold rather than the other way round.
+    inference_qc_enabled: bool = True
+
+    # Where candidate audio waits while a generation decides. Not a
+    # system temp directory: it has to survive a worker being killed so
+    # that the queue's retry can reuse an expensive call rather than pay
+    # for it twice. Removed when the generation reaches a terminal state.
+    candidate_workspace_dir: str = "data/generation-candidates"
+
     # Audio storage backend: "local" (development) or "s3" (production,
     # any S3-compatible provider).
     storage_provider: str = "local"

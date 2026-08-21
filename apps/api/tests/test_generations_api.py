@@ -178,3 +178,22 @@ async def test_full_generation_flow_produces_master_wav(client, tmp_path):
         assert stored.stat().st_size == asset["file_size"] > 0
         # Stored SHA256 matches the actual stored bytes.
         assert hashlib.sha256(stored.read_bytes()).hexdigest() == asset["sha256"]
+
+
+async def test_the_response_never_carries_the_quality_control_trace(client):
+    """Phase 29 runs behind the API, and it stays behind it.
+
+    The trace exists so an operator can explain a delivery. A customer
+    has no business knowing there were two attempts, which candidate
+    lost, or what the retry budget was — and once a field is on a public
+    response it is a contract, so the check is that it never appears
+    rather than that it is currently hidden.
+    """
+    created = (await client.post("/v1/generations", json=CREATE_PAYLOAD)).json()
+    body = (await client.get(f"/v1/generations/{created['generation_id']}")).json()
+
+    assert body["status"] == "COMPLETED"
+    assert "inference_qc_trace" not in body
+    rendered = str(body)
+    for internal in ("candidate_id", "attempt_index", "technical_selection_score", "retry_reason"):
+        assert internal not in rendered

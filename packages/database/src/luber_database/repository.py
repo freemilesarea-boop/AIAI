@@ -254,6 +254,21 @@ class GenerationRepository:
         generation.finishing_trace = trace
         await self._session.commit()
 
+    async def record_inference_qc_trace(self, generation_id: UUID, *, trace: str) -> None:
+        """Store what the candidate controller did.
+
+        Written after every attempt rather than once at the end. A crash
+        between an expensive provider call and the cheap check that
+        follows it must not lose the record that the call was made —
+        that record is what lets a resumed run reuse the audio instead
+        of buying it a second time.
+        """
+        generation = await self._fetch_owned(Generation, generation_id, Generation.user_id)
+        if generation is None:
+            raise LookupError(f"generation not found: {generation_id}")
+        generation.inference_qc_trace = trace
+        await self._session.commit()
+
     async def mark_completed(
         self,
         generation_id: UUID,

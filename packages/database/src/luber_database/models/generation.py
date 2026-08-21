@@ -130,6 +130,14 @@ class Generation(Base):
     #: which is a different fact from it having run and found nothing.
     finishing_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    #: JSON: what the Phase 29 candidate controller did — every attempt,
+    #: its findings, why a retry happened, which candidate won and why.
+    #: This is the only durable record of the candidates that lost: their
+    #: audio is never uploaded, so without it a delivery could not be
+    #: explained. NULL means the controller never ran, which is a
+    #: different fact from it having run and generated one candidate.
+    inference_qc_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     #: Set when this generation was produced by "generate again" or by
     #: a variation. SET NULL on delete so removing an original does not
     #: remove what was made from it.

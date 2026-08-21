@@ -22,6 +22,7 @@ members = [
     "packages/audio-finishing",
     "packages/training",
     "packages/evaluation",
+    "packages/inference-qc",
 ]
 
 [dependency-groups]
@@ -38,6 +39,13 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Keep a temp directory only when its test failed. The suite moves real
+# audio through a real pipeline — masters, finished masters, previews —
+# and since Phase 29 made the mock provider honour the requested
+# duration those files are minutes long rather than two seconds. Three
+# runs of retained passing-test directories is several gigabytes of
+# nothing anybody will read.
+tmp_path_retention_policy = "failed"
 testpaths = [
     "apps/api/tests",
     "services/generation-worker/tests",
@@ -54,6 +62,7 @@ testpaths = [
     "benchmarks/reference_audio/tests",
     "benchmarks/audio_finishing/tests",
     "packages/audio-finishing/tests",
+    "packages/inference-qc/tests",
 ]
 
 [tool.ruff]
@@ -71,6 +80,7 @@ src = [
     "packages/dataset/src",
     "packages/training/src",
     "packages/evaluation/src",
+    "packages/inference-qc/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
@@ -103,6 +113,9 @@ select = [
 "packages/training/src/luber_training/remote_cli.py" = ["T20"]
 # Operator evaluation CLI: stdout is its user interface.
 "packages/evaluation/src/luber_evaluation/cli.py" = ["T20"]
+# Inference QC dry-run CLI: stdout is its user interface. It generates
+# nothing and mutates nothing; printing a report is the whole job.
+"packages/inference-qc/src/luber_inference_qc/cli.py" = ["T20"]
 # The remote worker CLI: its stdout *is* the protocol. The control plane
 # parses one JSON envelope from it, so printing is the whole contract.
 "packages/training/src/luber_training/remote/worker_cli.py" = ["T20"]
@@ -130,6 +143,7 @@ mypy_path = [
     "packages/dataset/src",
     "packages/training/src",
     "packages/evaluation/src",
+    "packages/inference-qc/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",

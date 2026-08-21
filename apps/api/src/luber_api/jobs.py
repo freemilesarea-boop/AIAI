@@ -19,6 +19,7 @@ from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from luber_api.settings import get_settings
 from luber_audio_utils import AudioStorage
 from luber_database import GenerationRepository
 from luber_generation_client import (
@@ -79,8 +80,14 @@ class InlineGenerationRunner:
 
     async def enqueue(self, generation_id: UUID) -> None:
         async with self._session_factory() as session:
+            settings = get_settings()
             service = GenerationService(
-                GenerationRepository(session), self._provider, self._storage
+                GenerationRepository(session),
+                self._provider,
+                self._storage,
+                qc_policy=settings.inference_qc_policy,
+                qc_enabled=settings.inference_qc_enabled,
+                candidate_workspace_dir=settings.candidate_workspace_dir,
             )
             await service.execute(generation_id, worker_id="inline")
 

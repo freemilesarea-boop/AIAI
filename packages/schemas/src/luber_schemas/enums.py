@@ -166,6 +166,18 @@ class ErrorCode(StrEnum):
     UPLOAD_FAILED = "UPLOAD_FAILED"
     ENCODING_FAILED = "ENCODING_FAILED"
     QUEUE_FAILED = "QUEUE_FAILED"
+    #: Phase 29. The model produced audio and every attempt failed a
+    #: measurable technical check — silent, collapsed, the wrong length,
+    #: distorted at source. Kept separate from the codes above because
+    #: nothing was wrong with the request or the infrastructure: the
+    #: engine ran and what it made could not be delivered, and the same
+    #: request submitted again may well work.
+    QUALITY_CHECK_FAILED = "QUALITY_CHECK_FAILED"
+    #: Phase 29. The retry budget was spent before any attempt passed.
+    #: Distinct from QUALITY_CHECK_FAILED: that means nothing further
+    #: would have helped, this means nothing further was tried. An
+    #: operator tuning budgets needs to tell those apart.
+    QUALITY_RETRY_EXHAUSTED = "QUALITY_RETRY_EXHAUSTED"
     UNKNOWN_GENERATION_ERROR = "UNKNOWN_GENERATION_ERROR"
 
 
