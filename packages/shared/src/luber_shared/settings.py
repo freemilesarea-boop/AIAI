@@ -86,6 +86,21 @@ class BaseServiceSettings(BaseSettings):
     # for it twice. Removed when the generation reaches a terminal state.
     candidate_workspace_dir: str = "data/generation-candidates"
 
+    # ── Inference observability (Phase 30) ────────────────────────
+    #
+    # Whether a finished generation is projected into the analytics
+    # table as it completes. Off restores the pre-Phase-30 behaviour:
+    # nothing is recorded, and the scheduled `ingest` command becomes
+    # the only way rows arrive.
+    observability_enabled: bool = True
+
+    # The repository revision this process is running. Recorded on the
+    # observations this process writes, where it is the revision that
+    # actually produced them. Deliberately not defaulted to anything
+    # plausible: a backfill cannot know which commit ran last week, and
+    # a guess in a column that reads like a fact is worse than UNKNOWN.
+    luber_revision: str = ""
+
     # Audio storage backend: "local" (development) or "s3" (production,
     # any S3-compatible provider).
     storage_provider: str = "local"

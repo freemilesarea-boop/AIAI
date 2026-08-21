@@ -552,4 +552,13 @@ async def test_the_only_mutating_verbs_are_the_expected_ones(ops_app) -> None:
         # A comparison reads; it is a POST only because a list of
         # checkpoint ids does not belong in a URL.
         ("/v1/ops/training/checkpoints/compare", "POST"),
+        # Phase 30. The only two mutations the inference console has, and
+        # neither touches inference: they record what an operator decided
+        # about an incident. Acknowledging does not suppress measurement
+        # and dismissing does not delete history. Nothing in that console
+        # can disable a provider, move a QC threshold or switch a policy —
+        # which is why this list is asserted exactly rather than as a
+        # subset.
+        ("/v1/ops/inference/incidents/{incident_id}/acknowledge", "POST"),
+        ("/v1/ops/inference/incidents/{incident_id}/dismiss", "POST"),
     }

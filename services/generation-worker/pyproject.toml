@@ -10,6 +10,8 @@ dependencies = [
     "luber-generation-client",
     "luber-database",
     "luber-audio-utils",
+    # Records each finished generation as a privacy-safe observation.
+    "luber-inference-observability",
 ]
 
 [tool.uv.sources]
@@ -18,6 +20,7 @@ luber-schemas = { workspace = true }
 luber-generation-client = { workspace = true }
 luber-database = { workspace = true }
 luber-audio-utils = { workspace = true }
+luber-inference-observability = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

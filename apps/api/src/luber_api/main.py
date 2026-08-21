@@ -22,6 +22,7 @@ from luber_api.routes.auth import router as auth_router
 from luber_api.routes.generations import router as generations_router
 from luber_api.routes.health import router as health_router
 from luber_api.routes.ops import router as ops_training_router
+from luber_api.routes.ops_inference import router as ops_inference_router
 from luber_api.routes.projects import assign_router as project_assign_router
 from luber_api.routes.projects import router as projects_router
 from luber_api.routes.reference_audio import router as reference_audio_router
@@ -98,6 +99,11 @@ def create_app() -> FastAPI:
             settings.environment.value,
         )
         app.include_router(ops_training_router)
+        # The inference observability console. Same gate, same switch,
+        # its own namespace: inference is not training, and filing it
+        # under /v1/ops/training would be a lie about the system that a
+        # later phase would have to unpick.
+        app.include_router(ops_inference_router)
     elif settings.ops_console_enabled:
         logger.error(
             "OPS_CONSOLE_ENABLED is set but the environment is %s; the operator training "

@@ -21,15 +21,18 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from luber_audio_utils import storage_from_settings
 from luber_database import (
     GenerationRepository,
+    ObservabilityRepository,
     create_async_engine_from_url,
     create_session_factory,
 )
+from luber_database.models.generation import Generation
 from luber_generation_client import GENERATION_QUEUE_NAME, GenerationService, provider_from_settings
 from luber_generation_worker.singleton import (
     EXIT_ALREADY_RUNNING,
     SingleWorkerLock,
     WorkerAlreadyRunningError,
 )
+from luber_inference_observability.service import ingest_one
 from luber_shared import BaseServiceSettings, configure_logging
 
 logger = logging.getLogger(__name__)
@@ -64,7 +67,42 @@ async def generate(ctx: dict[str, Any], generation_id: str) -> str:
             candidate_workspace_dir=config.candidate_workspace_dir,
         )
         status = await service.execute(uuid.UUID(generation_id), worker_id=ctx.get("worker_id"))
+        await _record_observation(session, uuid.UUID(generation_id), config)
     return status.value
+
+
+async def _record_observation(session: Any, generation_id: uuid.UUID, config: WorkerConfig) -> None:
+    """Project this finished generation into the Phase 30 analytics table.
+
+    Deliberately after `execute` and deliberately unable to fail it. The
+    generation has already succeeded or failed by this point, and its
+    outcome is recorded; losing an analytics row is a gap in a chart,
+    while raising here would turn a delivered song into a failed job.
+
+    Nothing is lost permanently either way — the scheduled ingest reads
+    from a watermark and picks up anything this missed.
+
+    This is also the only place `luber_revision` can honestly be set: the
+    process writing it is the process that produced the generation. A
+    backfill running next month cannot know that, and records UNKNOWN.
+    """
+    if not config.observability_enabled:
+        return
+    try:
+        generation = await session.get(Generation, generation_id)
+        if generation is None:
+            return
+        await ingest_one(
+            ObservabilityRepository(session),
+            generation,
+            luber_revision=config.luber_revision or None,
+        )
+    except Exception:
+        logger.warning(
+            "could not record an inference observation",
+            extra={"generation_id": str(generation_id)},
+            exc_info=True,
+        )
 
 
 async def check_database(engine: AsyncEngine) -> None:

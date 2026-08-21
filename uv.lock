@@ -19,6 +19,7 @@ members = [
     "luber-evaluation",
     "luber-generation-client",
     "luber-generation-worker",
+    "luber-inference-observability",
     "luber-inference-qc",
     "luber-music-ai",
     "luber-schemas",
@@ -855,6 +856,7 @@ dependencies = [
     { name = "luber-database" },
     { name = "luber-evaluation" },
     { name = "luber-generation-client" },
+    { name = "luber-inference-observability" },
     { name = "luber-schemas" },
     { name = "luber-shared" },
     { name = "luber-training" },
@@ -873,6 +875,7 @@ requires-dist = [
     { name = "luber-database", editable = "packages/database" },
     { name = "luber-evaluation", editable = "packages/evaluation" },
     { name = "luber-generation-client", editable = "packages/generation-client" },
+    { name = "luber-inference-observability", editable = "packages/inference-observability" },
     { name = "luber-schemas", editable = "packages/schemas" },
     { name = "luber-shared", editable = "packages/shared" },
     { name = "luber-training", editable = "packages/training" },
@@ -1011,6 +1014,7 @@ dependencies = [
     { name = "luber-audio-utils" },
     { name = "luber-database" },
     { name = "luber-generation-client" },
+    { name = "luber-inference-observability" },
     { name = "luber-schemas" },
     { name = "luber-shared" },
 ]
@@ -1021,6 +1025,24 @@ requires-dist = [
     { name = "luber-audio-utils", editable = "packages/audio-utils" },
     { name = "luber-database", editable = "packages/database" },
     { name = "luber-generation-client", editable = "packages/generation-client" },
+    { name = "luber-inference-observability", editable = "packages/inference-observability" },
+    { name = "luber-schemas", editable = "packages/schemas" },
+    { name = "luber-shared", editable = "packages/shared" },
+]
+
+[[package]]
+name = "luber-inference-observability"
+version = "0.1.0"
+source = { editable = "packages/inference-observability" }
+dependencies = [
+    { name = "luber-inference-qc" },
+    { name = "luber-schemas" },
+    { name = "luber-shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "luber-inference-qc", editable = "packages/inference-qc" },
     { name = "luber-schemas", editable = "packages/schemas" },
     { name = "luber-shared", editable = "packages/shared" },
 ]

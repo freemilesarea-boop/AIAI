@@ -1,4 +1,5 @@
-"""ORM models: users (Phase 0) + generation domain tables (Phase 1)."""
+"""ORM models: users (Phase 0), the generation domain (Phase 1), and
+the Phase 30 observability projection."""
 
 from luber_database.models.generation import (
     AudioAsset,
@@ -6,6 +7,18 @@ from luber_database.models.generation import (
     GenerationJob,
     ReferenceAudio,
 )
+from luber_database.models.observability import (
+    InferenceIncidentRow,
+    InferenceObservationRow,
+)
 from luber_database.models.user import User
 
-__all__ = ["AudioAsset", "Generation", "GenerationJob", "ReferenceAudio", "User"]
+__all__ = [
+    "AudioAsset",
+    "Generation",
+    "GenerationJob",
+    "InferenceIncidentRow",
+    "InferenceObservationRow",
+    "ReferenceAudio",
+    "User",
+]

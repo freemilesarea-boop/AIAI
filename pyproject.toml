@@ -23,6 +23,7 @@ members = [
     "packages/training",
     "packages/evaluation",
     "packages/inference-qc",
+    "packages/inference-observability",
 ]
 
 [dependency-groups]
@@ -63,6 +64,7 @@ testpaths = [
     "benchmarks/audio_finishing/tests",
     "packages/audio-finishing/tests",
     "packages/inference-qc/tests",
+    "packages/inference-observability/tests",
 ]
 
 [tool.ruff]
@@ -81,6 +83,7 @@ src = [
     "packages/training/src",
     "packages/evaluation/src",
     "packages/inference-qc/src",
+    "packages/inference-observability/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
@@ -116,6 +119,9 @@ select = [
 # Inference QC dry-run CLI: stdout is its user interface. It generates
 # nothing and mutates nothing; printing a report is the whole job.
 "packages/inference-qc/src/luber_inference_qc/cli.py" = ["T20"]
+# Observability CLI: same reason. It reads and prints; it changes no
+# generation behaviour and starts nothing.
+"packages/inference-observability/src/luber_inference_observability/cli.py" = ["T20"]
 # The remote worker CLI: its stdout *is* the protocol. The control plane
 # parses one JSON envelope from it, so printing is the whole contract.
 "packages/training/src/luber_training/remote/worker_cli.py" = ["T20"]
@@ -144,6 +150,7 @@ mypy_path = [
     "packages/training/src",
     "packages/evaluation/src",
     "packages/inference-qc/src",
+    "packages/inference-observability/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",

@@ -144,6 +144,12 @@ async def degraded_client(app: FastAPI):
 # convention this repository already uses: the helpers live in a module
 # with a distinct name so a whole-repository run cannot resolve one
 # package's `conftest` import to another's.
+from inference_fixtures import (  # noqa: E402, F401
+    empty_app,
+    empty_client,
+    inference_app,
+    inference_client,
+)
 from ops_fixtures import (  # noqa: E402, F401
     ops_app,
     ops_client,

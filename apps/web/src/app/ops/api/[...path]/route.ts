@@ -20,6 +20,14 @@
  * The route 404s when the console is off, matching what the API does, so
  * a deployment that has not enabled it exposes no operator surface at
  * all rather than an endpoint that answers 401.
+ *
+ * The first path segment names an operator namespace and is checked
+ * against an allowlist. Phase 30 added a second console — inference
+ * observability — and the alternative to a namespace was either filing
+ * inference under `/v1/ops/training`, which would be a lie about the
+ * system, or a second proxy route holding a second copy of the token.
+ * An allowlist keeps one credential in one place and makes a third
+ * namespace a deliberate edit rather than a reachable path.
  */
 
 import { NextResponse } from "next/server";
@@ -63,6 +71,16 @@ const notFound = () => NextResponse.json({ detail: "Not found." }, { status: 404
  */
 const FORWARDED = ["content-type", "accept", "origin"];
 
+/**
+ * Operator namespaces this proxy will forward to.
+ *
+ * An allowlist rather than a pass-through: without it, `/ops/api/foo`
+ * would reach `/v1/ops/foo`, and any operator surface added to the API
+ * later would become browser-reachable by having been mounted rather
+ * than by anybody deciding it should be.
+ */
+const NAMESPACES = new Set(["training", "inference"]);
+
 async function proxy(request: Request, path: string[]): Promise<Response> {
   if (!consoleEnabled()) return notFound();
 
@@ -78,8 +96,11 @@ async function proxy(request: Request, path: string[]): Promise<Response> {
     );
   }
 
+  const [namespace, ...rest] = path;
+  if (!NAMESPACES.has(namespace)) return notFound();
+
   const incoming = new URL(request.url);
-  const target = new URL(`/v1/ops/training/${path.join("/")}`, apiTarget());
+  const target = new URL(`/v1/ops/${namespace}/${rest.join("/")}`, apiTarget());
   target.search = incoming.search;
 
   const headers = new Headers();

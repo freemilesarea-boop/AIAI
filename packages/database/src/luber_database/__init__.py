@@ -9,6 +9,7 @@ from luber_database.auth_repository import AuthRepository
 from luber_database.base import Base
 from luber_database.engine import create_async_engine_from_url, create_session_factory
 from luber_database.errors import GenerationHasDescendantsError
+from luber_database.observability_repository import ObservabilityRepository
 from luber_database.repository import GenerationRepository
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Base",
     "GenerationHasDescendantsError",
     "GenerationRepository",
+    "ObservabilityRepository",
     "create_async_engine_from_url",
     "create_session_factory",
 ]

@@ -1,7 +1,7 @@
 /**
  * How the console talks to the operator API.
  *
- * Every request goes to the same-origin `/ops/api/...` proxy, which
+ * Every request goes to the same-origin `/ops/api/training/...` proxy, which
  * attaches the operator token server-side. Nothing here holds a
  * credential, and there is no place in this module for one to be put.
  *
@@ -34,7 +34,15 @@ import type {
   WorkerList,
 } from "@/lib/ops/types";
 
-export const OPS_API_BASE = "/ops/api";
+/**
+ * The training namespace of the operator proxy.
+ *
+ * The namespace is in the base rather than in every call site: the
+ * proxy routes on the first segment, and repeating it thirty times
+ * would be thirty chances to route a training call at the inference
+ * console.
+ */
+export const OPS_API_BASE = "/ops/api/training";
 
 export class OpsError extends Error {
   readonly status: number;

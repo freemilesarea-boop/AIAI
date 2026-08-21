@@ -55,7 +55,7 @@ describe("operator proxy", () => {
   it("is absent when the console is not enabled", async () => {
     delete process.env.OPS_CONSOLE_ENABLED;
 
-    const response = await GET(new Request("http://web.test/ops/api/overview"), context(["overview"]));
+    const response = await GET(new Request("http://web.test/ops/api/training/overview"), context(["training", "overview"]));
 
     expect(response.status).toBe(404);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -64,7 +64,7 @@ describe("operator proxy", () => {
   it("refuses to serve when no token is configured", async () => {
     delete process.env.OPS_OPERATOR_TOKEN;
 
-    const response = await GET(new Request("http://web.test/ops/api/overview"), context(["overview"]));
+    const response = await GET(new Request("http://web.test/ops/api/training/overview"), context(["training", "overview"]));
 
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ detail: expect.stringContaining("OPS_OPERATOR_TOKEN") });
@@ -73,8 +73,8 @@ describe("operator proxy", () => {
 
   it("attaches the token upstream and never returns it", async () => {
     const response = await GET(
-      new Request("http://web.test/ops/api/runs?status=RUNNING"),
-      context(["runs"]),
+      new Request("http://web.test/ops/api/training/runs?status=RUNNING"),
+      context(["training", "runs"]),
     );
 
     expect(response.status).toBe(200);
@@ -89,10 +89,10 @@ describe("operator proxy", () => {
 
   it("does not forward a product session cookie", async () => {
     await GET(
-      new Request("http://web.test/ops/api/overview", {
+      new Request("http://web.test/ops/api/training/overview", {
         headers: { cookie: "luber_session=secret-session-value", origin: "http://web.test" },
       }),
-      context(["overview"]),
+      context(["training", "overview"]),
     );
 
     const headers = fetchSpy.mock.calls[0][1].headers as Headers;
@@ -103,18 +103,40 @@ describe("operator proxy", () => {
 
   it("forwards a POST body and its content type", async () => {
     await POST(
-      new Request("http://web.test/ops/api/runs/run_1/actions/cancel", {
+      new Request("http://web.test/ops/api/training/runs/run_1/actions/cancel", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({}),
       }),
-      context(["runs", "run_1", "actions", "cancel"]),
+      context(["training", "runs", "run_1", "actions", "cancel"]),
     );
 
     const [target, init] = fetchSpy.mock.calls[0];
     expect(String(target)).toBe("http://api.test/v1/ops/training/runs/run_1/actions/cancel");
     expect(init.method).toBe("POST");
     expect(init.body).toBe("{}");
+  });
+
+  it("forwards the inference namespace to its own upstream", async () => {
+    await GET(
+      new Request("http://web.test/ops/api/inference/overview?window=24h"),
+      context(["inference", "overview"]),
+    );
+
+    const [target] = fetchSpy.mock.calls[0];
+    expect(String(target)).toBe("http://api.test/v1/ops/inference/overview?window=24h");
+  });
+
+  it("refuses a namespace that is not on the allowlist", async () => {
+    // Without this, any operator surface mounted on the API later would
+    // become browser-reachable by having been added.
+    const response = await GET(
+      new Request("http://web.test/ops/api/secrets/dump"),
+      context(["secrets", "dump"]),
+    );
+
+    expect(response.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("says the API is unreachable rather than throwing", async () => {
@@ -125,7 +147,7 @@ describe("operator proxy", () => {
       }),
     );
 
-    const response = await GET(new Request("http://web.test/ops/api/overview"), context(["overview"]));
+    const response = await GET(new Request("http://web.test/ops/api/training/overview"), context(["training", "overview"]));
 
     expect(response.status).toBe(502);
     expect(await response.json()).toMatchObject({

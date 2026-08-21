@@ -22,6 +22,8 @@ dependencies = [
     "luber-database",
     "luber-generation-client",
     "luber-audio-utils",
+    # The inference observability read model behind /v1/ops/inference.
+    "luber-inference-observability",
     # The operator training console reads the Phase 25 and Phase 26
     # registries in-process. Both are pure Python with no GPU, ML or
     # provider dependencies — that is a deliberate property of those
@@ -36,6 +38,7 @@ luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-generation-client = { workspace = true }
 luber-audio-utils = { workspace = true }
+luber-inference-observability = { workspace = true }
 luber-training = { workspace = true }
 luber-evaluation = { workspace = true }
 

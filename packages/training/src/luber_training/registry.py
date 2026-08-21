@@ -25,6 +25,7 @@ import fcntl
 import json
 import os
 import tempfile
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -123,16 +124,42 @@ class Registry:
         self._lock_path = self.root / LOCK_NAME
         self._lock_depth = 0
         self._lock_handle: Any = None
+        # In-process mutual exclusion. `flock` excludes other *processes*
+        # and does nothing between threads of one process, and the depth
+        # counter below cannot tell a second thread from a reentrant
+        # call. An RLock covers both: it serialises threads and is
+        # reentrant within one, which is exactly the shape this lock
+        # claims to have.
+        self._mutex = threading.RLock()
 
     # ── locking ──────────────────────────────────────────────────────
     @contextmanager
     def lock(self) -> Iterator[None]:
-        """Exclusive registry lock, reentrant within one process.
+        """Exclusive registry lock: across processes, and across threads.
 
-        Reentrancy matters: `transition_run` locks and then calls
-        `save_run`, which would deadlock on a non-reentrant lock. Depth
-        counting keeps the flock held once and released once.
+        Two mechanisms, because there are two ways to lose a race.
+
+        `flock` excludes other *processes* — a CLI and an API server
+        against the same registry directory.
+
+        The mutex excludes other *threads* of this process, which is the
+        case that actually bit: FastAPI runs synchronous route handlers
+        in a threadpool, so two concurrent dispatches are two threads
+        here. `flock` does not exclude them, and the depth counter alone
+        made it worse — a second thread saw a non-zero depth, read it as
+        a reentrant call, and walked straight into the critical section.
+        Both dispatches then passed the "is it still QUEUED" check before
+        either transitioned, and a double click started two runs.
+
+        Reentrancy still matters: `transition_run` locks and then calls
+        `save_run`, which would deadlock on a non-reentrant lock. An
+        RLock is reentrant per thread, and the depth counter keeps the
+        flock taken once and released once.
         """
+        with self._mutex:
+            yield from self._locked()
+
+    def _locked(self) -> Iterator[None]:
         if self._lock_depth > 0:
             self._lock_depth += 1
             try:
