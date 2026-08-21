@@ -105,6 +105,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 //: else in the product is private.
 const PUBLIC_ROUTES = new Set(["/login", "/signup"]);
 
+//: The operator training console. It is not part of the product: it has
+//: its own navigation, its own vocabulary and its own audience, and it
+//: must not appear in a customer's sidebar or sit behind a customer's
+//: session. Rendered bare here so `/ops` brings its own shell.
+const OPERATOR_PREFIX = "/ops";
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "/";
@@ -117,6 +123,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // visitor should not be looking at the furniture of a product they
   // cannot use. Placed after every hook — an early return above one
   // makes it conditional, which breaks the rules of hooks.
+  // The operator console renders with no product chrome at all: no
+  // sidebar, no player, and — importantly — no RequireAuth, because it
+  // is gated by the deployment rather than by a customer session.
+  if (pathname === OPERATOR_PREFIX || pathname.startsWith(`${OPERATOR_PREFIX}/`)) {
+    return <>{children}</>;
+  }
+
   if (PUBLIC_ROUTES.has(pathname)) {
     return (
       <div className="min-h-screen bg-[var(--surface-base)]">

@@ -136,3 +136,17 @@ async def degraded_client(app: FastAPI):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c
+
+
+# ── operator training console ────────────────────────────────────────
+#
+# Re-exported here so pytest discovers them by directory, following the
+# convention this repository already uses: the helpers live in a module
+# with a distinct name so a whole-repository run cannot resolve one
+# package's `conftest` import to another's.
+from ops_fixtures import (  # noqa: E402, F401
+    ops_app,
+    ops_client,
+    ops_environment,
+    scenario,
+)

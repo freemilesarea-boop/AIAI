@@ -7,6 +7,7 @@ process, ever.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,9 +17,11 @@ from redis.asyncio import Redis
 
 from luber_api.jobs import ArqGenerationEnqueuer, InlineGenerationRunner
 from luber_api.middleware import RequestIdMiddleware
+from luber_api.ops.security import console_available
 from luber_api.routes.auth import router as auth_router
 from luber_api.routes.generations import router as generations_router
 from luber_api.routes.health import router as health_router
+from luber_api.routes.ops import router as ops_training_router
 from luber_api.routes.projects import assign_router as project_assign_router
 from luber_api.routes.projects import router as projects_router
 from luber_api.routes.reference_audio import router as reference_audio_router
@@ -27,6 +30,8 @@ from luber_audio_utils import storage_from_settings
 from luber_database import create_async_engine_from_url, create_session_factory
 from luber_generation_client import provider_from_settings
 from luber_shared import configure_logging
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -76,6 +81,29 @@ def create_app() -> FastAPI:
     app.include_router(reference_audio_router)
     app.include_router(projects_router)
     app.include_router(project_assign_router)
+
+    # The operator training console. Mounted only where it is switched
+    # on and the environment is not production — the second condition is
+    # structural rather than a policy check inside the routes, because a
+    # router that is never registered has no attack surface at all.
+    #
+    # `require_operator` refuses again on every request. Two independent
+    # checks, because the cost of getting this wrong is a public
+    # training console.
+    if console_available(settings):
+        logger.warning(
+            "operator training console mounted at /v1/ops/training (environment=%s). "
+            "It exposes training internals and actions to anyone who can reach this "
+            "process with the operator token.",
+            settings.environment.value,
+        )
+        app.include_router(ops_training_router)
+    elif settings.ops_console_enabled:
+        logger.error(
+            "OPS_CONSOLE_ENABLED is set but the environment is %s; the operator training "
+            "console is not served in production and has not been mounted.",
+            settings.environment.value,
+        )
     return app
 
 

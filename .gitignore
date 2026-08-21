@@ -99,3 +99,10 @@ transfer_temp/
 collected_checkpoints/
 luber-worker/
 *.luber-partial
+
+# Operator console fixtures. `scripts/development/seed_operator_fixture.py`
+# writes a synthetic registry here for driving the training console
+# without a GPU. It is generated, it is large, and every figure in it is
+# simulated — committing it would put fabricated training records in the
+# repository beside real ones.
+ops-fixture/

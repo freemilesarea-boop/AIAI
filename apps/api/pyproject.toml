@@ -22,6 +22,12 @@ dependencies = [
     "luber-database",
     "luber-generation-client",
     "luber-audio-utils",
+    # The operator training console reads the Phase 25 and Phase 26
+    # registries in-process. Both are pure Python with no GPU, ML or
+    # provider dependencies — that is a deliberate property of those
+    # packages, and it is what makes them safe to import into the API.
+    "luber-training",
+    "luber-evaluation",
 ]
 
 [tool.uv.sources]
@@ -30,6 +36,8 @@ luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-generation-client = { workspace = true }
 luber-audio-utils = { workspace = true }
+luber-training = { workspace = true }
+luber-evaluation = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
