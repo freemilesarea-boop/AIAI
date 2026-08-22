@@ -128,6 +128,25 @@ class RemoteCheckpoint:
         return cls(**known)
 
 
+def _checkpoint_directories(roots: list[Path]) -> list[Path]:
+    """Immediate checkpoint directories beneath each root, in order.
+
+    ``final`` is itself a checkpoint rather than a directory of them:
+    the trainer writes the adapter straight into it. So a root that
+    holds adapter files *is* the candidate, and a root that holds
+    directories offers them instead.
+    """
+    out: list[Path] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        if (root / "adapter_model.safetensors").is_file():
+            out.append(root)
+            continue
+        out.extend(sorted(child for child in root.iterdir() if child.is_dir()))
+    return out
+
+
 def _parse_step_epoch(name: str) -> tuple[int | None, int | None]:
     """Step and epoch from a directory name, where it states them.
 
@@ -160,13 +179,26 @@ def discover_checkpoints(
     "nothing" needs to see that something was written and why it was not
     accepted.
     """
-    checkpoints_dir = layout.checkpoints_dir
-    if not checkpoints_dir.is_dir():
-        return []
+    # Two places, because two things write here. The trainer puts its
+    # per-epoch checkpoints under `output/checkpoints` and its last
+    # adapter under `output/final` — read from `trainer_fixed` at the
+    # pinned commit. `layout.checkpoints_dir` is kept as well: it is
+    # where this project's own synthetic trainer writes, and dropping it
+    # would make a worker forget checkpoints written by an earlier
+    # build. A directory found in both is reported once.
+    roots = [
+        layout.checkpoints_dir,
+        layout.output_dir / "checkpoints",
+        layout.output_dir / "final",
+    ]
 
     found: list[RemoteCheckpoint] = []
-    for path in sorted(checkpoints_dir.iterdir()):
-        if not path.is_dir() or path.name in IGNORED_NAMES:
+    seen: set[Path] = set()
+    for path in _checkpoint_directories(roots):
+        if path in seen:
+            continue
+        seen.add(path)
+        if path.name in IGNORED_NAMES:
             continue
         if path.name.endswith((".tmp", ".partial", ".staging")):
             # Plainly still being written. Not an error, just not ready.

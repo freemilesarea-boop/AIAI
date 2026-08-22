@@ -82,6 +82,35 @@ Precision under `auto`:
 An **explicit** precision is passed straight through by upstream without
 any check that the device can do it. LUBER checks, against the probe.
 
+### fp16 on MPS cannot train — measured in Phase 33
+
+The table above is still what the trainer *does*. Phase 33 measured what
+happens next, and on Apple silicon `auto` is not usable:
+
+> `ValueError: Attempting to unscale FP16 gradients.`
+
+`fixed_lora_module` loads the model in `float16` **and** drives Fabric
+at `16-mixed`, and Fabric's `GradScaler` refuses to unscale gradients
+that are themselves fp16. The run dies at the first gradient clip, after
+the 2.4B model has loaded. This is a property of the trainer, not of the
+hardware: Phase 32 measured fp16 tensors working on this machine's MPS
+backend, and they do.
+
+Measured on Apple M4 Pro / torch 2.10.0 / ACE-Step `6d467e4b`, by a
+bounded Phase 33 canary:
+
+| precision on MPS | real training |
+|---|---|
+| `bf16` | **works** |
+| `fp32` | **works** |
+| `fp16` | fails at the first clip |
+| `auto` | fails — it resolves to `fp16` here |
+
+`AUTO_BY_DEVICE` is unchanged, because it mirrors upstream and upstream
+is unchanged. What is new is `luber_training.preflight.UNTRAINABLE_PRECISION`,
+which **blocks** the combination with the measured reason attached. See
+`docs/TRAINING_PREFLIGHT_AND_CANARY.md` §8.
+
 ## 4. Workload classes and where they go
 
 | Workload | Default policy | Why |
@@ -251,6 +280,13 @@ wire format, its preflight and its backend are unchanged; Phase 32
 *translates* a worker record into a capability rather than replacing it.
 Placement chooses `REMOTE + CUDA`; Phase 27 executes it.
 
+**Phase 33 (training preflight and canary).** Builds directly on this
+one. Placement chooses a location and a device; the preflight proves the
+chosen machine can execute the plan, and the canary demonstrates it by
+running a bounded real training step. Phase 33 added one measured fact
+back into this document — fp16 on MPS cannot train — and changed no
+placement semantics. See `docs/TRAINING_PREFLIGHT_AND_CANARY.md`.
+
 **Phase 31 (provider resilience).** A different layer answering a
 different question. `ProviderRouter` decides which *generation provider*
 answers a user's request. Execution placement decides where a
@@ -265,13 +301,18 @@ read as implying otherwise.
 
 1. **No NVIDIA hardware has been tested.** CUDA placement logic is
    exercised against fixtures; no GPU benchmark, VRAM figure or model
-   name is claimed anywhere.
-2. **Nothing has trained a real model on MPS.** The smoke is a toy
-   network. Whether ACE-Step LoRA converges on Apple silicon is an open
-   experiment.
-3. **Memory feasibility is UNKNOWN for every real workload.**
+   name is claimed anywhere. Phase 33 did not change this.
+2. **A real ACE-Step LoRA now runs on MPS — bounded.** Phase 33's canary
+   loaded the real DiT in bf16, injected a real LoRA, took an optimizer
+   step, wrote a checkpoint and resumed from it. It trained on **two
+   synthetic tensors for one epoch**. Whether ACE-Step LoRA *converges*
+   on Apple silicon is still an open experiment: a canary proves the
+   mechanism and nothing about the model.
+3. **Memory feasibility is UNKNOWN for every real workload.** Phase 33
+   makes that explicit rather than fixing it: a `FULL_TRAINING`
+   preflight is UNVERIFIED on this ground alone.
 4. **No local training backend.** `LocalDryRunBackend` trains nothing by
-   design. Phase 32 makes a local device *expressible and validatable*;
-   executing one is a later decision.
+   design. Phase 33's canary starts the trainer directly, under hard
+   bounds; it is not a backend and cannot run a real job.
 5. **Thresholds and policies are code.** Changing the headroom fraction
    or a workload's default policy is a deploy.

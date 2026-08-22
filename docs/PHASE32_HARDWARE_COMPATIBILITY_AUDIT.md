@@ -60,7 +60,7 @@ training loop belongs to ACE-Step.
 There is exactly one place where LUBER *decides* a device, and it is a
 hard-coded ternary:
 
-```python
+```text
 # packages/training/src/luber_training/trainer_adapter.py
 "--device",
 "cuda" if plan.requirements.requires_cuda else "cpu",

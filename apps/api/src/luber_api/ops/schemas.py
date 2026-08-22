@@ -352,6 +352,96 @@ class PreflightView(BaseModel):
     generated_at: str | None = None
 
 
+class TrainingPreflightCheckView(BaseModel):
+    """One Phase 33 check, with its taxonomy entry attached."""
+
+    name: str
+    group: str = "plan"
+    status: Literal["PASS", "FAIL", "UNKNOWN", "NOT_APPLICABLE"]
+    detail: str = ""
+    reason: str | None = None
+    mandatory: bool = True
+
+
+class CapacityEvidenceView(BaseModel):
+    """One capacity fact and how it was established.
+
+    ``source`` is never dropped. A number without it is a number a
+    reader would assume was measured, and almost nothing here is.
+    """
+
+    name: str
+    source: Literal["MEASURED", "ESTIMATED", "UNKNOWN"]
+    value_mb: int | None = None
+    detail: str = ""
+    derivation: str = ""
+    #: True where the figure is Apple unified memory shared with the
+    #: operating system rather than dedicated accelerator memory.
+    unified_memory: bool = False
+
+
+class CanaryView(BaseModel):
+    """What a bounded canary established, if one has run."""
+
+    available: bool = False
+    unavailable_reason: str | None = None
+    status: Literal["PASSED", "FAILED", "BLOCKED", "NOT_RUN"] = "NOT_RUN"
+    mode: str | None = None
+    detail: str = ""
+    steps: int | None = None
+    max_optimizer_steps: int | None = None
+    max_samples: int | None = None
+    max_epochs: int | None = None
+    dataset_kind: str | None = None
+    exit_code: int | None = None
+    seconds: float | None = None
+    checkpoint_ok: bool | None = None
+    checkpoint_step: int | None = None
+    checkpoint_provenance_plan_digest: str | None = None
+    checkpoint_problems: list[str] = Field(default_factory=list)
+    resume_ok: bool | None = None
+    resume_detail: str = ""
+
+
+class TrainingPreflightView(BaseModel):
+    """Phase 33's verdict: can this machine execute this plan?
+
+    ``UNVERIFIED`` is a first-class status here rather than a shade of
+    pass. The console renders it distinctly for the same reason the
+    model carries it: a check nobody could perform is not a check that
+    passed, and an operator about to rent a GPU is the person a
+    reassuring colour would mislead.
+    """
+
+    available: bool = False
+    unavailable_reason: str | None = None
+    status: Literal["READY", "BLOCKED", "UNVERIFIED"] = "UNVERIFIED"
+    intent: str = "CANARY"
+    plan_digest: str | None = None
+    execution_location: str | None = None
+    execution_device: str | None = None
+    torch_device: str | None = None
+    resolved_precision: str | None = None
+    optimizer: str | None = None
+    worker_identity: str | None = None
+    target_label: str | None = None
+    capability_digest: str | None = None
+    dataset_status: str = "UNKNOWN"
+    dependency_status: str = "UNKNOWN"
+    storage_status: str = "UNKNOWN"
+    checkpoint_status: str = "NOT_APPLICABLE"
+    canary_status: str = "NOT_RUN"
+    capacity_status: str = "UNKNOWN"
+    checks: list[TrainingPreflightCheckView] = Field(default_factory=list)
+    capacity: list[CapacityEvidenceView] = Field(default_factory=list)
+    blocking_reasons: list[str] = Field(default_factory=list)
+    unverified: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    hardware: dict[str, Any] = Field(default_factory=dict)
+    measured_at: str | None = None
+    policy_version: str | None = None
+
+
 class ReproducibilityView(BaseModel):
     """Everything needed to rebuild this run, in one place."""
 
@@ -565,6 +655,8 @@ class RunDetail(BaseModel):
     staging: StagingView
     control_preflight: PreflightView
     remote_preflight: PreflightView
+    training_preflight: TrainingPreflightView
+    canary: CanaryView
     gates: list[GateView] = Field(default_factory=list)
     gates_available: bool = False
     gates_unavailable_reason: str | None = None

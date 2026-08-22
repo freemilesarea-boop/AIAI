@@ -87,7 +87,7 @@ and forwarding it would be the beginning of one being consulted there.
 | `/ops/training/experiments/[id]` | One hypothesis and everything descended from it |
 | `/ops/training/runs` | Every execution attempt |
 | `/ops/training/runs/new` | Create a DRAFT run from two locked builds |
-| `/ops/training/runs/[id]` | One run, in full — the most important screen |
+| `/ops/training/runs/[id]` | One run, in full — the most important screen, including its Phase 33 training preflight and bounded canary |
 | `/ops/training/workers` | The fleet, with liveness kept apart from record status |
 | `/ops/training/workers/[id]` | One capability report, exactly as measured |
 | `/ops/training/checkpoints` | Every artifact, with placeholders unmistakable |
@@ -97,6 +97,21 @@ and forwarding it would be the beginning of one being consulted there.
 
 The API is `/v1/ops/training/…`; the browser reaches it through
 `/ops/api/…`.
+
+Two Phase 33 reads live under a run:
+`GET /runs/{id}/training-preflight` and `GET /runs/{id}/canary`. Both
+are reads and neither can start anything — collecting preflight evidence
+means subprocesses against a trainer installation, and running a canary
+starts one. Those belong to the operator CLI, on the machine that has a
+trainer.
+
+The run page renders three statuses distinctly: `READY` with a tick,
+`BLOCKED` with a cross, and **`UNVERIFIED` with a dashed outline and a
+`?`**. `UNVERIFIED` deliberately does not resemble success — a check
+nobody could perform is not a check that passed, and the operator about
+to rent a GPU is the person a reassuring colour would mislead. Capacity
+figures carry their source (`MEASURED`, `ESTIMATED`, `UNKNOWN`) and an
+Apple unified-memory figure is labelled *shared with the OS — not VRAM*.
 
 The console has its own shell. It does not appear in the customer's
 navigation, and the customer's navigation does not appear in it — a
@@ -369,7 +384,12 @@ These are real, and none of them is hidden in the UI.
    (`POST /checkpoints/compare`) but has no dedicated page yet.** The
    data is there; the screen is not.
 
-10. **Narrow-viewport layout has not been verified in a real browser
+10. **The console shows a training preflight and a canary; it runs
+    neither.** Both panels read a record the CLI wrote, and say plainly
+    when nobody has run one — which is a different statement from
+    UNVERIFIED, and is rendered differently.
+
+11. **Narrow-viewport layout has not been verified in a real browser
     window.** Dense tables scroll inside their own containers and the
     page does not overflow at desktop widths, which was verified; the
     automation environment could not resize the window below that.

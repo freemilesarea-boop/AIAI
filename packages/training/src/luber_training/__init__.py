@@ -23,6 +23,23 @@ are captured; the bundle ties them together.
 EvaluationCandidate and stops. Nothing here can promote anything.
 """
 
+from luber_training.canary import (
+    CANARY_MAX_OPTIMIZER_STEPS,
+    CANARY_MAX_SAMPLES,
+    CanaryBoundsError,
+    CanaryEnvelope,
+    CanaryMode,
+    CanaryResult,
+    CanaryStatus,
+    ace_step_canary,
+    orchestration_canary,
+)
+from luber_training.capacity import (
+    CapacityEvidence,
+    CapacityReport,
+    EvidenceSource,
+    capacity_report,
+)
 from luber_training.config import (
     PRESETS,
     TrainingConfig,
@@ -52,15 +69,36 @@ from luber_training.gates import GateInputs, GateReport, run_all
 from luber_training.ids import EntityKind, new_id
 from luber_training.orchestrator import OrchestrationError, Orchestrator, PreflightReport
 from luber_training.plan import TrainingPlan
+from luber_training.preflight import (
+    BlockingReason,
+    PreflightIntent,
+    PreflightRequest,
+    PreflightStatus,
+    TrainingPreflightResult,
+)
+from luber_training.preflight import (
+    evaluate as evaluate_preflight,
+)
 from luber_training.registry import Registry
 
 __all__ = [
+    "CANARY_MAX_OPTIMIZER_STEPS",
+    "CANARY_MAX_SAMPLES",
     "PRESETS",
+    "BlockingReason",
+    "CanaryBoundsError",
+    "CanaryEnvelope",
+    "CanaryMode",
+    "CanaryResult",
+    "CanaryStatus",
+    "CapacityEvidence",
+    "CapacityReport",
     "Checkpoint",
     "CheckpointKind",
     "CheckpointStatus",
     "EntityKind",
     "EvaluationCandidate",
+    "EvidenceSource",
     "Experiment",
     "ExperimentStatus",
     "FailureCode",
@@ -69,18 +107,26 @@ __all__ = [
     "ModelBaseline",
     "OrchestrationError",
     "Orchestrator",
+    "PreflightIntent",
     "PreflightReport",
+    "PreflightRequest",
+    "PreflightStatus",
     "Registry",
     "RunStatus",
     "TrainingConfig",
     "TrainingDatasetRef",
     "TrainingPlan",
+    "TrainingPreflightResult",
     "TrainingRun",
     "TrainingStrategy",
     "TrainingWorker",
     "WorkerCapabilities",
     "WorkerClass",
+    "ace_step_canary",
+    "capacity_report",
+    "evaluate_preflight",
     "new_id",
+    "orchestration_canary",
     "preset",
     "run_all",
     "validate_config",

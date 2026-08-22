@@ -120,6 +120,7 @@ select = [
 # Operator training CLI: stdout is its user interface.
 "packages/training/src/luber_training/cli.py" = ["T20"]
 "packages/training/src/luber_training/remote_cli.py" = ["T20"]
+"packages/training/src/luber_training/preflight_cli.py" = ["T20"]
 # Operator evaluation CLI: stdout is its user interface.
 "packages/evaluation/src/luber_evaluation/cli.py" = ["T20"]
 # Inference QC dry-run CLI: stdout is its user interface. It generates
@@ -145,6 +146,11 @@ select = [
 # The remote worker CLI: its stdout *is* the protocol. The control plane
 # parses one JSON envelope from it, so printing is the whole contract.
 "packages/training/src/luber_training/remote/worker_cli.py" = ["T20"]
+# The out-of-process trainer and checkpoint probes: the trainer's own
+# interpreter runs them and parses one JSON document from stdout, so
+# printing is the whole contract — the same shape as `_facts.py`.
+"packages/training/src/luber_training/_trainer_probe.py" = ["T20"]
+"packages/training/src/luber_training/_checkpoint_probe.py" = ["T20"]
 "benchmarks/*/scripts/*.py" = ["T20"]
 # Embedded HTML/JS template: wrapping would alter the rendered page.
 "benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]

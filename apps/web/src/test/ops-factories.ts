@@ -14,6 +14,7 @@
 
 import type {
   ActionAvailability,
+  CanaryRun,
   CheckpointSummary,
   EvaluationDetail,
   GateView,
@@ -26,6 +27,7 @@ import type {
   RunSummary,
   TimelineEntry,
   TrainingConfig,
+  TrainingPreflight,
   WorkerSummary,
 } from "@/lib/ops/types";
 
@@ -214,6 +216,105 @@ export function unavailablePreflight(reason: string): Preflight {
     problems: [],
     unknown: [],
     generated_at: null,
+  };
+}
+
+/**
+ * A Phase 33 preflight that reached UNVERIFIED — the honest default for
+ * this project, since nothing has measured a memory requirement.
+ */
+export function trainingPreflight(
+  overrides: Partial<TrainingPreflight> = {},
+): TrainingPreflight {
+  return {
+    available: true,
+    unavailable_reason: null,
+    status: "UNVERIFIED",
+    intent: "FULL_TRAINING",
+    plan_digest: "a".repeat(64),
+    execution_location: "REMOTE",
+    execution_device: "CUDA",
+    torch_device: "cuda",
+    resolved_precision: "bf16",
+    optimizer: "adamw",
+    worker_identity: "worker_1",
+    target_label: "rented-gpu",
+    capability_digest: "b".repeat(64),
+    dataset_status: "PASS",
+    dependency_status: "UNKNOWN",
+    storage_status: "PASS",
+    checkpoint_status: "NOT_APPLICABLE",
+    canary_status: "NOT_RUN",
+    capacity_status: "UNKNOWN",
+    checks: [
+      {
+        name: "plan.execution_device",
+        group: "plan",
+        status: "PASS",
+        detail: "CUDA (torch: cuda)",
+        reason: null,
+        mandatory: true,
+      },
+      {
+        name: "capacity.training_requirement",
+        group: "capacity",
+        status: "UNKNOWN",
+        detail: "no memory requirement has been measured for this configuration",
+        reason: "CAPACITY_UNVERIFIED",
+        mandatory: true,
+      },
+    ],
+    capacity: [
+      {
+        name: "device_memory_mb",
+        source: "MEASURED",
+        value_mb: 81920,
+        detail: "81920 MB of dedicated device memory reported by the probe",
+        derivation: "",
+        unified_memory: false,
+      },
+      {
+        name: "training_memory_requirement_mb",
+        source: "UNKNOWN",
+        value_mb: null,
+        detail: "no LUBER configuration has a measured memory requirement on any device",
+        derivation: "",
+        unified_memory: false,
+      },
+    ],
+    blocking_reasons: [],
+    unverified: [
+      "CAPACITY_UNVERIFIED: capacity.training_requirement: no memory requirement has been measured",
+    ],
+    warnings: [],
+    hardware: { selected_device: "CUDA" },
+    measured_at: "2026-08-22T10:00:00+00:00",
+    policy_version: "training-preflight-v1",
+    ...overrides,
+  };
+}
+
+export function canaryRun(overrides: Partial<CanaryRun> = {}): CanaryRun {
+  return {
+    available: true,
+    unavailable_reason: null,
+    status: "PASSED",
+    mode: "ACE_STEP",
+    detail: "the installed trainer took 1 optimizer step and wrote a checkpoint that reopens",
+    steps: 1,
+    max_optimizer_steps: 8,
+    max_samples: 2,
+    max_epochs: 1,
+    dataset_kind: "SYNTHETIC",
+    exit_code: 0,
+    seconds: 12.9,
+    checkpoint_ok: true,
+    checkpoint_step: 1,
+    checkpoint_provenance_plan_digest: "c".repeat(64),
+    checkpoint_problems: [],
+    resume_ok: true,
+    resume_detail: "training continued from step 1 to 2 with optimizer state restored",
+    ...overrides,
   };
 }
 
@@ -448,6 +549,8 @@ export function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
       built_at: null,
     },
     control_preflight: preflight(),
+    training_preflight: trainingPreflight(),
+    canary: canaryRun(),
     remote_preflight: unavailablePreflight("The worker has not recorded a preflight."),
     gates: gates(),
     gates_available: true,

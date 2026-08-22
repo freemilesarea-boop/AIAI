@@ -44,7 +44,9 @@ from luber_api.ops.schemas import (
     AuditEvent,
     BaselineResponse,
     BuildOption,
+    CanaryView,
     CandidateSummary,
+    CapacityEvidenceView,
     CatalogueResponse,
     CheckpointComparisonResponse,
     CheckpointComparisonRow,
@@ -88,6 +90,8 @@ from luber_api.ops.schemas import (
     SystemCheck,
     TimelineEntry,
     TrainingConfigView,
+    TrainingPreflightCheckView,
+    TrainingPreflightView,
     WorkerCapabilitiesView,
     WorkerCompatibility,
     WorkerDetail,
@@ -141,6 +145,12 @@ RUN_VALIDATION_REQUESTED = "RUN_VALIDATION_REQUESTED"
 OPS_ARTIFACT_DIR = "ops"
 GATE_REPORT_NAME = "gate_report.json"
 CONTROL_PREFLIGHT_NAME = "preflight.json"
+
+#: Phase 33's records. Written beside the plan by the orchestrator
+#: rather than under `ops/`, because the CLI writes them too and both
+#: sides must read one file.
+TRAINING_PREFLIGHT_NAME = "training_preflight.json"
+CANARY_RECORD_NAME = "canary.json"
 
 #: The order of the Phase 25 run state machine, for the timeline.
 LINEAR_STATES: tuple[str, ...] = (
@@ -916,6 +926,148 @@ class OpsReadModel:
             generated_at=payload.get("created_at"),
         )
 
+    def _training_preflight(self, run_directory: Path | None) -> TrainingPreflightView:
+        """Phase 33's verdict for this run, if one has been recorded.
+
+        Absent is its own answer, and deliberately not rendered as
+        UNVERIFIED-with-no-detail: "nobody has run this" and "this ran
+        and could not establish something" are different situations with
+        different next moves.
+        """
+        if run_directory is None:
+            return TrainingPreflightView(
+                available=False,
+                unavailable_reason="This run has no artifact directory on this machine.",
+            )
+        payload = _read_json(run_directory / TRAINING_PREFLIGHT_NAME)
+        if payload is None:
+            return TrainingPreflightView(
+                available=False,
+                unavailable_reason=(
+                    "No training preflight has been recorded for this run. Run "
+                    "`luber-training preflight --run-id <id>` on the machine that holds "
+                    "the trainer."
+                ),
+            )
+        raw_status = str(payload.get("status", "UNVERIFIED"))
+        status = raw_status if raw_status in {"READY", "BLOCKED", "UNVERIFIED"} else "UNVERIFIED"
+        capacity = payload.get("capacity") or {}
+        return TrainingPreflightView(
+            available=True,
+            status=status,  # type: ignore[arg-type]
+            intent=str(payload.get("intent", "CANARY")),
+            plan_digest=payload.get("plan_digest"),
+            execution_location=payload.get("execution_location"),
+            execution_device=payload.get("execution_device"),
+            torch_device=payload.get("torch_device"),
+            resolved_precision=payload.get("resolved_precision"),
+            optimizer=payload.get("optimizer"),
+            worker_identity=payload.get("worker_identity"),
+            target_label=payload.get("target_label"),
+            capability_digest=payload.get("capability_digest"),
+            dataset_status=str(payload.get("dataset_status", "UNKNOWN")),
+            dependency_status=str(payload.get("dependency_status", "UNKNOWN")),
+            storage_status=str(payload.get("storage_status", "UNKNOWN")),
+            checkpoint_status=str(payload.get("checkpoint_status", "NOT_APPLICABLE")),
+            canary_status=str(payload.get("canary_status", "NOT_RUN")),
+            capacity_status=str(payload.get("capacity_status", "UNKNOWN")),
+            checks=[
+                TrainingPreflightCheckView(
+                    name=str(check.get("name", "")),
+                    group=str(check.get("group", "plan")),
+                    status=(
+                        check.get("status")
+                        if check.get("status") in {"PASS", "FAIL", "UNKNOWN", "NOT_APPLICABLE"}
+                        else "UNKNOWN"
+                    ),
+                    detail=redact_text(str(check.get("detail", ""))),
+                    reason=check.get("reason"),
+                    mandatory=bool(check.get("mandatory", True)),
+                )
+                for check in payload.get("checks", []) or []
+            ],
+            capacity=[
+                CapacityEvidenceView(
+                    name=str(item.get("name", "")),
+                    source=(
+                        item.get("source")
+                        if item.get("source") in {"MEASURED", "ESTIMATED", "UNKNOWN"}
+                        else "UNKNOWN"
+                    ),
+                    value_mb=item.get("value_mb"),
+                    detail=str(item.get("detail", "")),
+                    derivation=str(item.get("derivation", "")),
+                    unified_memory=bool(item.get("unified_memory", False)),
+                )
+                for item in capacity.get("evidence", []) or []
+            ],
+            blocking_reasons=[
+                redact_text(str(item)) for item in payload.get("blocking_reasons", []) or []
+            ],
+            unverified=[redact_text(str(item)) for item in payload.get("unverified", []) or []],
+            warnings=[redact_text(str(item)) for item in payload.get("warnings", []) or []],
+            hardware=payload.get("hardware_snapshot") or {},
+            measured_at=payload.get("measured_at"),
+            policy_version=payload.get("policy_version"),
+        )
+
+    def _canary(self, run_directory: Path | None) -> CanaryView:
+        """The bounded canary's own record, if one has run."""
+        if run_directory is None:
+            return CanaryView(
+                available=False,
+                unavailable_reason="This run has no artifact directory on this machine.",
+            )
+        payload = _read_json(run_directory / CANARY_RECORD_NAME)
+        if payload is None:
+            return CanaryView(
+                available=False,
+                unavailable_reason="No canary has been run for this run.",
+            )
+        envelope = payload.get("envelope") or {}
+        checkpoint = payload.get("checkpoint") or {}
+        resume = payload.get("resume") or {}
+        raw_status = str(payload.get("status", "NOT_RUN"))
+        canary_status = (
+            raw_status if raw_status in {"PASSED", "FAILED", "BLOCKED", "NOT_RUN"} else "NOT_RUN"
+        )
+        return CanaryView(
+            available=True,
+            status=canary_status,  # type: ignore[arg-type]
+            mode=payload.get("mode"),
+            detail=redact_text(str(payload.get("detail", ""))),
+            steps=payload.get("steps"),
+            max_optimizer_steps=envelope.get("max_optimizer_steps"),
+            max_samples=envelope.get("max_samples"),
+            max_epochs=envelope.get("max_epochs"),
+            dataset_kind=payload.get("dataset_kind"),
+            exit_code=payload.get("exit_code"),
+            seconds=payload.get("seconds"),
+            checkpoint_ok=checkpoint.get("ok"),
+            checkpoint_step=checkpoint.get("step"),
+            checkpoint_provenance_plan_digest=checkpoint.get("provenance_plan_digest"),
+            checkpoint_problems=[str(item) for item in checkpoint.get("problems", []) or []],
+            resume_ok=resume.get("ok"),
+            resume_detail=redact_text(str(resume.get("detail", ""))),
+        )
+
+    def training_preflight_for(self, run_id: str) -> TrainingPreflightView:
+        """Phase 33's verdict for a run, by id."""
+        record = next(
+            (item for item in self._all("runs") if str(item.get("run_id")) == run_id), None
+        )
+        if record is None:
+            return TrainingPreflightView(available=False, unavailable_reason="No such run.")
+        return self._training_preflight(self.run_directory(record))
+
+    def canary_for(self, run_id: str) -> CanaryView:
+        record = next(
+            (item for item in self._all("runs") if str(item.get("run_id")) == run_id), None
+        )
+        if record is None:
+            return CanaryView(available=False, unavailable_reason="No such run.")
+        return self._canary(self.run_directory(record))
+
     def _remote_state(self, run_id: str, worker_directory: Path | None) -> RemoteStateView:
         if worker_directory is None:
             return RemoteStateView(
@@ -1248,6 +1400,8 @@ class OpsReadModel:
             staging=self._staging(worker_directory),
             control_preflight=self._control_preflight(run_directory),
             remote_preflight=self._remote_preflight(worker_directory),
+            training_preflight=self._training_preflight(run_directory),
+            canary=self._canary(run_directory),
             gates=gates,
             gates_available=gates_available,
             gates_unavailable_reason=gates_reason,
@@ -2185,11 +2339,13 @@ class OpsReadModel:
 
 
 __all__ = [
+    "CANARY_RECORD_NAME",
     "CONTROL_PREFLIGHT_NAME",
     "GATE_REPORT_NAME",
     "OPS_ARTIFACT_DIR",
     "RUN_CANCEL_REQUESTED",
     "RUN_RECONCILED",
     "RUN_VALIDATION_REQUESTED",
+    "TRAINING_PREFLIGHT_NAME",
     "OpsReadModel",
 ]

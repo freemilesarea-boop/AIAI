@@ -495,7 +495,14 @@ class RemoteWorker:
             # This is the only place logical roots turn into paths.
             dataset_dir=str(layout.dataset_dir),
             output_dir=str(layout.output_dir),
-            checkpoint_dir=str(layout.checkpoints_dir),
+            # The trainer's `--checkpoint-dir` is the root it *reads
+            # base model weights from* — `acestep-v15-turbo` and the
+            # rest — not a place to write. Phase 33 found this pointed
+            # at the run's own empty output directory, which would have
+            # made the first real dispatch fail at model loading. It is
+            # the worker's shared checkpoint root, which is what that
+            # logical root has always been for.
+            checkpoint_dir=config_data.roots.checkpoint_root,
         )
 
         command = compile_command(plan, trainer_root=config_data.trainer_root)

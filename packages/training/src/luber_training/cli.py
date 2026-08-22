@@ -558,6 +558,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_remote_parser(sub)
 
+    # The execution-readiness gate and the bounded canary. In their own
+    # module because `canary ace-step` is the one verb here that starts
+    # a real trainer — bounded, and only ever bounded.
+    from luber_training.preflight_cli import add_preflight_parsers
+
+    add_preflight_parsers(sub)
+
     sub.add_parser("presets", help="available training presets").set_defaults(func=cmd_presets)
     sub.add_parser("verify", help="registry integrity").set_defaults(func=cmd_verify)
     return parser

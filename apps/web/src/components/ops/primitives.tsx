@@ -204,18 +204,35 @@ const STATUS_TONE: Record<string, Tone> = {
   NOT_CONFIGURED: "unknown",
   AUTOMATIC: "neutral",
   MANUAL: "warn",
+  // Phase 33. READY is absent on purpose: it already means "ready to
+  // be run" for an experiment, where neutral is right, and a training
+  // preflight's READY is a pass. The caller overrides the tone rather
+  // than one word carrying two meanings.
+  NOT_APPLICABLE: "neutral",
+  PASSED: "good",
+  NOT_RUN: "unknown",
+  MEASURED: "good",
+  // An estimate is not a measurement and must not look like one.
+  ESTIMATED: "warn",
 };
 
 export function OpsStatus({
   status,
   label,
   title,
+  tone: toneOverride,
 }: {
   status: string;
   label?: string;
   title?: string;
+  /**
+   * Force a tone for a word that means different things in different
+   * places. `READY` is the live case: an experiment that is READY has
+   * not started, and a training preflight that is READY has passed.
+   */
+  tone?: Tone;
 }) {
-  const tone = STATUS_TONE[status] ?? "neutral";
+  const tone = toneOverride ?? STATUS_TONE[status] ?? "neutral";
   return (
     <span
       title={title}

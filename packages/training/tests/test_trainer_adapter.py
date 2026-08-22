@@ -142,7 +142,11 @@ class TestCommandCompiler:
         assert isinstance(command.argv, list)
         assert all(isinstance(part, str) for part in command.argv)
         assert command.argv[1] == "train.py"
-        assert command.argv[2] == "fixed"
+        # `--yes` and `--plain` are declared on the trainer's *root*
+        # parser, so they precede the subcommand. `train.py fixed --yes`
+        # is rejected outright by the installed parser.
+        assert command.argv[2:4] == ["--yes", "--plain"]
+        assert command.argv[4] == "fixed"
 
     def test_it_carries_no_secrets(self):
         command = compile_command(a_plan(), trainer_root="/opt/ace-step")

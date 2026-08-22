@@ -129,6 +129,15 @@ WAV plus latents — budget several times the raw audio size.
 Expected bottleneck for a small run is data, not compute. There is no
 corpus yet.
 
+**Phase 33 update.** A bounded canary has now loaded the real ACE-Step
+DiT (2 396 625 030 parameters) on Apple silicon in bf16, injected a
+rank-4 LoRA (2 752 512 trainable), taken an optimizer step, written a
+checkpoint and resumed from it — on **two synthetic tensors for one
+epoch**. That establishes the mechanism and nothing about the table
+above: no memory requirement for a real workload has been measured on
+any device, and the preflight reports it as UNKNOWN rather than reading
+a figure off the presets. See `docs/TRAINING_PREFLIGHT_AND_CANARY.md`.
+
 No cloud vendor is named and no prices are quoted; neither was asked for
 and both would date immediately.
 

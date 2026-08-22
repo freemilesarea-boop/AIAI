@@ -26,8 +26,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from luber_hardware import MachineCapability
 from luber_training import registry as registry_module
 from luber_training.backends import DRY_RUN, EnvironmentCheck, TrainingExecutionBackend
+from luber_training.capacity import CapacityReport
 from luber_training.config import TrainingConfig
 from luber_training.config import validate as validate_config
 from luber_training.entities import (
@@ -59,9 +61,27 @@ from luber_training.plan import (
     capture_environment,
     default_requirements,
 )
+from luber_training.preflight import (
+    DEFAULT_CAPABILITY_MAX_AGE_SECONDS,
+    CanaryEvidence,
+    DatasetEvidence,
+    PreflightIntent,
+    PreflightRequest,
+    RemoteEvidence,
+    StorageEvidence,
+    TrainerEvidence,
+    TrainingPreflightResult,
+)
+from luber_training.preflight import (
+    evaluate as evaluate_preflight,
+)
 from luber_training.registry import Registry
 
 RUNS_DIRECTORY_NAME = "training_runs"
+
+#: Phase 33's records, beside the plan and the environment lock.
+TRAINING_PREFLIGHT_NAME = "training_preflight.json"
+CANARY_RECORD_NAME = "canary.json"
 
 
 class OrchestrationError(RuntimeError):
@@ -449,8 +469,16 @@ class Orchestrator:
         run = self.transition_run(run_id, RunStatus.QUEUED.value, worker_id=worker_id)
         return run, report
 
-    def compile_plan(self, run_id: str) -> TrainingPlan:
-        """Build the immutable plan for a validated run."""
+    def compile_plan(self, run_id: str, *, execution_device: str | None = None) -> TrainingPlan:
+        """Build the immutable plan for a validated run.
+
+        ``execution_device`` is Phase 32's placement, when one has been
+        made. Omitted, the plan is compiled exactly as it was before —
+        `requires_cuda` with no device named — so the digest of an
+        existing run does not move. Supplied, it becomes part of the
+        plan's identity, which is correct: a plan that says MPS is not
+        the same plan as one that left the device implied.
+        """
         run = self.get_run(run_id)
         baseline = self.get_baseline(run.base_model_id)
         if not baseline.supports(run.config.strategy):
@@ -468,7 +496,7 @@ class Orchestrator:
             dataset_ref=run.dataset_ref,
             config=run.config,
             execution_backend=run.execution_backend,
-            requirements=default_requirements(run.config),
+            requirements=default_requirements(run.config, device=execution_device),
             resume_from_checkpoint_id=run.resume_from_checkpoint_id,
         )
         digest = plan.digest()
@@ -563,6 +591,101 @@ class Orchestrator:
                 report.checks["disk_capacity"] = "PASS"
 
         return report
+
+    # ── Phase 33: the execution-readiness gate ───────────────────────
+    def training_preflight(
+        self,
+        run_id: str,
+        plan: TrainingPlan,
+        *,
+        capability: MachineCapability,
+        execution_location: str,
+        intent: str = PreflightIntent.CANARY.value,
+        worker: TrainingWorker | None = None,
+        gate_report: GateReport | None = None,
+        dataset: DatasetEvidence | None = None,
+        trainer: TrainerEvidence | None = None,
+        storage: StorageEvidence | None = None,
+        remote: RemoteEvidence | None = None,
+        canary: CanaryEvidence | None = None,
+        capacity: CapacityReport | None = None,
+        capability_max_age_seconds: float | None = None,
+        measured_at: str | None = None,
+        write: bool = True,
+    ) -> TrainingPreflightResult:
+        """Can this machine execute this plan, and is it proven?
+
+        Distinct from :meth:`preflight`, which is Phase 25's and stays
+        exactly as it was. That one answers "is this run legitimate and
+        does the worker look plausible"; this one answers "will the
+        trainer start, on this device, at this precision, with this
+        optimizer, and can we say so without guessing".
+
+        Evidence is passed in rather than gathered here. Collecting it
+        means subprocesses and filesystem reads that a browser-reachable
+        process may not be able to perform, and a verdict that changed
+        depending on who asked would not be a verdict.
+        """
+        request = PreflightRequest(
+            plan=plan,
+            capability=capability,
+            execution_location=execution_location,
+            intent=intent,
+            worker=worker,
+            gate_report=gate_report,
+            dataset=dataset or DatasetEvidence(),
+            trainer=trainer or TrainerEvidence(),
+            storage=storage or StorageEvidence(),
+            remote=remote or RemoteEvidence(),
+            canary=canary or CanaryEvidence(),
+            capacity=capacity,
+            capability_max_age_seconds=(
+                capability_max_age_seconds
+                if capability_max_age_seconds is not None
+                else DEFAULT_CAPABILITY_MAX_AGE_SECONDS
+            ),
+            measured_at=measured_at,
+        )
+        result = evaluate_preflight(request)
+        if write:
+            directory = Path(self.get_run(run_id).output_directory or self.artifacts_root / run_id)
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / TRAINING_PREFLIGHT_NAME).write_text(
+                json.dumps(result.to_dict(), indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        self.registry.append_audit(
+            registry_module.TRAINING_PREFLIGHT_RECORDED,
+            run_id,
+            "run",
+            status=result.status,
+            intent=result.intent,
+            execution_device=result.execution_device,
+        )
+        return result
+
+    def record_canary(self, run_id: str, result: dict[str, Any]) -> Path:
+        """Store a canary's own record beside the run.
+
+        Separate from the preflight file because they are separate
+        claims: a canary is something that happened, a preflight is a
+        verdict about what may happen next.
+        """
+        directory = Path(self.get_run(run_id).output_directory or self.artifacts_root / run_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / CANARY_RECORD_NAME
+        path.write_text(
+            json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.registry.append_audit(
+            registry_module.CANARY_RECORDED,
+            run_id,
+            "run",
+            status=result.get("status"),
+            mode=result.get("mode"),
+        )
+        return path
 
     # ── execution ────────────────────────────────────────────────────
     def start_run(

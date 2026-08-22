@@ -32,6 +32,7 @@ from luber_api.ops.readmodel import OpsReadModel
 from luber_api.ops.schemas import (
     ActionResponse,
     BaselineResponse,
+    CanaryView,
     CatalogueResponse,
     CheckpointComparisonResponse,
     CheckpointDetail,
@@ -49,6 +50,7 @@ from luber_api.ops.schemas import (
     RunCreateRequest,
     RunDetail,
     RunListResponse,
+    TrainingPreflightView,
     WorkerCompatibility,
     WorkerDetail,
     WorkerListResponse,
@@ -248,6 +250,34 @@ def run_logs(
     control plane and a worker.
     """
     return read.logs(run_id, stream=stream, offset=offset, limit=limit)
+
+
+@router.get("/runs/{run_id}/training-preflight", response_model=TrainingPreflightView)
+def run_training_preflight(run_id: str, read: ReadModel) -> TrainingPreflightView:
+    """Phase 33's verdict: can the selected machine execute this plan?
+
+    A read. This endpoint never runs a preflight and never starts a
+    trainer — collecting the evidence means subprocesses against a
+    trainer installation, which is the operator CLI's job on the machine
+    that has one. What the console shows is the record that produced.
+
+    ``available: false`` means nobody has run it, which is deliberately
+    distinct from UNVERIFIED: one is "we have not looked", the other is
+    "we looked and could not establish something".
+    """
+    view = read.training_preflight_for(run_id)
+    if view.unavailable_reason == "No such run.":
+        raise _not_found("run", run_id)
+    return view
+
+
+@router.get("/runs/{run_id}/canary", response_model=CanaryView)
+def run_canary(run_id: str, read: ReadModel) -> CanaryView:
+    """What a bounded canary established for this run, if one has run."""
+    view = read.canary_for(run_id)
+    if view.unavailable_reason == "No such run.":
+        raise _not_found("run", run_id)
+    return view
 
 
 @router.get("/runs/{run_id}/diagnostics", response_model=list[str])

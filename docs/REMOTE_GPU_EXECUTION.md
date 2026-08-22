@@ -386,6 +386,33 @@ train against a torch it was never tested with.
 
 **No trainer starts unless preflight passes.**
 
+### The control plane's own preflight — Phase 33
+
+This one runs on the worker, on the artifacts it received. Phase 33
+added a **second, canonical** preflight that runs before anything is
+transferred and answers a different question: can the selected machine
+execute this plan at all — this device, this precision, this optimizer,
+this trainer revision. Its vocabulary is `READY` / `BLOCKED` /
+`UNVERIFIED` and its failures are machine-readable codes rather than
+sentences.
+
+The two are complementary and neither replaces the other: the worker is
+the only place that can rehash what actually arrived, and the control
+plane is the only place that holds the plan's intent. See
+`docs/TRAINING_PREFLIGHT_AND_CANARY.md`.
+
+Phase 33 also changed two things in this path, both found by offering
+the compiled command to the installed trainer's own parser:
+
+* **`--checkpoint-dir` now resolves to the worker's `checkpoint_root`.**
+  To the trainer that flag names the root it *reads base model weights
+  from*, and it was being pointed at the run's own empty output
+  directory. Model loading would have failed on the first real dispatch.
+* **The compiled command carries `--yes --plain` before the
+  subcommand.** Without `--yes` the trainer stops at an interactive
+  confirmation; launched detached with stdin closed it exits **0**
+  having trained nothing, which is indistinguishable from success.
+
 ### Code revision
 
 The worker's LUBER commit must match the dispatch's. Rsyncing a dirty
@@ -510,6 +537,20 @@ registering every directory found there would eventually register
 something that is not a model. A candidate must look like what
 `save_adapter_flat` writes, and one that does not is reported
 `REJECTED` **with its reasons** rather than skipped silently.
+
+Discovery looks in three places, because the installed trainer does not
+write where Phase 27 originally looked: `--output-dir/checkpoints/`
+(per-epoch), `--output-dir/final/` (the last adapter, written straight
+into the directory rather than beneath it), and the run layout's own
+`checkpoints/`. Read from `trainer_fixed` at the pinned commit; found in
+Phase 33.
+
+**A checkpoint that exists is not a checkpoint that works.** Hashing
+catches a truncated transfer and nothing else: a correctly-hashed
+adapter can have all-zero tensors or an undeserialisable training state.
+Phase 33's canary opens what it wrote — through the trainer's own
+interpreter — and reports the tensor count, the non-zero parameter
+count, the step counter and the optimizer state.
 
 ### Collection
 

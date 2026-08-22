@@ -283,6 +283,86 @@ export interface Preflight {
   generated_at: string | null;
 }
 
+/**
+ * Phase 33 statuses. `UNVERIFIED` is not a shade of ready — a check
+ * nobody could perform is not a check that passed, and the console
+ * renders it as its own state rather than as a softer green.
+ */
+export type TrainingPreflightStatus = "READY" | "BLOCKED" | "UNVERIFIED";
+export type TrainingCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "NOT_APPLICABLE";
+export type CapacitySource = "MEASURED" | "ESTIMATED" | "UNKNOWN";
+export type CanaryStatus = "PASSED" | "FAILED" | "BLOCKED" | "NOT_RUN";
+
+export interface TrainingPreflightCheck {
+  name: string;
+  group: string;
+  status: TrainingCheckStatus;
+  detail: string;
+  reason: string | null;
+  mandatory: boolean;
+}
+
+export interface CapacityEvidence {
+  name: string;
+  source: CapacitySource;
+  value_mb: number | null;
+  detail: string;
+  derivation: string;
+  /** Apple unified memory, shared with the OS. Never dedicated VRAM. */
+  unified_memory: boolean;
+}
+
+export interface TrainingPreflight {
+  available: boolean;
+  unavailable_reason: string | null;
+  status: TrainingPreflightStatus;
+  intent: string;
+  plan_digest: string | null;
+  execution_location: string | null;
+  execution_device: string | null;
+  torch_device: string | null;
+  resolved_precision: string | null;
+  optimizer: string | null;
+  worker_identity: string | null;
+  target_label: string | null;
+  capability_digest: string | null;
+  dataset_status: string;
+  dependency_status: string;
+  storage_status: string;
+  checkpoint_status: string;
+  canary_status: string;
+  capacity_status: string;
+  checks: TrainingPreflightCheck[];
+  capacity: CapacityEvidence[];
+  blocking_reasons: string[];
+  unverified: string[];
+  warnings: string[];
+  hardware: Record<string, unknown>;
+  measured_at: string | null;
+  policy_version: string | null;
+}
+
+export interface CanaryRun {
+  available: boolean;
+  unavailable_reason: string | null;
+  status: CanaryStatus;
+  mode: string | null;
+  detail: string;
+  steps: number | null;
+  max_optimizer_steps: number | null;
+  max_samples: number | null;
+  max_epochs: number | null;
+  dataset_kind: string | null;
+  exit_code: number | null;
+  seconds: number | null;
+  checkpoint_ok: boolean | null;
+  checkpoint_step: number | null;
+  checkpoint_provenance_plan_digest: string | null;
+  checkpoint_problems: string[];
+  resume_ok: boolean | null;
+  resume_detail: string;
+}
+
 export interface Reproducibility {
   luber_commit: string | null;
   luber_dirty: boolean | null;
@@ -516,6 +596,8 @@ export interface RunDetail {
   staging: Staging;
   control_preflight: Preflight;
   remote_preflight: Preflight;
+  training_preflight: TrainingPreflight;
+  canary: CanaryRun;
   gates: GateView[];
   gates_available: boolean;
   gates_unavailable_reason: string | null;

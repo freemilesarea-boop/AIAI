@@ -58,7 +58,14 @@ import {
   runDuration,
   timestamp,
 } from "@/lib/ops/format";
-import type { GateView, Preflight, RunDetail } from "@/lib/ops/types";
+import type {
+  CanaryRun,
+  GateView,
+  Preflight,
+  RunDetail,
+  TrainingPreflight,
+  TrainingPreflightStatus,
+} from "@/lib/ops/types";
 
 /** How long ago an instant was, in seconds, or null if unparseable. */
 function secondsSince(value: string | null): number | null {
@@ -320,6 +327,30 @@ export default function RunDetailPage({ params }: { params: Promise<{ id: string
               <PreflightPanel preflight={detail.remote_preflight} />
             </Panel>
           </div>
+
+          <Panel
+            title="Training preflight"
+            subtitle={
+              "Whether the selected machine can execute this plan. READY means proven; " +
+              "UNVERIFIED means nobody could establish something, and is not a pass."
+            }
+            id="training-preflight"
+            tone={detail.training_preflight.status === "BLOCKED" ? "danger" : "default"}
+          >
+            <TrainingPreflightPanel preflight={detail.training_preflight} />
+          </Panel>
+
+          <Panel
+            title="Bounded canary"
+            subtitle={
+              "A training run small enough to be safe. A canary proves the mechanism and " +
+              "nothing about the model; its checkpoint must never be promoted."
+            }
+            id="canary"
+            tone={detail.canary.status === "FAILED" ? "danger" : "default"}
+          >
+            <CanaryPanel canary={detail.canary} />
+          </Panel>
 
           <div className="grid gap-5 lg:grid-cols-2">
             <Panel
@@ -804,6 +835,196 @@ function PreflightPanel({ preflight }: { preflight: Preflight }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/* ── phase 33: training preflight and canary ────────────────────────── */
+
+/**
+ * READY is the only status that gets a passing tone, and it gets it by
+ * an explicit override. BLOCKED and UNVERIFIED fall through to the
+ * shared map, where UNVERIFIED is a dashed outline rather than a
+ * softer green — the whole point of the status is that it does not
+ * resemble success.
+ */
+function TrainingPreflightStatusBadge({ status }: { status: TrainingPreflightStatus }) {
+  return <OpsStatus status={status} tone={status === "READY" ? "good" : undefined} />;
+}
+
+function TrainingPreflightPanel({ preflight }: { preflight: TrainingPreflight }) {
+  if (!preflight.available) return <Unavailable reason={preflight.unavailable_reason} />;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <TrainingPreflightStatusBadge status={preflight.status} />
+        <span className="text-[11px] text-[var(--text-muted)]">
+          {preflight.intent} · {timestamp(preflight.measured_at)}
+        </span>
+      </div>
+
+      <KeyValue
+        columns={2}
+        items={[
+          { label: "Location", value: <Maybe value={preflight.execution_location} /> },
+          { label: "Device", value: <Maybe value={preflight.execution_device} /> },
+          { label: "Precision", value: <Maybe value={preflight.resolved_precision} /> },
+          { label: "Optimizer", value: <Maybe value={preflight.optimizer} /> },
+          { label: "Target", value: <Maybe value={preflight.target_label} /> },
+          {
+            label: "Plan digest",
+            value: preflight.plan_digest ? (
+              <CopyValue
+                value={preflight.plan_digest}
+                display={preflight.plan_digest.slice(0, 16)}
+                label="plan digest"
+              />
+            ) : (
+              <Maybe value={null} />
+            ),
+          },
+        ]}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          ["Dataset", preflight.dataset_status],
+          ["Dependencies", preflight.dependency_status],
+          ["Storage", preflight.storage_status],
+          ["Checkpoint", preflight.checkpoint_status],
+          ["Canary", preflight.canary_status],
+          ["Capacity", preflight.capacity_status],
+        ].map(([label, value]) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
+            <OpsStatus status={value} />
+          </span>
+        ))}
+      </div>
+
+      {preflight.blocking_reasons.length > 0 && (
+        <ul className="space-y-1 text-xs text-[var(--danger)]">
+          {preflight.blocking_reasons.map((reason) => (
+            <li key={reason}>· {reason}</li>
+          ))}
+        </ul>
+      )}
+
+      {preflight.unverified.length > 0 && (
+        <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] px-3 py-2">
+          <p className="text-[11px] font-medium text-[var(--text-secondary)]">
+            Could not be established — not a pass
+          </p>
+          <ul className="mt-1 space-y-0.5 text-[11px] text-[var(--text-muted)]">
+            {preflight.unverified.map((item) => (
+              <li key={item}>· {item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {preflight.capacity.length > 0 && (
+        <div>
+          <p className="text-[11px] font-medium text-[var(--text-secondary)]">Capacity evidence</p>
+          <ul className="mt-1 space-y-1">
+            {preflight.capacity.map((item) => (
+              <li key={item.name} className="flex flex-wrap items-center gap-2">
+                <OpsStatus status={item.source} />
+                <span className="text-xs text-[var(--text-secondary)]">{item.name}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  {item.value_mb === null ? "—" : `${item.value_mb} MB`}
+                  {item.unified_memory && " · unified memory, shared with the OS — not VRAM"}
+                  {item.derivation && ` · ${item.derivation}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <ul className="space-y-1.5">
+        {preflight.checks.map((check) => (
+          <li key={check.name} className="flex flex-wrap items-center gap-2">
+            <OpsStatus status={check.status} />
+            <span className="text-xs text-[var(--text-secondary)]">{check.name}</span>
+            {check.reason && (
+              <span className="font-mono text-[10px] text-[var(--text-muted)]">{check.reason}</span>
+            )}
+            {check.detail && (
+              <span className="text-[11px] text-[var(--text-muted)]">{check.detail}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CanaryPanel({ canary }: { canary: CanaryRun }) {
+  if (!canary.available) return <Unavailable reason={canary.unavailable_reason} />;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <OpsStatus status={canary.status} />
+        <span className="text-[11px] text-[var(--text-muted)]">
+          {canary.mode}
+          {canary.dataset_kind && ` · ${canary.dataset_kind} data`}
+        </span>
+      </div>
+      <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">{canary.detail}</p>
+      <KeyValue
+        columns={2}
+        items={[
+          {
+            label: "Steps",
+            value: (
+              <span>
+                <Maybe value={canary.steps} /> of at most{" "}
+                <Maybe value={canary.max_optimizer_steps} />
+              </span>
+            ),
+          },
+          {
+            label: "Bounds",
+            value: (
+              <span>
+                <Maybe value={canary.max_samples} /> sample(s) ·{" "}
+                <Maybe value={canary.max_epochs} /> epoch(s)
+              </span>
+            ),
+          },
+          { label: "Exit code", value: <Maybe value={canary.exit_code} /> },
+          { label: "Seconds", value: <Maybe value={canary.seconds} /> },
+          {
+            label: "Checkpoint",
+            value:
+              canary.checkpoint_ok === null ? (
+                <Maybe value={null} />
+              ) : (
+                <OpsStatus status={canary.checkpoint_ok ? "PASS" : "FAIL"} />
+              ),
+          },
+          {
+            label: "Resume",
+            value:
+              canary.resume_ok === null ? (
+                <Maybe value={null} />
+              ) : (
+                <OpsStatus status={canary.resume_ok ? "PASS" : "FAIL"} />
+              ),
+          },
+        ]}
+      />
+      {canary.resume_detail && (
+        <p className="text-[11px] text-[var(--text-muted)]">{canary.resume_detail}</p>
+      )}
+      {canary.checkpoint_problems.length > 0 && (
+        <ul className="space-y-1 text-xs text-[var(--danger)]">
+          {canary.checkpoint_problems.map((problem) => (
+            <li key={problem}>· {problem}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

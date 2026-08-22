@@ -35,6 +35,21 @@ from luber_training.plan import TrainingPlan
 #: upstream itself describes as bugged; `estimate` does not train.
 TRAINER_SUBCOMMAND = "fixed"
 
+#: Flags that must precede the subcommand, and why they exist.
+#:
+#: `--yes` is not a convenience. `run_fixed` calls `confirm_start()`
+#: before loading anything, and a trainer launched detached has stdin
+#: closed — so the prompt raises EOFError, `confirm_start` returns
+#: False, and **`run_fixed` returns 0** having trained nothing. From the
+#: outside that is indistinguishable from a successful run: exit code
+#: zero, no traceback, no checkpoint. Phase 33 found this by offering
+#: the compiled argv to the installed parser.
+#:
+#: They go *before* the subcommand because that is where the installed
+#: parser puts them: they are declared on the root parser, not on
+#: `fixed`, so `train.py fixed --yes` is rejected outright.
+PRE_SUBCOMMAND_FLAGS: tuple[str, ...] = ("--yes", "--plain")
+
 #: Lyrics the trainer expects for material with no vocal.
 INSTRUMENTAL_MARKER = "[Instrumental]"
 
@@ -270,12 +285,25 @@ def compile_command(
     trainer_root: str,
     python_executable: str = "python",
     model_variant: str = "turbo",
+    model_dir: str | None = None,
+    resume_from: str | None = None,
 ) -> CompiledCommand:
     """A TrainingPlan as a concrete ACE-Step invocation.
 
     Every flag emitted was read from the installed parser. A flag the
     trainer does not have cannot appear here, which is what makes the
     compiled command trustworthy rather than plausible.
+
+    ``model_dir`` is what `--checkpoint-dir` means to the trainer: the
+    root holding the base model weights (`acestep-v15-turbo` and the
+    rest), not a place to put output. It defaults to `plan.checkpoint_dir`
+    because that is the field the backend substitutes, and a caller that
+    knows better — the canary, a worker with a shared weight cache —
+    supplies it explicitly.
+
+    ``resume_from`` names a checkpoint directory to continue. A plan can
+    cite a checkpoint id, but only the executing side knows where that
+    checkpoint actually is, so the path is passed rather than derived.
     """
     config = plan.config
     if config.strategy not in (TrainingStrategy.LORA.value, TrainingStrategy.LOKR.value):
@@ -286,13 +314,14 @@ def compile_command(
     argv: list[str] = [
         _token(python_executable),
         "train.py",
+        *PRE_SUBCOMMAND_FLAGS,
         TRAINER_SUBCOMMAND,
+        "--checkpoint-dir",
+        _token(model_dir if model_dir is not None else plan.checkpoint_dir),
         "--dataset-dir",
         _token(plan.dataset_dir),
         "--output-dir",
         _token(plan.output_dir),
-        "--checkpoint-dir",
-        _token(plan.checkpoint_dir),
         "--model-variant",
         _token(model_variant),
         # ── device ──
@@ -381,6 +410,13 @@ def compile_command(
     argv.append("--offload-encoder" if config.offload_encoder else "--no-offload-encoder")
     argv.append("--pin-memory" if config.pin_memory else "--no-pin-memory")
     argv.append("--persistent-workers" if config.persistent_workers else "--no-persistent-workers")
+
+    if resume_from is not None:
+        # Emitted only when a path is supplied. A plan citing a
+        # checkpoint id whose location nobody resolved would otherwise
+        # compile to a command that trains from scratch — the same
+        # silence this phase exists to remove.
+        argv += ["--resume-from", _token(resume_from)]
 
     return CompiledCommand(
         argv=argv,
