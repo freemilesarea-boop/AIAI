@@ -705,6 +705,54 @@ class WorkerCompatibility(BaseModel):
     reasons: list[str] = Field(default_factory=list)
 
 
+# ── compute targets (Phase 32) ───────────────────────────────────────
+
+
+class ComputeTargetView(BaseModel):
+    """One place a workload could run, and what it can take.
+
+    No field here can hold a hostname, a username or a path. A compute
+    target is a location, a device and a set of measurements — the
+    worker's *name* is operator-chosen and already in the console, and
+    `host_identity` is deliberately not carried across.
+    """
+
+    name: str
+    #: LOCAL or REMOTE. Separate from `device` on purpose: this
+    #: deployment has a local target that is not CUDA and will have a
+    #: remote one that is, and neither implies the other.
+    location: str
+    #: CPU, MPS or CUDA.
+    device: str
+    #: READY, NOT_AVAILABLE, NOT_CONNECTED or UNPROBED.
+    status: str
+    detail: str = ""
+    memory_mb: int | None = None
+    #: Precisions measured working on this device. Empty means nobody
+    #: measured, never "none work".
+    precisions: list[str] = Field(default_factory=list)
+    #: Workload classes this target could actually be asked to take,
+    #: computed by the same policy the scheduler uses.
+    workloads: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    #: True for a profile describing hardware nobody has probed.
+    planned: bool = False
+    capability_digest: str | None = None
+
+
+class ComputeTargetsResponse(BaseModel):
+    """The compute-targets panel: every target, and what is missing."""
+
+    at: str
+    summary: str
+    targets: list[ComputeTargetView] = Field(default_factory=list)
+    #: Concurrent local training jobs permitted. One, so the machine
+    #: that runs the control plane stays a control plane.
+    local_training_concurrency: int = 1
+    capability_schema_version: str = ""
+    execution_placement_policy_version: str = ""
+
+
 # ── evaluations ──────────────────────────────────────────────────────
 
 

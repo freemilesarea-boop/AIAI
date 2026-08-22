@@ -106,3 +106,12 @@ luber-worker/
 # simulated — committing it would put fabricated training records in the
 # repository beside real ones.
 ops-fixture/
+
+# Phase 32: hardware compatibility reports. They describe one machine at
+# one moment — its chip, memory and torch build — and are regenerated in
+# seconds by `python -m luber_hardware report`. Committing one would put
+# a snapshot of somebody's laptop in the repository and invite a reader
+# to treat it as the deployment's specification.
+artifacts/hardware/
+hardware_compatibility_report.json
+hardware_compatibility_report.md

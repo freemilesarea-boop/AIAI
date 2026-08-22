@@ -52,6 +52,8 @@ from luber_api.ops.schemas import (
     CheckpointListResponse,
     CheckpointSummary,
     ComparisonView,
+    ComputeTargetsResponse,
+    ComputeTargetView,
     CostView,
     CountBreakdown,
     DatasetRefView,
@@ -100,6 +102,15 @@ from luber_api.ops.streams import (
     read_stream,
     tail_lines,
 )
+from luber_hardware import (
+    CAPABILITY_SCHEMA_VERSION,
+    EXECUTION_PLACEMENT_POLICY_VERSION,
+    LOCAL_TRAINING_CONCURRENCY,
+    ExecutionTarget,
+    MachineCapability,
+    ProbeError,
+    readiness,
+)
 from luber_training.backends import DRY_RUN, REMOTE_GPU
 from luber_training.config import PRESET_INTENT, PRESETS, TrainingConfig, preset
 from luber_training.entities import (
@@ -108,6 +119,11 @@ from luber_training.entities import (
     RunStatus,
     TrainingWorker,
     WorkerClass,
+)
+from luber_training.placement import (
+    LOCAL_TARGET_NAME,
+    capability_from_worker_record,
+    local_target,
 )
 from luber_training.remote.protocol import REMOTE_PROTOCOL_VERSION, run_status_for
 
@@ -1544,6 +1560,71 @@ class OpsReadModel:
             recent_runs=runs[:20],
             audit_events=self._audit_events(worker_id),
             unknown_capabilities=unknown,
+        )
+
+    def compute_targets(self, *, python_executable: str | None = None) -> ComputeTargetsResponse:
+        """Every place a workload could run, and what each can take.
+
+        Phase 32. The rows are derived: readiness runs the real
+        placement policy against each target, so a row can never say a
+        machine takes heavy training while the scheduler refuses it.
+
+        The local row is probed live rather than cached. A cached
+        capability is one that says READY about a torch installation
+        somebody removed an hour ago, and the probe costs milliseconds
+        when the interpreter is this one.
+        """
+        targets: list[ExecutionTarget] = []
+        try:
+            targets.append(local_target(python_executable))
+        except ProbeError as exc:
+            # A named interpreter that cannot be reached is worth
+            # showing rather than hiding: it means the setting is wrong,
+            # and an operator seeing no local row would conclude the
+            # machine has no CPU.
+            targets.append(
+                ExecutionTarget(
+                    name=LOCAL_TARGET_NAME,
+                    capability=MachineCapability(
+                        label=LOCAL_TARGET_NAME,
+                        notes=(f"the configured interpreter could not be probed: {exc}",),
+                    ),
+                )
+            )
+
+        for record in self._all("workers"):
+            targets.append(
+                ExecutionTarget(
+                    name=str(record.get("name") or record.get("worker_id") or "worker"),
+                    capability=capability_from_worker_record(record),
+                    location="REMOTE",
+                    worker_id=str(record.get("worker_id") or "") or None,
+                )
+            )
+
+        report = readiness(targets)
+        return ComputeTargetsResponse(
+            at=report.at.isoformat(),
+            summary=report.summary,
+            targets=[
+                ComputeTargetView(
+                    name=view.name,
+                    location=view.location,
+                    device=view.device,
+                    status=view.status,
+                    detail=view.detail,
+                    memory_mb=view.memory_mb,
+                    precisions=list(view.precisions),
+                    workloads=list(view.workloads),
+                    limitations=list(view.limitations),
+                    planned=view.planned,
+                    capability_digest=view.capability_digest,
+                )
+                for view in report.targets
+            ],
+            local_training_concurrency=LOCAL_TRAINING_CONCURRENCY,
+            capability_schema_version=CAPABILITY_SCHEMA_VERSION,
+            execution_placement_policy_version=EXECUTION_PLACEMENT_POLICY_VERSION,
         )
 
     def worker_compatibility(

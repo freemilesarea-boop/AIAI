@@ -19,6 +19,7 @@ members = [
     "luber-evaluation",
     "luber-generation-client",
     "luber-generation-worker",
+    "luber-hardware",
     "luber-inference-observability",
     "luber-inference-qc",
     "luber-music-ai",
@@ -1032,6 +1033,11 @@ requires-dist = [
 ]
 
 [[package]]
+name = "luber-hardware"
+version = "0.1.0"
+source = { editable = "packages/hardware" }
+
+[[package]]
 name = "luber-inference-observability"
 version = "0.1.0"
 source = { editable = "packages/inference-observability" }
@@ -1147,10 +1153,14 @@ version = "0.1.0"
 source = { editable = "packages/training" }
 dependencies = [
     { name = "luber-dataset" },
+    { name = "luber-hardware" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "luber-dataset", editable = "packages/dataset" }]
+requires-dist = [
+    { name = "luber-dataset", editable = "packages/dataset" },
+    { name = "luber-hardware", editable = "packages/hardware" },
+]
 
 [[package]]
 name = "mako"

@@ -6,10 +6,11 @@ requires-python = ">=3.11"
 # No GPU, ML or provider SDK dependencies. This package decides *what*
 # to train and never performs training itself; the execution backend
 # owns everything vendor-specific.
-dependencies = ["luber-dataset"]
+dependencies = ["luber-dataset", "luber-hardware"]
 
 [tool.uv.sources]
 luber-dataset = { workspace = true }
+luber-hardware = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

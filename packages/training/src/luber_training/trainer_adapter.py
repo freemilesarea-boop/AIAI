@@ -296,8 +296,14 @@ def compile_command(
         "--model-variant",
         _token(model_variant),
         # ── device ──
+        # From the plan, which got it from Phase 32's placement. This
+        # was a `"cuda" if requires_cuda else "cpu"` ternary until
+        # Phase 32 — two branches for a trainer that has accepted
+        # `auto | cuda | cuda:N | mps | xpu | cpu` since the pinned
+        # commit. LUBER could not express an Apple run because it had
+        # no word for one, not because the trainer could not do it.
         "--device",
-        "cuda" if plan.requirements.requires_cuda else "cpu",
+        plan.requirements.device_token(),
         "--precision",
         _token(config.precision),
         "--num-devices",

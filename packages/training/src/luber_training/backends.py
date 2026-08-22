@@ -118,6 +118,13 @@ def capability_check(plan: TrainingPlan, worker: TrainingWorker) -> EnvironmentC
     problems: list[str] = []
     unknown: list[str] = []
 
+    # A plan that disagrees with itself is refused before anything is
+    # matched against a worker. Phase 32 lets a plan name its device;
+    # `requires_cuda=True` beside `execution_device="MPS"` is two
+    # statements that cannot both hold, and picking one silently is how
+    # a run trains somewhere nobody chose.
+    problems.extend(requirements.contradictions())
+
     if requirements.requires_cuda:
         if worker.worker_class == WorkerClass.DEVELOPMENT_ONLY.value:
             problems.append(f"worker {worker.name} is DEVELOPMENT_ONLY and the plan requires CUDA")

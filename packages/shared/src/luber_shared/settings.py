@@ -159,6 +159,20 @@ class BaseServiceSettings(BaseSettings):
     auth_rate_limit_attempts: int = 10
     auth_rate_limit_window_seconds: int = 15 * 60
 
+    # --- hardware and execution placement (Phase 32) --------------
+    #: The interpreter that runs training, when it is not this one.
+    #:
+    #: LUBER's own environment has no `torch` — the control plane never
+    #: imports it — while the ACE-Step trainer's virtualenv does. Left
+    #: empty, a capability probe describes the process asking, which on
+    #: this topology honestly reports "CPU only". Set to the trainer's
+    #: Python and it reports what the machine can actually do.
+    #:
+    #: A path, never a command line: it is passed as argv[0] to a
+    #: subprocess with a fixed script argument and never through a
+    #: shell.
+    training_python_executable: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION

@@ -24,6 +24,7 @@ const NAV = [
   { href: "/ops/training/experiments", label: "Experiments" },
   { href: "/ops/training/runs", label: "Runs" },
   { href: "/ops/training/workers", label: "Workers" },
+  { href: "/ops/training/compute", label: "Compute" },
   { href: "/ops/training/checkpoints", label: "Checkpoints" },
   { href: "/ops/training/evaluations", label: "Evaluations" },
 ];

@@ -37,6 +37,7 @@ from luber_api.ops.schemas import (
     CheckpointDetail,
     CheckpointListResponse,
     ComparisonRequest,
+    ComputeTargetsResponse,
     EvaluationDetail,
     EvaluationListResponse,
     ExperimentCreateRequest,
@@ -360,6 +361,22 @@ def worker_detail(worker_id: str, read: ReadModel) -> WorkerDetail:
 
 
 # ── checkpoints ──────────────────────────────────────────────────────
+
+
+@router.get("/compute-targets", response_model=ComputeTargetsResponse)
+def compute_targets(read: ReadModel, settings: Settings) -> ComputeTargetsResponse:
+    """Where work can run: this machine, and every registered worker.
+
+    Phase 32. Derived from probes rather than configured, so it cannot
+    report a GPU worker as READY after the machine was returned to the
+    rental provider — and it cannot report this Mac as able to take
+    heavy training, because the scheduler refuses exactly that.
+
+    The local row is probed through `training_python_executable` when
+    one is configured. The control plane's own Python has no torch, so
+    without that setting this honestly reports CPU only.
+    """
+    return read.compute_targets(python_executable=settings.training_python_executable or None)
 
 
 @router.get("/checkpoints", response_model=CheckpointListResponse)

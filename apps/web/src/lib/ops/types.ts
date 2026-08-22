@@ -684,3 +684,40 @@ export interface CheckpointComparison {
   metric_names: string[];
   note: string;
 }
+
+/* ── compute targets (Phase 32) ─────────────────────────────────────── */
+
+/**
+ * One place a workload could run.
+ *
+ * `location` and `device` are separate fields because they are separate
+ * questions: this deployment has a local target that is not CUDA, and
+ * will have a remote one that is. Neither implies the other.
+ *
+ * `precisions: []` means nobody measured — never "none work".
+ */
+export interface ComputeTarget {
+  name: string;
+  /** LOCAL | REMOTE */
+  location: string;
+  /** CPU | MPS | CUDA */
+  device: string;
+  /** READY | NOT_AVAILABLE | NOT_CONNECTED | UNPROBED */
+  status: string;
+  detail: string;
+  memory_mb: number | null;
+  precisions: string[];
+  workloads: string[];
+  limitations: string[];
+  planned: boolean;
+  capability_digest: string | null;
+}
+
+export interface ComputeTargets {
+  at: string;
+  summary: string;
+  targets: ComputeTarget[];
+  local_training_concurrency: number;
+  capability_schema_version: string;
+  execution_placement_policy_version: string;
+}

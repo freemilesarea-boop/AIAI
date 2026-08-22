@@ -25,6 +25,7 @@ members = [
     "packages/inference-qc",
     "packages/inference-observability",
     "packages/provider-resilience",
+    "packages/hardware",
 ]
 
 [dependency-groups]
@@ -67,6 +68,7 @@ testpaths = [
     "packages/inference-qc/tests",
     "packages/inference-observability/tests",
     "packages/provider-resilience/tests",
+    "packages/hardware/tests",
 ]
 
 [tool.ruff]
@@ -87,6 +89,7 @@ src = [
     "packages/inference-qc/src",
     "packages/inference-observability/src",
     "packages/provider-resilience/src",
+    "packages/hardware/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",
@@ -128,6 +131,17 @@ select = [
 # Provider resilience CLI: stdout is its user interface. It reports
 # circuit state and records operator decisions; it generates nothing.
 "packages/provider-resilience/src/luber_provider_resilience/cli.py" = ["T20"]
+# Hardware CLI: stdout is its user interface. It probes and reports; it
+# starts no training and moves no workload.
+"packages/hardware/src/luber_hardware/cli.py" = ["T20"]
+# The out-of-process fact collector: its stdout *is* the transport. It is
+# executed as a script by another interpreter and printing one JSON
+# document is the entire contract.
+"packages/hardware/src/luber_hardware/_facts.py" = ["T20"]
+# The out-of-process training smoke: same contract as the fact
+# collector. Another interpreter runs it and parses one JSON document
+# from its stdout.
+"packages/hardware/src/luber_hardware/_smoke.py" = ["T20"]
 # The remote worker CLI: its stdout *is* the protocol. The control plane
 # parses one JSON envelope from it, so printing is the whole contract.
 "packages/training/src/luber_training/remote/worker_cli.py" = ["T20"]
@@ -158,6 +172,7 @@ mypy_path = [
     "packages/inference-qc/src",
     "packages/inference-observability/src",
     "packages/provider-resilience/src",
+    "packages/hardware/src",
     "packages/audio-finishing/src",
     "benchmarks/music_quality/scripts",
     "benchmarks/remix_cover/scripts",

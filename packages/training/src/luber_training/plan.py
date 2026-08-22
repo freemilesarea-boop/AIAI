@@ -32,10 +32,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from luber_hardware import ComputeDevice, torch_device_string
 from luber_training.config import TrainingConfig
 from luber_training.entities import TrainingDatasetRef
 
-TRAINING_PLAN_SCHEMA_VERSION = "luber-training-plan/1"
+#: Bumped in Phase 32: `HardwareRequirements` now records the compute
+#: device a plan was compiled for. A plan that states its device is not
+#: the same plan as one that left it implied, and the digest changes
+#: with it — which is correct, because MPS and CUDA do not train
+#: identically.
+TRAINING_PLAN_SCHEMA_VERSION = "luber-training-plan/2"
 
 #: Placeholders a backend substitutes with real paths on the worker.
 #: Written this way so a plan can be read, diffed and hashed without
@@ -64,8 +70,58 @@ class HardwareRequirements:
     minimum_vram_mb: int | None = None
     minimum_gpu_count: int = 1
     supported_precision: tuple[str, ...] = ("bf16", "fp16", "fp32")
+    #: The compute device this plan was compiled for, as Phase 32's
+    #: placement resolved it: CUDA, MPS or CPU.
+    #:
+    #: ``None`` means nobody resolved one, and the device is derived
+    #: from ``requires_cuda`` exactly as it was before Phase 32 — which
+    #: is what keeps a plan compiled by older code compiling to the same
+    #: command. Set, it is authoritative: it is the only way to express
+    #: an Apple run, because `requires_cuda` has no third value.
+    execution_device: str | None = None
     #: Why a requirement is absent, when it is.
     unknown_requirements: tuple[str, ...] = ()
+
+    def device_token(self) -> str:
+        """The string the trainer's ``--device`` flag expects.
+
+        One place, because the alternative is what this replaced: a
+        ternary in the command compiler that could say `cuda` or `cpu`
+        and had no way at all to say `mps`. The trainer has accepted
+        `mps` since the pinned commit; LUBER simply had no word for it.
+        """
+        if self.execution_device is not None:
+            return torch_device_string(self.execution_device)
+        return "cuda" if self.requires_cuda else "cpu"
+
+    def contradictions(self) -> tuple[str, ...]:
+        """Ways this requirement set disagrees with itself.
+
+        `requires_cuda=True` beside `execution_device="MPS"` is not a
+        preference to reconcile — it is two statements that cannot both
+        be honoured, and a preflight should say so rather than pick one.
+        """
+        problems: list[str] = []
+        device = self.execution_device
+        if device is None:
+            return ()
+        if device not in {item.value for item in ComputeDevice}:
+            problems.append(
+                f"execution_device {device!r} is not a compute device; expected one of "
+                + ", ".join(sorted(item.value for item in ComputeDevice))
+            )
+            return tuple(problems)
+        if self.requires_cuda and device != ComputeDevice.CUDA.value:
+            problems.append(
+                f"the plan requires CUDA but was compiled for {device}; one of the two is "
+                "wrong and neither may be assumed"
+            )
+        if not self.requires_cuda and device == ComputeDevice.CUDA.value:
+            problems.append(
+                "the plan was compiled for CUDA but does not require it; a worker without "
+                "a GPU would satisfy the requirement and fail the run"
+            )
+        return tuple(problems)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -74,22 +130,37 @@ class HardwareRequirements:
         return payload
 
 
-def default_requirements(config: TrainingConfig) -> HardwareRequirements:
+def default_requirements(
+    config: TrainingConfig, *, device: str | None = None
+) -> HardwareRequirements:
     """Requirements derivable from a config, and no more.
 
     GPU count comes from ``num_devices`` because that is a fact about
     the config. VRAM does not, because nothing has measured it — so it
     is recorded as an explicit unknown rather than guessed.
+
+    ``device`` comes from Phase 32's placement when a placement was
+    made. Given one, ``requires_cuda`` follows from it rather than being
+    stated twice: a plan compiled for MPS does not require CUDA, and
+    saying so in two fields is how they come to disagree.
     """
+    unknown = [
+        "minimum_vram_mb: no VRAM figure has been measured for any LUBER "
+        "configuration on NVIDIA hardware",
+    ]
+    requires_cuda = True if device is None else device == ComputeDevice.CUDA.value
+    if device is not None and device != ComputeDevice.CUDA.value:
+        unknown.append(
+            f"memory headroom on {device}: unified memory is shared with the operating "
+            "system and nothing has measured what this configuration needs"
+        )
     return HardwareRequirements(
-        requires_cuda=True,
+        requires_cuda=requires_cuda,
         minimum_vram_mb=None,
         minimum_gpu_count=max(1, config.num_devices),
         supported_precision=("bf16", "fp16", "fp32"),
-        unknown_requirements=(
-            "minimum_vram_mb: no VRAM figure has been measured for any LUBER "
-            "configuration on NVIDIA hardware",
-        ),
+        execution_device=device,
+        unknown_requirements=tuple(unknown),
     )
 
 

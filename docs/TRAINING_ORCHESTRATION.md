@@ -211,6 +211,16 @@ what lets a plan compiled on a Mac execute on a rented Linux host.
 The hash excludes `compiled_at` and `plan_id`: two plans that would train
 identically must hash identically.
 
+Since Phase 32 the plan also records the **compute device** it was
+compiled for (`requirements.execution_device`: `CUDA`, `MPS` or `CPU`),
+and the schema version moved to `luber-training-plan/2`. It is inside
+the hash on purpose — MPS and CUDA do not train identically, so a plan
+naming one is not the same plan as one naming the other. Left `None`, a
+plan behaves exactly as it did before the field existed. What stays
+*out* of the hash is every hardware measurement: free disk, torch patch
+version and GPU utilisation describe a machine at a moment, not the
+training being requested. See `docs/HARDWARE_EXECUTION_COMPATIBILITY.md`.
+
 ---
 
 ## 9. Execution backends

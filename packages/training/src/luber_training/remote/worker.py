@@ -484,6 +484,11 @@ class RemoteWorker:
                 minimum_vram_mb=requirements.get("minimum_vram_mb"),
                 minimum_gpu_count=int(requirements.get("minimum_gpu_count", 1)),
                 supported_precision=tuple(requirements.get("supported_precision", ())),
+                # Read back rather than defaulted. A device dropped here
+                # would compile to `--device cuda` on a plan that was
+                # placed on something else, and the worker would train
+                # on hardware the control plane did not choose.
+                execution_device=requirements.get("execution_device"),
                 unknown_requirements=tuple(requirements.get("unknown_requirements", ())),
             ),
             # The placeholders become this worker's real directories.

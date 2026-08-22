@@ -17,6 +17,7 @@ import type {
   ActionResult,
   BaselineResponse,
   Catalogue,
+  ComputeTargets,
   CheckpointComparison,
   CheckpointDetail,
   CheckpointList,
@@ -168,6 +169,8 @@ export const ops = {
     request<WorkerList>(`/workers${query(params)}`),
 
   worker: (id: string) => request<WorkerDetail>(`/workers/${id}`),
+
+  computeTargets: () => request<ComputeTargets>("/compute-targets"),
 
   workerCompatibility: (backend: string) =>
     request<WorkerCompatibility[]>(

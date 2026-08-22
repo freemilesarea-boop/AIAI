@@ -11,6 +11,13 @@ decision rather than a code change.
 
 ---
 
+> **Phase 32.** Which *location and device* a workload goes to is
+> decided before this document applies — see
+> `docs/HARDWARE_EXECUTION_COMPATIBILITY.md`. Placement selects
+> `REMOTE + CUDA`; everything below is how that gets executed, and
+> none of it changed. For preparing the host itself, see
+> `docs/NVIDIA_TRAINING_WORKER_RUNBOOK.md`.
+
 ## 1. Two roles, and a boundary of authority
 
 The split is not about code layout. It is about who is allowed to decide

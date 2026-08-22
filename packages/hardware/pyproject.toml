@@ -1,0 +1,19 @@
+[project]
+name = "luber-hardware"
+version = "0.1.0"
+description = "Hardware capability probing, device resolution and execution placement"
+requires-python = ">=3.11"
+# No dependencies, and that is the point. This package answers "what can
+# this machine do" and "where should this workload run"; it never trains,
+# never loads a model and never imports the training package. `torch` is
+# consulted when it happens to be importable and is not required — the
+# control plane does not have it, and the probe's whole job is to be
+# able to say so.
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/luber_hardware"]
