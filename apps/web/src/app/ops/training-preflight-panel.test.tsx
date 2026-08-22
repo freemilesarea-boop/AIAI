@@ -14,7 +14,7 @@ import { Suspense, type ReactElement } from "react";
 
 import RunDetailPage from "@/app/ops/training/runs/[id]/page";
 import { OpsStatus } from "@/components/ops/primitives";
-import { canaryRun, runDetail, trainingPreflight } from "@/test/ops-factories";
+import { canaryRun, capacity, memoryProfile, runDetail, trainingPreflight } from "@/test/ops-factories";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
@@ -252,5 +252,119 @@ describe("canary panel", () => {
 
     const panel = screen.getByRole("region", { name: /Bounded canary/i });
     expect(within(panel).getByText(/No canary has been run/)).toBeInTheDocument();
+  });
+});
+
+describe("memory and capacity panel", () => {
+  it("shows a QUALIFIED verdict with the measured peak and the reserve", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getAllByText("QUALIFIED").length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/9751 MiB/).length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/SAMPLED_PEAK/).length).toBeGreaterThan(0);
+  });
+
+  it("never calls Apple unified memory VRAM", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getAllByText(/unified memory/i).length).toBeGreaterThan(0);
+    // The only permitted use of the word is the disclaimer itself.
+    const text = panel.textContent ?? "";
+    expect(text.replace(/not VRAM/g, "")).not.toMatch(/VRAM/);
+  });
+
+  it("shows the sequence a profile was measured on, not just the peak", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getAllByText(/6000 latent frames/).length).toBeGreaterThan(0);
+    expect(within(panel).getByText("REPRESENTATIVE")).toBeInTheDocument();
+  });
+
+  it("marks a derived figure as derived rather than measured", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getByText("DERIVED")).toBeInTheDocument();
+    expect(within(panel).getByText(/x 1.25 safety margin/)).toBeInTheDocument();
+  });
+
+  it("shows INSUFFICIENT as a failure, not a caveat", async () => {
+    await renderRun(
+      runDetail({
+        capacity: capacity({
+          qualification: "INSUFFICIENT",
+          domains: [
+            {
+              domain: "APPLE_UNIFIED",
+              qualification: "INSUFFICIENT",
+              peak_mib: 22000,
+              peak_kind: "SAMPLED_PEAK",
+              required_mib: 27500,
+              reserved_mib: 3686,
+              budget_mib: 20889,
+              total_mib: 24576,
+              detail: "27500 MiB required against a 20889 MiB budget",
+            },
+          ],
+        }),
+      }),
+    );
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getAllByText("INSUFFICIENT").length).toBeGreaterThan(0);
+    expect(within(panel).queryByText("QUALIFIED")).not.toBeInTheDocument();
+  });
+
+  it("says plainly when nothing has been measured", async () => {
+    await renderRun(
+      runDetail({
+        capacity: capacity({
+          available: false,
+          unavailable_reason: "No memory profile has been recorded for this run.",
+          qualification: "UNVERIFIED",
+        }),
+      }),
+    );
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getByText(/No memory profile has been recorded/)).toBeInTheDocument();
+  });
+
+  it("says a profile of an unrealistic workload is not representative", async () => {
+    await renderRun(
+      runDetail({
+        capacity: capacity({
+          qualification: "UNVERIFIED",
+          profile: memoryProfile({
+            representativeness: "NOT_REPRESENTATIVE",
+            latent_length: 64,
+            latent_seconds: 2.6,
+            representativeness_detail: "64 latent frames ≈ 3s of audio",
+          }),
+        }),
+      }),
+    );
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getByText("NOT_REPRESENTATIVE")).toBeInTheDocument();
+    expect(within(panel).getAllByText("UNVERIFIED").length).toBeGreaterThan(0);
+  });
+
+  it("carries the checkpoint and resume peaks separately", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getByText("9393 MiB")).toBeInTheDocument();
+    expect(within(panel).getByText("5464 MiB")).toBeInTheDocument();
+  });
+
+  it("says a memory profile makes no quality claim", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Memory and capacity/i });
+    expect(within(panel).getByText(/nothing about music quality/i)).toBeInTheDocument();
   });
 });

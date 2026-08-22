@@ -287,6 +287,12 @@ running a bounded real training step. Phase 33 added one measured fact
 back into this document — fp16 on MPS cannot train — and changed no
 placement semantics. See `docs/TRAINING_PREFLIGHT_AND_CANARY.md`.
 
+**Phase 34 (memory profiling and capacity qualification).** Builds on
+Phase 33. It measures what a configuration costs from inside the real
+trainer process and turns that into a capacity qualification the
+preflight consumes. It added no placement semantics and changed no
+device rule. Apple figures are unified memory throughout — never VRAM.
+
 **Phase 31 (provider resilience).** A different layer answering a
 different question. `ProviderRouter` decides which *generation provider*
 answers a user's request. Execution placement decides where a
@@ -308,9 +314,13 @@ read as implying otherwise.
    synthetic tensors for one epoch**. Whether ACE-Step LoRA *converges*
    on Apple silicon is still an open experiment: a canary proves the
    mechanism and nothing about the model.
-3. **Memory feasibility is UNKNOWN for every real workload.** Phase 33
-   makes that explicit rather than fixing it: a `FULL_TRAINING`
-   preflight is UNVERIFIED on this ground alone.
+3. **Memory feasibility was UNKNOWN for every real workload.** Phase 34
+   measured it on this M4 Pro, from inside the trainer process, at
+   production sequence length: **9 855 MiB of unified memory** for a
+   rank-32 LoRA at 6000 latent frames, bf16, micro batch 1. That is a
+   `SAMPLED_PEAK` — the pinned torch has no MPS peak counter — and it
+   qualifies **only that configuration on that machine**. Everything
+   else is still UNKNOWN. See `docs/TRAINING_MEMORY_CAPACITY.md`.
 4. **No local training backend.** `LocalDryRunBackend` trains nothing by
    design. Phase 33's canary starts the trainer directly, under hard
    bounds; it is not a backend and cannot run a real job.

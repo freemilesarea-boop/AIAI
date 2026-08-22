@@ -151,6 +151,9 @@ select = [
 # printing is the whole contract — the same shape as `_facts.py`.
 "packages/training/src/luber_training/_trainer_probe.py" = ["T20"]
 "packages/training/src/luber_training/_checkpoint_probe.py" = ["T20"]
+# The in-process memory probe: it *is* the trainer process, and its
+# stdout carries the one-line outcome the launcher reads. Same contract.
+"packages/training/src/luber_training/_memory_probe.py" = ["T20"]
 "benchmarks/*/scripts/*.py" = ["T20"]
 # Embedded HTML/JS template: wrapping would alter the rendered page.
 "benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]

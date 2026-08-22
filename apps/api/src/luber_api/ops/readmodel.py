@@ -46,7 +46,9 @@ from luber_api.ops.schemas import (
     BuildOption,
     CanaryView,
     CandidateSummary,
+    CapacityDomainView,
     CapacityEvidenceView,
+    CapacityView,
     CatalogueResponse,
     CheckpointComparisonResponse,
     CheckpointComparisonRow,
@@ -72,6 +74,8 @@ from luber_api.ops.schemas import (
     HeartbeatView,
     HumanReviewView,
     LogView,
+    MemoryPeakView,
+    MemoryProfileView,
     ModelBaselineView,
     OverviewResponse,
     Page,
@@ -152,6 +156,12 @@ CONTROL_PREFLIGHT_NAME = "preflight.json"
 TRAINING_PREFLIGHT_NAME = "training_preflight.json"
 CANARY_RECORD_NAME = "canary.json"
 
+#: Phase 34's measurement, written beside the run the profile was taken
+#: for. The registry's own `memory_profiles/` directory holds the same
+#: evidence indexed by configuration; this is the run-scoped copy the
+#: console reads.
+MEMORY_PROFILE_NAME = "training_memory_profile.json"
+
 #: The order of the Phase 25 run state machine, for the timeline.
 LINEAR_STATES: tuple[str, ...] = (
     RunStatus.DRAFT.value,
@@ -193,6 +203,83 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _mib(value: Any) -> int | None:
+    """Bytes as mebibytes, or None. Never zero for an absent figure."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return int(value) // (1024 * 1024)
+
+
+def _profile_view(payload: dict[str, Any] | None) -> MemoryProfileView | None:
+    """A recorded memory profile in the shape the console renders.
+
+    Nothing is recomputed here. The peak kinds, the sequence length and
+    the representativeness all travel through unchanged, because each of
+    them is the thing that stops a number being read as more than it is.
+    """
+    if payload is None:
+        return None
+    identity = payload.get("identity") or {}
+    runtime = payload.get("runtime") or {}
+    latent = identity.get("latent_length")
+    raw_outcome = str(payload.get("outcome", ""))
+    outcome = (
+        raw_outcome
+        if raw_outcome in {"COMPLETED", "FAILED", "PROFILE_TIMEOUT", "BLOCKED", "NOT_RUN"}
+        else "NOT_RUN"
+    )
+    raw_representativeness = str(payload.get("representativeness", ""))
+    representativeness = (
+        raw_representativeness
+        if raw_representativeness
+        in {"REPRESENTATIVE", "PARTIALLY_REPRESENTATIVE", "NOT_REPRESENTATIVE", "UNKNOWN"}
+        else "UNKNOWN"
+    )
+    return MemoryProfileView(
+        profile_id=str(payload.get("profile_id", "")),
+        outcome=outcome,  # type: ignore[arg-type]
+        representativeness=representativeness,  # type: ignore[arg-type]
+        representativeness_detail=str(payload.get("representativeness_detail", "")),
+        identity_digest=payload.get("identity_digest"),
+        device=identity.get("device"),
+        precision=identity.get("precision"),
+        optimizer=identity.get("optimizer"),
+        micro_batch_size=identity.get("micro_batch_size"),
+        gradient_accumulation=identity.get("gradient_accumulation"),
+        effective_batch_size=identity.get("effective_batch_size"),
+        lora_rank=identity.get("lora_rank"),
+        gradient_checkpointing=identity.get("gradient_checkpointing"),
+        latent_length=latent,
+        latent_seconds=(round(latent / 25.0, 1) if isinstance(latent, int) else None),
+        encoder_length=identity.get("encoder_length"),
+        peaks=[
+            MemoryPeakView(
+                domain=item.get("domain", "HOST"),
+                kind=item.get("kind", "NOT_AVAILABLE"),
+                source=item.get("source", "UNKNOWN"),
+                peak_mib=_mib(item.get("peak_bytes")),
+                baseline_mib=_mib(item.get("baseline_bytes")),
+                growth_mib=_mib(item.get("growth_bytes")),
+                total_mib=_mib(item.get("total_bytes")),
+                sample_count=int(item.get("sample_count") or 0),
+                detail=str(item.get("detail", "")),
+            )
+            for item in payload.get("peaks", []) or []
+        ],
+        checkpoint_peak_mib=_mib(payload.get("checkpoint_peak_bytes")),
+        resume_peak_mib=_mib(payload.get("resume_peak_bytes")),
+        optimizer_steps=payload.get("optimizer_steps"),
+        not_observed={
+            str(key): str(value) for key, value in (payload.get("not_observed") or {}).items()
+        },
+        torch_version=runtime.get("torch_version"),
+        ace_step_commit=runtime.get("ace_step_commit"),
+        measured_at=payload.get("finished_at"),
+        failure_reason=redact_text(str(payload.get("failure_reason", ""))),
+        failure_kind=str(payload.get("failure_kind", "NOT_A_MEMORY_FAILURE")),
+    )
 
 
 def _paginate(items: list[T], limit: int, offset: int) -> tuple[list[T], Page]:
@@ -971,6 +1058,7 @@ class OpsReadModel:
             checkpoint_status=str(payload.get("checkpoint_status", "NOT_APPLICABLE")),
             canary_status=str(payload.get("canary_status", "NOT_RUN")),
             capacity_status=str(payload.get("capacity_status", "UNKNOWN")),
+            capacity_qualification=str(payload.get("capacity_qualification", "UNVERIFIED")),
             checks=[
                 TrainingPreflightCheckView(
                     name=str(check.get("name", "")),
@@ -1050,6 +1138,89 @@ class OpsReadModel:
             resume_ok=resume.get("ok"),
             resume_detail=redact_text(str(resume.get("detail", ""))),
         )
+
+    def _capacity(self, run_directory: Path | None) -> CapacityView:
+        """What the recorded profile and the preflight say about capacity.
+
+        Assembled from two records rather than recomputed: the CLI runs
+        the qualifier on the machine that holds the profiles, and a
+        console that judged capacity a second way would eventually
+        disagree with the tool an operator actually used.
+        """
+        if run_directory is None:
+            return CapacityView(
+                available=False,
+                unavailable_reason="This run has no artifact directory on this machine.",
+            )
+
+        preflight = _read_json(run_directory / TRAINING_PREFLIGHT_NAME) or {}
+        decision = preflight.get("capacity_decision") or {}
+        profile_payload = _read_json(run_directory / MEMORY_PROFILE_NAME)
+
+        if not decision and profile_payload is None:
+            return CapacityView(
+                available=False,
+                unavailable_reason=(
+                    "No memory profile has been recorded for this run. Run "
+                    "`luber-training profile-memory --run-id <id>` on the machine that "
+                    "holds the trainer."
+                ),
+            )
+
+        raw = str(decision.get("qualification", "UNVERIFIED"))
+        qualification = (
+            raw
+            if raw in {"QUALIFIED", "MARGIN_LOW", "INSUFFICIENT", "UNVERIFIED"}
+            else "UNVERIFIED"
+        )
+        return CapacityView(
+            available=True,
+            qualification=qualification,  # type: ignore[arg-type]
+            device=decision.get("device"),
+            policy_version=decision.get("policy_version"),
+            applicability=decision.get("applicability"),
+            applicability_detail=str(decision.get("applicability_detail", "")),
+            reasons=[redact_text(str(item)) for item in decision.get("reasons", []) or []],
+            domains=[
+                CapacityDomainView(
+                    domain=item.get("domain", "HOST"),
+                    qualification=item.get("qualification", "UNVERIFIED"),
+                    peak_mib=_mib(item.get("peak_bytes")),
+                    peak_kind=str(item.get("peak_kind", "NOT_AVAILABLE")),
+                    required_mib=_mib(item.get("required_bytes")),
+                    reserved_mib=_mib(item.get("reserved_bytes")),
+                    budget_mib=_mib(item.get("budget_bytes")),
+                    total_mib=_mib(item.get("total_bytes")),
+                    detail=str(item.get("detail", "")),
+                )
+                for item in decision.get("domains", []) or []
+            ],
+            evidence=[
+                CapacityEvidenceView(
+                    name=str(item.get("name", "")),
+                    source=(
+                        item.get("source")
+                        if item.get("source") in {"MEASURED", "DERIVED", "ESTIMATED", "UNKNOWN"}
+                        else "UNKNOWN"
+                    ),
+                    value_mb=item.get("value_mb"),
+                    detail=str(item.get("detail", "")),
+                    derivation=str(item.get("derivation", "")),
+                    unified_memory=bool(item.get("unified_memory", False)),
+                )
+                for item in decision.get("evidence", []) or []
+            ],
+            profile=_profile_view(profile_payload),
+            measured_at=decision.get("measured_at"),
+        )
+
+    def capacity_for(self, run_id: str) -> CapacityView:
+        record = next(
+            (item for item in self._all("runs") if str(item.get("run_id")) == run_id), None
+        )
+        if record is None:
+            return CapacityView(available=False, unavailable_reason="No such run.")
+        return self._capacity(self.run_directory(record))
 
     def training_preflight_for(self, run_id: str) -> TrainingPreflightView:
         """Phase 33's verdict for a run, by id."""
@@ -1402,6 +1573,7 @@ class OpsReadModel:
             remote_preflight=self._remote_preflight(worker_directory),
             training_preflight=self._training_preflight(run_directory),
             canary=self._canary(run_directory),
+            capacity=self._capacity(run_directory),
             gates=gates,
             gates_available=gates_available,
             gates_unavailable_reason=gates_reason,
@@ -2342,6 +2514,7 @@ __all__ = [
     "CANARY_RECORD_NAME",
     "CONTROL_PREFLIGHT_NAME",
     "GATE_REPORT_NAME",
+    "MEMORY_PROFILE_NAME",
     "OPS_ARTIFACT_DIR",
     "RUN_CANCEL_REQUESTED",
     "RUN_RECONCILED",

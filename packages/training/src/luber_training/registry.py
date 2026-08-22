@@ -115,6 +115,9 @@ CANDIDATE_CREATED = "CANDIDATE_CREATED"
 #: UNVERIFIED preflight is the one an operator most needs to find again.
 TRAINING_PREFLIGHT_RECORDED = "TRAINING_PREFLIGHT_RECORDED"
 CANARY_RECORDED = "CANARY_RECORDED"
+#: Phase 34. Recorded whatever the outcome: a profile that failed is
+#: the record an operator needs most.
+MEMORY_PROFILE_RECORDED = "MEMORY_PROFILE_RECORDED"
 
 
 class Registry:

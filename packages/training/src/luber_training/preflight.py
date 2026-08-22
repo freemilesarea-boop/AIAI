@@ -62,6 +62,7 @@ from luber_training.capacity import (
     CapacityReport,
     EvidenceSource,
 )
+from luber_training.capacity_policy import CapacityDecision, CapacityQualification
 from luber_training.config import Optimizer, Precision
 from luber_training.entities import TrainingWorker, WorkerClass
 from luber_training.gates import GateReport
@@ -418,6 +419,10 @@ class PreflightRequest:
     remote: RemoteEvidence = field(default_factory=RemoteEvidence)
     canary: CanaryEvidence = field(default_factory=CanaryEvidence)
     capacity: CapacityReport | None = None
+    #: Phase 34's verdict on whether measured evidence permits a run of
+    #: this configuration. ``None`` means nobody asked the qualifier,
+    #: which is not the same as its having said no.
+    capacity_decision: CapacityDecision | None = None
     capability_max_age_seconds: float = DEFAULT_CAPABILITY_MAX_AGE_SECONDS
     #: Fixed by the caller so an identical evidence set produces an
     #: identical result. Defaulting to "now" inside would make every
@@ -454,6 +459,9 @@ class TrainingPreflightResult:
     checkpoint_status: str = CheckStatus.NOT_APPLICABLE.value
     canary_status: str = "NOT_RUN"
     capacity_status: str = EvidenceSource.UNKNOWN.value
+    #: Phase 34's qualification, where one was supplied.
+    capacity_qualification: str = CapacityQualification.UNVERIFIED.value
+    capacity_decision: dict[str, Any] = field(default_factory=dict)
     measured_at: str = ""
     schema_version: str = TRAINING_PREFLIGHT_SCHEMA_VERSION
     policy_version: str = TRAINING_PREFLIGHT_POLICY_VERSION
@@ -504,6 +512,8 @@ class TrainingPreflightResult:
             "checkpoint_status": self.checkpoint_status,
             "canary_status": self.canary_status,
             "capacity_status": self.capacity_status,
+            "capacity_qualification": self.capacity_qualification,
+            "capacity_decision": self.capacity_decision,
             "measured_at": self.measured_at,
             "note": (
                 "UNVERIFIED is not READY. A mandatory check nobody could perform is "
@@ -1465,26 +1475,75 @@ def _capacity_checks(request: PreflightRequest) -> list[PreflightCheck]:
             )
         )
 
-    requirement = report.by_name(TRAINING_MEMORY_REQUIREMENT)
-    unmeasured = requirement is None or not requirement.known
-    checks.append(
-        PreflightCheck(
+    checks.append(_qualification_check(request, report))
+    return checks
+
+
+def _qualification_check(
+    request: PreflightRequest, report: CapacityReport | None
+) -> PreflightCheck:
+    """Whether measured evidence permits a run of this configuration.
+
+    Phase 33 could only ever answer UNKNOWN here, because nothing had
+    measured what a run costs. Phase 34 gives the question an answer
+    when — and only when — an applicable, completed, representative
+    profile exists whose peak satisfies the capacity policy.
+
+    Mandatory for FULL_TRAINING and informational for a canary. A canary
+    runs bounded on synthetic tensors; requiring a production memory
+    figure before it could start would block the one run that produces
+    the figure.
+    """
+    mandatory = request.intent == PreflightIntent.FULL_TRAINING.value
+    decision = request.capacity_decision
+
+    if decision is None:
+        requirement = None if report is None else report.by_name(TRAINING_MEMORY_REQUIREMENT)
+        return PreflightCheck(
             name="capacity.training_requirement",
-            status=CheckStatus.UNKNOWN.value if unmeasured else CheckStatus.PASS.value,
+            status=CheckStatus.UNKNOWN.value,
             detail=(
                 (requirement.detail if requirement is not None else "")
                 or "no memory requirement has been measured for this configuration"
             ),
-            reason=BlockingReason.CAPACITY_UNVERIFIED.value if unmeasured else None,
-            # Mandatory only for a real run. A bounded canary does not
-            # need a production memory figure to be legitimate — and if
-            # this were mandatory everywhere, nothing in this project
-            # could ever be READY, which would make the status
-            # meaningless rather than strict.
-            mandatory=request.intent == PreflightIntent.FULL_TRAINING.value,
+            reason=BlockingReason.CAPACITY_UNVERIFIED.value,
+            mandatory=mandatory,
         )
+
+    if decision.qualification == CapacityQualification.INSUFFICIENT.value:
+        return PreflightCheck(
+            name="capacity.training_requirement",
+            status=CheckStatus.FAIL.value,
+            detail=(
+                "measured evidence says this configuration cannot satisfy the capacity "
+                "policy on this machine: " + "; ".join(decision.reasons[:3])
+            ),
+            # A definite refusal, so it blocks whatever the intent. A
+            # canary whose own configuration is known not to fit should
+            # not be started either.
+            reason=BlockingReason.CAPACITY_UNVERIFIED.value,
+        )
+
+    if decision.qualification == CapacityQualification.UNVERIFIED.value:
+        return PreflightCheck(
+            name="capacity.training_requirement",
+            status=CheckStatus.UNKNOWN.value,
+            detail=(
+                "no applicable memory profile qualifies this configuration: "
+                + (decision.applicability_detail or "; ".join(decision.reasons[:2]))
+            ),
+            reason=BlockingReason.CAPACITY_UNVERIFIED.value,
+            mandatory=mandatory,
+        )
+
+    return PreflightCheck(
+        name="capacity.training_requirement",
+        status=CheckStatus.PASS.value,
+        detail=(
+            f"{decision.qualification} against policy {decision.policy_version}, from "
+            f"profile {decision.profile_id}: " + "; ".join(decision.reasons[:2])
+        ),
     )
-    return checks
 
 
 def _canary_checks(request: PreflightRequest) -> list[PreflightCheck]:
@@ -1608,6 +1667,14 @@ def evaluate(request: PreflightRequest) -> TrainingPreflightResult:
         warnings=warnings,
         unverified=unverified,
         canary_status=request.canary.status,
+        capacity_qualification=(
+            CapacityQualification.UNVERIFIED.value
+            if request.capacity_decision is None
+            else request.capacity_decision.qualification
+        ),
+        capacity_decision=(
+            {} if request.capacity_decision is None else request.capacity_decision.to_dict()
+        ),
         capacity_status=(
             EvidenceSource.UNKNOWN.value
             if capacity is None or capacity.any_unknown

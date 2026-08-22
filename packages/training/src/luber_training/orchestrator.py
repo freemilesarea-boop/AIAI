@@ -30,6 +30,7 @@ from luber_hardware import MachineCapability
 from luber_training import registry as registry_module
 from luber_training.backends import DRY_RUN, EnvironmentCheck, TrainingExecutionBackend
 from luber_training.capacity import CapacityReport
+from luber_training.capacity_policy import CapacityDecision
 from luber_training.config import TrainingConfig
 from luber_training.config import validate as validate_config
 from luber_training.entities import (
@@ -82,6 +83,12 @@ RUNS_DIRECTORY_NAME = "training_runs"
 #: Phase 33's records, beside the plan and the environment lock.
 TRAINING_PREFLIGHT_NAME = "training_preflight.json"
 CANARY_RECORD_NAME = "canary.json"
+
+#: Phase 34's. A memory profile is stored twice on purpose: once beside
+#: the run it was taken for, and once in the registry's own profile
+#: directory where the qualifier looks for evidence about a
+#: configuration regardless of which run produced it.
+MEMORY_PROFILE_RECORD_NAME = "training_memory_profile.json"
 
 
 class OrchestrationError(RuntimeError):
@@ -609,6 +616,7 @@ class Orchestrator:
         remote: RemoteEvidence | None = None,
         canary: CanaryEvidence | None = None,
         capacity: CapacityReport | None = None,
+        capacity_decision: CapacityDecision | None = None,
         capability_max_age_seconds: float | None = None,
         measured_at: str | None = None,
         write: bool = True,
@@ -639,6 +647,7 @@ class Orchestrator:
             remote=remote or RemoteEvidence(),
             canary=canary or CanaryEvidence(),
             capacity=capacity,
+            capacity_decision=capacity_decision,
             capability_max_age_seconds=(
                 capability_max_age_seconds
                 if capability_max_age_seconds is not None
@@ -684,6 +693,31 @@ class Orchestrator:
             "run",
             status=result.get("status"),
             mode=result.get("mode"),
+        )
+        return path
+
+    def record_memory_profile(self, run_id: str, profile: dict[str, Any]) -> Path:
+        """Store a memory profile beside the run it was measured for.
+
+        Its own file rather than the canary's: a canary is a run that
+        happened, a profile is a measurement of one, and a reader
+        looking for "what did this cost" should not have to know that a
+        canary produced it.
+        """
+        directory = Path(self.get_run(run_id).output_directory or self.artifacts_root / run_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / MEMORY_PROFILE_RECORD_NAME
+        path.write_text(
+            json.dumps(profile, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.registry.append_audit(
+            registry_module.MEMORY_PROFILE_RECORDED,
+            run_id,
+            "run",
+            outcome=profile.get("outcome"),
+            profile_id=profile.get("profile_id"),
+            representativeness=profile.get("representativeness"),
         )
         return path
 

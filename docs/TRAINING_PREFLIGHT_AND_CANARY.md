@@ -56,10 +56,19 @@ proofs:
 * **`FULL_TRAINING`** — clearing a real run. An unmeasured memory
   requirement makes it `UNVERIFIED`.
 
-Nothing in this project has a measured memory requirement, so **every
-`FULL_TRAINING` preflight in LUBER today is `UNVERIFIED`**. That is the
-honest state, not a bug, and it is why the `CANARY` intent exists: it is
-the one that can be answered.
+Nothing in this project had a measured memory requirement when this was
+written, so **every `FULL_TRAINING` preflight was `UNVERIFIED`**.
+
+**Phase 34 changed that where evidence exists.** The preflight now
+consumes a capacity qualification, and `FULL_TRAINING` can reach READY
+when an applicable, completed, representative memory profile satisfies
+the headroom policy. Where no such profile exists it is still
+`UNVERIFIED`, and an `INSUFFICIENT` qualification blocks. See
+`docs/TRAINING_MEMORY_CAPACITY.md`.
+
+A passing canary still does not imply full-training readiness: the
+canary proves the mechanism, the profile measures the cost, and they are
+separate checks with separate evidence.
 
 ---
 
@@ -120,6 +129,9 @@ never mix.
   The derivation travels with the number, so a reader can disagree with
   the multiplier rather than having to trust the result. An estimate is
   never promoted to a measurement by being reasonable.
+* **DERIVED** — arithmetic over measured values, with the arithmetic
+  stated. Added in Phase 34 for peak-minus-baseline and
+  budget-minus-required.
 * **UNKNOWN** — nobody looked, or nobody can.
 
 `CapacityReport` has no `fits` field. Whether a real training workload
@@ -137,15 +149,18 @@ column beside a GPU's.
 
 ### What is UNKNOWN today
 
-* The memory requirement of any LUBER training configuration, on any
-  device. Nothing has measured it.
+* ~~The memory requirement of any LUBER training configuration~~ —
+  **measured in Phase 34** for two configurations on this M4 Pro, at
+  production sequence length. Every other configuration, and every other
+  machine, is still UNKNOWN.
 * The disk requirement, until a canary has produced a checkpoint whose
   size can be observed. There is no formula here for "a rank-16 LoRA is
   N megabytes".
-* Peak device allocation during a canary. Nothing outside the training
+* Peak device allocation during a *canary*. Nothing outside the training
   process can observe MPS allocation, and a resident-set figure taken
-  from outside proved not to be defensible, so it is reported as UNKNOWN
-  rather than published with a caveat nobody would read.
+  from outside proved not to be defensible. **Phase 34's profiler
+  measures it from inside the trainer process instead**, which is where
+  `torch.mps` will answer.
 
 ---
 
@@ -394,9 +409,12 @@ a browser can reach.
 
 1. **Passing Phase 33 does not mean a production-scale training workload
    has been proven to fit on a given accelerator.** A canary trains on
-   two synthetic tensors of length 64 for one epoch. It says the
-   mechanism works. It says nothing about whether a real dataset, at
-   real sequence lengths, for thirty epochs, fits in memory or converges.
+   two synthetic tensors of length 64 for one epoch — about two and a
+   half seconds of audio at the VAE's 25 frames a second. It says the
+   mechanism works.
+   Phase 34 measures the cost at production sequence length separately,
+   and the canary's own peak qualifies nothing: its shape is reported
+   `NOT_REPRESENTATIVE` and the qualifier refuses it.
 2. **Fixture-tested CUDA logic is not real NVIDIA hardware validation.**
 3. **A canary's checkpoint is worthless as a model.** It learned noise.
    The provenance sidecar says so and nothing may promote it.
@@ -418,5 +436,7 @@ a browser can reach.
 * `docs/HARDWARE_EXECUTION_COMPATIBILITY.md` — Phase 32: devices,
   placement, precision, what was measured
 * `docs/REMOTE_GPU_EXECUTION.md` — Phase 27: how work reaches a worker
+* `docs/TRAINING_MEMORY_CAPACITY.md` — Phase 34: what a run costs, and
+  whether that leaves enough room
 * `docs/TRAINING_ORCHESTRATION.md` — Phase 25: gates, plans, lifecycle
 * `docs/TRAINING_CONSOLE.md` — Phase 28: the operator console

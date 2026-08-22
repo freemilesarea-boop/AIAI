@@ -383,6 +383,8 @@ def generate_synthetic_fixture(
     destination: Path,
     envelope: CanaryEnvelope,
     timeout: float = 300.0,
+    latent_length: int = CANARY_LATENT_LENGTH,
+    encoder_length: int = CANARY_ENCODER_LENGTH,
 ) -> DatasetVerdict:
     """Build the canary's dataset with the trainer's own generator.
 
@@ -391,6 +393,12 @@ def generate_synthetic_fixture(
     and `is_synthetic` on every sample. Using it rather than writing our
     own means the shapes cannot drift from what the trainer reads, and
     it means LUBER never fabricates a training tensor.
+
+    The lengths default to the canary's short ones — the question there
+    is whether a step runs at all. Phase 34's memory profiler passes
+    production-realistic ones, because the sequence dimension is what
+    activation memory scales with and a short measurement cannot stand
+    in for a long run.
     """
     destination.mkdir(parents=True, exist_ok=True)
     try:
@@ -404,9 +412,9 @@ def generate_synthetic_fixture(
                 "--num-samples",
                 str(envelope.max_samples),
                 "--latent-length",
-                str(CANARY_LATENT_LENGTH),
+                str(int(latent_length)),
                 "--encoder-length",
-                str(CANARY_ENCODER_LENGTH),
+                str(int(encoder_length)),
             ],
             cwd=str(trainer_root),
             capture_output=True,

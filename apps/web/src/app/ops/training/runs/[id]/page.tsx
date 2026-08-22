@@ -60,7 +60,9 @@ import {
 } from "@/lib/ops/format";
 import type {
   CanaryRun,
+  Capacity,
   GateView,
+  MemoryDomain,
   Preflight,
   RunDetail,
   TrainingPreflight,
@@ -338,6 +340,18 @@ export default function RunDetailPage({ params }: { params: Promise<{ id: string
             tone={detail.training_preflight.status === "BLOCKED" ? "danger" : "default"}
           >
             <TrainingPreflightPanel preflight={detail.training_preflight} />
+          </Panel>
+
+          <Panel
+            title="Memory and capacity"
+            subtitle={
+              "What this configuration was measured to cost, and whether that leaves enough " +
+              "room. Apple figures are unified memory shared with the OS — not VRAM."
+            }
+            id="capacity"
+            tone={detail.capacity.qualification === "INSUFFICIENT" ? "danger" : "default"}
+          >
+            <CapacityPanel capacity={detail.capacity} />
           </Panel>
 
           <Panel
@@ -1025,6 +1039,136 @@ function CanaryPanel({ canary }: { canary: CanaryRun }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * A domain's label. Apple's pool is called what it is, everywhere, so a
+ * reader skimming a table cannot come away believing the machine has
+ * 24 GB of dedicated video memory.
+ */
+function domainLabel(domain: MemoryDomain): string {
+  if (domain === "APPLE_UNIFIED") return "unified memory (shared with the OS — not VRAM)";
+  if (domain === "CUDA_DEVICE") return "CUDA device memory";
+  return "host RSS";
+}
+
+function mib(value: number | null): string {
+  return value === null ? "" : `${value} MiB`;
+}
+
+function CapacityPanel({ capacity }: { capacity: Capacity }) {
+  if (!capacity.available) return <Unavailable reason={capacity.unavailable_reason} />;
+  const profile = capacity.profile;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <OpsStatus
+          status={capacity.qualification}
+          tone={capacity.qualification === "QUALIFIED" ? "good" : undefined}
+        />
+        <span className="text-[11px] text-[var(--text-muted)]">
+          {capacity.device} · policy {capacity.policy_version} · {timestamp(capacity.measured_at)}
+        </span>
+      </div>
+
+      {profile && (
+        <>
+          <KeyValue
+            columns={2}
+            items={[
+              {
+                label: "Measured configuration",
+                value: (
+                  <span>
+                    {profile.precision} · batch {profile.micro_batch_size} · accum{" "}
+                    {profile.gradient_accumulation} · LoRA rank {profile.lora_rank}
+                  </span>
+                ),
+              },
+              {
+                label: "Input measured",
+                value: (
+                  <span>
+                    {profile.latent_length} latent frames (
+                    <Maybe value={profile.latent_seconds} />s of audio), encoder{" "}
+                    {profile.encoder_length}
+                  </span>
+                ),
+              },
+              {
+                label: "Representativeness",
+                value: <OpsStatus status={profile.representativeness} />,
+              },
+              { label: "Optimizer steps", value: <Maybe value={profile.optimizer_steps} /> },
+              {
+                label: "Checkpoint peak",
+                value: <Maybe value={mib(profile.checkpoint_peak_mib)} />,
+              },
+              { label: "Resume peak", value: <Maybe value={mib(profile.resume_peak_mib)} /> },
+            ]}
+          />
+          <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+            {profile.representativeness_detail}
+          </p>
+        </>
+      )}
+
+      <div>
+        <p className="text-[11px] font-medium text-[var(--text-secondary)]">
+          Measured peaks and headroom
+        </p>
+        <ul className="mt-1 space-y-1.5">
+          {capacity.domains.map((domain) => (
+            <li key={domain.domain} className="flex flex-wrap items-center gap-2">
+              <OpsStatus
+                status={domain.qualification}
+                tone={domain.qualification === "QUALIFIED" ? "good" : undefined}
+              />
+              <span className="text-xs text-[var(--text-secondary)]">
+                {domainLabel(domain.domain)}
+              </span>
+              <span className="text-[11px] text-[var(--text-muted)]">
+                peak <Maybe value={mib(domain.peak_mib)} /> ({domain.peak_kind}) · required{" "}
+                <Maybe value={mib(domain.required_mib)} /> · budget{" "}
+                <Maybe value={mib(domain.budget_mib)} /> · reserved{" "}
+                <Maybe value={mib(domain.reserved_mib)} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {capacity.evidence.length > 0 && (
+        <div>
+          <p className="text-[11px] font-medium text-[var(--text-secondary)]">Evidence</p>
+          <ul className="mt-1 space-y-1">
+            {capacity.evidence.map((item) => (
+              <li key={item.name} className="flex flex-wrap items-center gap-2">
+                <OpsStatus status={item.source} />
+                <span className="text-xs text-[var(--text-secondary)]">{item.name}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  {item.value_mb === null ? "—" : `${item.value_mb} MB`}
+                  {item.unified_memory && " · unified memory, shared with the OS — not VRAM"}
+                  {item.derivation && ` · ${item.derivation}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {capacity.applicability_detail && (
+        <p className="text-[11px] text-[var(--text-muted)]">
+          Applicability: {capacity.applicability} — {capacity.applicability_detail}
+        </p>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+        A memory profile says what a configuration cost. It says nothing about music quality,
+        convergence, or whether the resulting model is any good.
+      </p>
     </div>
   );
 }

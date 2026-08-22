@@ -98,8 +98,9 @@ and forwarding it would be the beginning of one being consulted there.
 The API is `/v1/ops/training/…`; the browser reaches it through
 `/ops/api/…`.
 
-Two Phase 33 reads live under a run:
-`GET /runs/{id}/training-preflight` and `GET /runs/{id}/canary`. Both
+Three reads live under a run:
+`GET /runs/{id}/training-preflight`, `GET /runs/{id}/canary` and
+`GET /runs/{id}/capacity`. Both
 are reads and neither can start anything — collecting preflight evidence
 means subprocesses against a trainer installation, and running a canary
 starts one. Those belong to the operator CLI, on the machine that has a
@@ -107,11 +108,17 @@ trainer.
 
 The run page renders three statuses distinctly: `READY` with a tick,
 `BLOCKED` with a cross, and **`UNVERIFIED` with a dashed outline and a
-`?`**. `UNVERIFIED` deliberately does not resemble success — a check
+`?`**, and the Phase 34 capacity panel does the same for `QUALIFIED`,
+`MARGIN_LOW`, `INSUFFICIENT` and `UNVERIFIED`. `UNVERIFIED` deliberately
+does not resemble success — a check
 nobody could perform is not a check that passed, and the operator about
 to rent a GPU is the person a reassuring colour would mislead. Capacity
 figures carry their source (`MEASURED`, `ESTIMATED`, `UNKNOWN`) and an
 Apple unified-memory figure is labelled *shared with the OS — not VRAM*.
+The capacity panel shows the measured peak, its kind (`SAMPLED_PEAK` or
+`RUNTIME_PEAK`), the sequence length it was measured on, the reserve the
+policy held back, and whether that measurement is representative of a
+production workload at all.
 
 The console has its own shell. It does not appear in the customer's
 navigation, and the customer's navigation does not appear in it — a
@@ -384,8 +391,10 @@ These are real, and none of them is hidden in the UI.
    (`POST /checkpoints/compare`) but has no dedicated page yet.** The
    data is there; the screen is not.
 
-10. **The console shows a training preflight and a canary; it runs
-    neither.** Both panels read a record the CLI wrote, and say plainly
+10. **The console shows a training preflight, a canary and a memory
+    profile; it runs none of them.** Measuring memory means running the
+    trainer, and qualifying against stored profiles means reading a
+    directory the operator CLI owns on the machine that has one. Both panels read a record the CLI wrote, and say plainly
     when nobody has run one — which is a different statement from
     UNVERIFIED, and is rendered differently.
 

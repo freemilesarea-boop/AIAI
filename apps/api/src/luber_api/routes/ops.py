@@ -33,6 +33,7 @@ from luber_api.ops.schemas import (
     ActionResponse,
     BaselineResponse,
     CanaryView,
+    CapacityView,
     CatalogueResponse,
     CheckpointComparisonResponse,
     CheckpointDetail,
@@ -266,6 +267,25 @@ def run_training_preflight(run_id: str, read: ReadModel) -> TrainingPreflightVie
     "we looked and could not establish something".
     """
     view = read.training_preflight_for(run_id)
+    if view.unavailable_reason == "No such run.":
+        raise _not_found("run", run_id)
+    return view
+
+
+@router.get("/runs/{run_id}/capacity", response_model=CapacityView)
+def run_capacity(run_id: str, read: ReadModel) -> CapacityView:
+    """What measured memory evidence permits for this run's configuration.
+
+    A read, like the rest of Phase 33 and 34's surface. Measuring memory
+    means running the trainer; qualifying against stored profiles means
+    reading a directory the operator CLI owns on the machine that has
+    one. Neither belongs in a process a browser can reach.
+
+    ``UNVERIFIED`` here means no applicable profile exists — a gap in
+    what anybody has measured, not a fault in the machine — and it is
+    never rendered as a pass.
+    """
+    view = read.capacity_for(run_id)
     if view.unavailable_reason == "No such run.":
         raise _not_found("run", run_id)
     return view

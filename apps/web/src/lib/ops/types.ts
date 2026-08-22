@@ -290,7 +290,7 @@ export interface Preflight {
  */
 export type TrainingPreflightStatus = "READY" | "BLOCKED" | "UNVERIFIED";
 export type TrainingCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "NOT_APPLICABLE";
-export type CapacitySource = "MEASURED" | "ESTIMATED" | "UNKNOWN";
+export type CapacitySource = "MEASURED" | "DERIVED" | "ESTIMATED" | "UNKNOWN";
 export type CanaryStatus = "PASSED" | "FAILED" | "BLOCKED" | "NOT_RUN";
 
 export interface TrainingPreflightCheck {
@@ -361,6 +361,100 @@ export interface CanaryRun {
   checkpoint_problems: string[];
   resume_ok: boolean | null;
   resume_detail: string;
+}
+
+/**
+ * Phase 34. `UNVERIFIED` means nobody has an applicable measurement —
+ * a gap in evidence, not a fault in the machine — and it is rendered as
+ * its own state rather than as a softer pass.
+ */
+export type CapacityQualification = "QUALIFIED" | "MARGIN_LOW" | "INSUFFICIENT" | "UNVERIFIED";
+export type MemoryDomain = "HOST" | "APPLE_UNIFIED" | "CUDA_DEVICE";
+/**
+ * A sampled peak is the largest value a sampler observed — a lower
+ * bound. A runtime peak is a high-water mark the runtime kept. The
+ * console must not render them identically.
+ */
+export type PeakKind = "RUNTIME_PEAK" | "SAMPLED_PEAK" | "NOT_AVAILABLE";
+export type ProfileOutcome =
+  | "COMPLETED"
+  | "FAILED"
+  | "PROFILE_TIMEOUT"
+  | "BLOCKED"
+  | "NOT_RUN";
+export type Representativeness =
+  | "REPRESENTATIVE"
+  | "PARTIALLY_REPRESENTATIVE"
+  | "NOT_REPRESENTATIVE"
+  | "UNKNOWN";
+
+export interface MemoryPeak {
+  domain: MemoryDomain;
+  kind: PeakKind;
+  source: CapacitySource;
+  peak_mib: number | null;
+  baseline_mib: number | null;
+  growth_mib: number | null;
+  total_mib: number | null;
+  sample_count: number;
+  detail: string;
+}
+
+export interface CapacityDomainVerdict {
+  domain: MemoryDomain;
+  qualification: CapacityQualification;
+  peak_mib: number | null;
+  peak_kind: string;
+  required_mib: number | null;
+  reserved_mib: number | null;
+  budget_mib: number | null;
+  total_mib: number | null;
+  detail: string;
+}
+
+export interface MemoryProfile {
+  profile_id: string;
+  outcome: ProfileOutcome;
+  representativeness: Representativeness;
+  representativeness_detail: string;
+  identity_digest: string | null;
+  device: string | null;
+  precision: string | null;
+  optimizer: string | null;
+  micro_batch_size: number | null;
+  gradient_accumulation: number | null;
+  effective_batch_size: number | null;
+  lora_rank: number | null;
+  gradient_checkpointing: boolean | null;
+  latent_length: number | null;
+  latent_seconds: number | null;
+  encoder_length: number | null;
+  peaks: MemoryPeak[];
+  checkpoint_peak_mib: number | null;
+  resume_peak_mib: number | null;
+  optimizer_steps: number | null;
+  not_observed: Record<string, string>;
+  torch_version: string | null;
+  ace_step_commit: string | null;
+  measured_at: string | null;
+  failure_reason: string;
+  failure_kind: string;
+}
+
+export interface Capacity {
+  available: boolean;
+  unavailable_reason: string | null;
+  qualification: CapacityQualification;
+  device: string | null;
+  policy_version: string | null;
+  policy: Record<string, unknown>;
+  applicability: string | null;
+  applicability_detail: string;
+  reasons: string[];
+  domains: CapacityDomainVerdict[];
+  evidence: CapacityEvidence[];
+  profile: MemoryProfile | null;
+  measured_at: string | null;
 }
 
 export interface Reproducibility {
@@ -598,6 +692,7 @@ export interface RunDetail {
   remote_preflight: Preflight;
   training_preflight: TrainingPreflight;
   canary: CanaryRun;
+  capacity: Capacity;
   gates: GateView[];
   gates_available: boolean;
   gates_unavailable_reason: string | null;

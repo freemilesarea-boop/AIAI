@@ -15,10 +15,12 @@
 import type {
   ActionAvailability,
   CanaryRun,
+  Capacity,
   CheckpointSummary,
   EvaluationDetail,
   GateView,
   Heartbeat,
+  MemoryProfile,
   MetricSeries,
   Overview,
   Preflight,
@@ -294,6 +296,126 @@ export function trainingPreflight(
   };
 }
 
+/**
+ * A capacity decision built on a real-shaped Apple measurement: a
+ * production-length sequence, a sampled peak, and unified memory that
+ * is never called VRAM.
+ */
+export function capacity(overrides: Partial<Capacity> = {}): Capacity {
+  return {
+    available: true,
+    unavailable_reason: null,
+    qualification: "QUALIFIED",
+    device: "MPS",
+    policy_version: "capacity-policy-v1",
+    policy: {},
+    applicability: "APPLICABLE",
+    applicability_detail: "every memory-relevant field matches",
+    reasons: ["12189 MiB required against a 20889 MiB budget"],
+    domains: [
+      {
+        domain: "APPLE_UNIFIED",
+        qualification: "QUALIFIED",
+        peak_mib: 9751,
+        peak_kind: "SAMPLED_PEAK",
+        required_mib: 12189,
+        reserved_mib: 3686,
+        budget_mib: 20889,
+        total_mib: 24576,
+        detail: "12189 MiB required against a 20889 MiB budget",
+      },
+      {
+        domain: "HOST",
+        qualification: "QUALIFIED",
+        peak_mib: 486,
+        peak_kind: "SAMPLED_PEAK",
+        required_mib: 607,
+        reserved_mib: 9011,
+        budget_mib: 15564,
+        total_mib: 24576,
+        detail: "607 MiB required against a 15564 MiB budget",
+      },
+    ],
+    evidence: [
+      {
+        name: "measured_peak_apple_unified_mb",
+        source: "MEASURED",
+        value_mb: 9751,
+        detail: "sampled peak",
+        derivation: "",
+        unified_memory: true,
+      },
+      {
+        name: "required_with_margin_apple_unified_mb",
+        source: "DERIVED",
+        value_mb: 12189,
+        detail: "with the sampled-peak margin applied",
+        derivation: "9751 MiB SAMPLED_PEAK x 1.25 safety margin",
+        unified_memory: true,
+      },
+    ],
+    profile: memoryProfile(),
+    measured_at: "2026-08-22T21:00:00+00:00",
+    ...overrides,
+  };
+}
+
+export function memoryProfile(overrides: Partial<MemoryProfile> = {}): MemoryProfile {
+  return {
+    profile_id: "mps-bf16-b1-r32-t6000-7f9be176c11d",
+    outcome: "COMPLETED",
+    representativeness: "REPRESENTATIVE",
+    representativeness_detail:
+      "6000 latent frames ≈ 240s of audio, against a production maximum of 6000 frames",
+    identity_digest: "7f9be176c11d".padEnd(64, "0"),
+    device: "MPS",
+    precision: "bf16",
+    optimizer: "adamw",
+    micro_batch_size: 1,
+    gradient_accumulation: 4,
+    effective_batch_size: 4,
+    lora_rank: 32,
+    gradient_checkpointing: true,
+    latent_length: 6000,
+    latent_seconds: 240,
+    encoder_length: 256,
+    peaks: [
+      {
+        domain: "APPLE_UNIFIED",
+        kind: "SAMPLED_PEAK",
+        source: "MEASURED",
+        peak_mib: 9855,
+        baseline_mib: 0,
+        growth_mib: 9855,
+        total_mib: 24576,
+        sample_count: 113,
+        detail: "the largest value a sampler observed. This is a lower bound",
+      },
+      {
+        domain: "HOST",
+        kind: "SAMPLED_PEAK",
+        source: "MEASURED",
+        peak_mib: 612,
+        baseline_mib: 20,
+        growth_mib: 592,
+        total_mib: 24576,
+        sample_count: 114,
+        detail: "process resident set",
+      },
+    ],
+    checkpoint_peak_mib: 9393,
+    resume_peak_mib: 5464,
+    optimizer_steps: 1,
+    not_observed: {},
+    torch_version: "2.10.0",
+    ace_step_commit: "6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0",
+    measured_at: "2026-08-22T21:00:00+00:00",
+    failure_reason: "",
+    failure_kind: "NOT_A_MEMORY_FAILURE",
+    ...overrides,
+  };
+}
+
 export function canaryRun(overrides: Partial<CanaryRun> = {}): CanaryRun {
   return {
     available: true,
@@ -551,6 +673,7 @@ export function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
     control_preflight: preflight(),
     training_preflight: trainingPreflight(),
     canary: canaryRun(),
+    capacity: capacity(),
     remote_preflight: unavailablePreflight("The worker has not recorded a preflight."),
     gates: gates(),
     gates_available: true,

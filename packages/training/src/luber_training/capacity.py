@@ -46,9 +46,18 @@ CAPACITY_SCHEMA_VERSION = "luber-training-capacity/1"
 
 
 class EvidenceSource(StrEnum):
-    """Where a capacity number came from. Never inferred from its value."""
+    """Where a capacity number came from. Never inferred from its value.
+
+    ``DERIVED`` was added in Phase 34, for a figure that is arithmetic
+    over measurements rather than a measurement or a guess — peak minus
+    baseline, headroom remaining. It sits between MEASURED and ESTIMATED
+    on purpose: every input to it was measured, and the subtraction is
+    still somebody's choice of what to subtract.
+    """
 
     MEASURED = "MEASURED"
+    #: Arithmetic over measured values, with the arithmetic stated.
+    DERIVED = "DERIVED"
     ESTIMATED = "ESTIMATED"
     UNKNOWN = "UNKNOWN"
 

@@ -40,6 +40,14 @@ from luber_training.capacity import (
     EvidenceSource,
     capacity_report,
 )
+from luber_training.capacity_policy import (
+    CAPACITY_POLICY_VERSION,
+    Applicability,
+    CapacityDecision,
+    CapacityPolicy,
+    CapacityQualification,
+    qualify,
+)
 from luber_training.config import (
     PRESETS,
     TrainingConfig,
@@ -67,6 +75,18 @@ from luber_training.entities import (
 )
 from luber_training.gates import GateInputs, GateReport, run_all
 from luber_training.ids import EntityKind, new_id
+from luber_training.memory import (
+    MemoryDomain,
+    MemoryProfileIdentity,
+    MemorySnapshot,
+    PeakKind,
+    ProfileOutcome,
+    ProfileStage,
+    Representativeness,
+    TrainingMemoryProfile,
+    classify_memory_failure,
+)
+from luber_training.memory_profiler import ProbeShape, ProfileRequest, profile_memory
 from luber_training.orchestrator import OrchestrationError, Orchestrator, PreflightReport
 from luber_training.plan import TrainingPlan
 from luber_training.preflight import (
@@ -84,14 +104,19 @@ from luber_training.registry import Registry
 __all__ = [
     "CANARY_MAX_OPTIMIZER_STEPS",
     "CANARY_MAX_SAMPLES",
+    "CAPACITY_POLICY_VERSION",
     "PRESETS",
+    "Applicability",
     "BlockingReason",
     "CanaryBoundsError",
     "CanaryEnvelope",
     "CanaryMode",
     "CanaryResult",
     "CanaryStatus",
+    "CapacityDecision",
     "CapacityEvidence",
+    "CapacityPolicy",
+    "CapacityQualification",
     "CapacityReport",
     "Checkpoint",
     "CheckpointKind",
@@ -104,17 +129,27 @@ __all__ = [
     "FailureCode",
     "GateInputs",
     "GateReport",
+    "MemoryDomain",
+    "MemoryProfileIdentity",
+    "MemorySnapshot",
     "ModelBaseline",
     "OrchestrationError",
     "Orchestrator",
+    "PeakKind",
     "PreflightIntent",
     "PreflightReport",
     "PreflightRequest",
     "PreflightStatus",
+    "ProbeShape",
+    "ProfileOutcome",
+    "ProfileRequest",
+    "ProfileStage",
     "Registry",
+    "Representativeness",
     "RunStatus",
     "TrainingConfig",
     "TrainingDatasetRef",
+    "TrainingMemoryProfile",
     "TrainingPlan",
     "TrainingPreflightResult",
     "TrainingRun",
@@ -124,10 +159,13 @@ __all__ = [
     "WorkerClass",
     "ace_step_canary",
     "capacity_report",
+    "classify_memory_failure",
     "evaluate_preflight",
     "new_id",
     "orchestration_canary",
     "preset",
+    "profile_memory",
+    "qualify",
     "run_all",
     "validate_config",
 ]

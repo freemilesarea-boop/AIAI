@@ -31,11 +31,32 @@ from luber_training.canary import (
     CanaryStatus,
     ace_step_canary,
     cleanup_workspace,
+    default_workspace,
     orchestration_canary,
 )
 from luber_training.capacity import capacity_report
+from luber_training.capacity_policy import (
+    DEFAULT_POLICY,
+    CapacityQualification,
+    device_total_for,
+    qualify,
+)
 from luber_training.entities import TrainingWorker
 from luber_training.gates import GateReport, run_all
+from luber_training.memory import MIB
+from luber_training.memory_profiler import (
+    DEFAULT_PROBE_ENCODER_LENGTH,
+    DEFAULT_PROFILE_TIMEOUT_SECONDS,
+    PRODUCTION_LATENT_LENGTH,
+    ProbeShape,
+    ProfileRequest,
+    bounded_envelope_for,
+    identity_for,
+    load_profiles,
+    profile_memory,
+    render_markdown,
+    write_profile,
+)
 from luber_training.orchestrator import Orchestrator
 from luber_training.plan import TrainingPlan
 from luber_training.preflight import PreflightIntent, PreflightStatus
@@ -50,6 +71,50 @@ from luber_training.trainer_adapter import compile_command
 
 #: What the canary writes into, when nobody names somewhere.
 DEFAULT_CANARY_DIRNAME = "canary"
+
+#: Where memory profiles are kept, beneath the registry root.
+#:
+#: A directory rather than a file: profiles are evidence records, one
+#: per configuration identity, and a bf16 measurement must not overwrite
+#: an fp32 one. They are operational artifacts and are never committed.
+MEMORY_PROFILE_DIRNAME = "memory_profiles"
+
+
+def _profile_directory(args: argparse.Namespace) -> Path:
+    return Path(args.registry).expanduser() / MEMORY_PROFILE_DIRNAME
+
+
+def _capacity_decision(
+    args: argparse.Namespace,
+    plan: TrainingPlan,
+    capability: MachineCapability,
+    device: str,
+    *,
+    latent_length: int,
+    encoder_length: int,
+) -> Any:
+    """Ask the qualifier what the stored profiles permit.
+
+    The request is built from the plan and the *asked-about* shape, not
+    from whatever a profile happened to measure. A profile qualifies a
+    request; a request never adopts a profile's shape to make itself
+    qualify.
+    """
+    shape = ProbeShape(latent_length=latent_length, encoder_length=encoder_length)
+    identity = identity_for(plan, shape, model_variant=args.model_variant)
+    requested = identity.to_dict()
+    requested["torch_version"] = capability.torch_version
+    return qualify(
+        device=device,
+        requested=requested,
+        profiles=load_profiles(_profile_directory(args)),
+        host_total_bytes=(
+            None if capability.memory_total_mb is None else capability.memory_total_mb * MIB
+        ),
+        device_total_bytes=device_total_for(capability, device),
+        runs_control_plane=args.runs_control_plane,
+        policy=DEFAULT_POLICY,
+    )
 
 
 def _print(payload: Any) -> None:
@@ -153,6 +218,14 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         disk_measured_by="the machine running this preflight",
     )
 
+    decision = _capacity_decision(
+        args,
+        plan,
+        capability,
+        device,
+        latent_length=args.latent_length,
+        encoder_length=args.encoder_length,
+    )
     result = orchestrator.training_preflight(
         args.run_id,
         plan,
@@ -166,6 +239,7 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         storage=storage,
         remote=remote,
         capacity=capacity,
+        capacity_decision=decision,
     )
     if args.json:
         _print(result.to_dict())
@@ -284,6 +358,108 @@ def cmd_canary_ace_step(args: argparse.Namespace) -> int:
     return 0 if result.status == CanaryStatus.PASSED.value else 1
 
 
+# ── memory profile and capacity ──────────────────────────────────────
+
+
+def cmd_profile_memory(args: argparse.Namespace) -> int:
+    """Measure what one configuration costs, inside the real trainer.
+
+    Bounded exactly as a canary is, and instrumented from inside the
+    trainer process because that is the only place `torch.mps` will
+    answer. Nothing is reduced to make it fit: the shape asked for is
+    the shape measured, and a smaller one is a different profile.
+    """
+    from luber_training.cli import _orchestrator
+
+    orchestrator = _orchestrator(args)
+    plan = _plan(orchestrator, args)
+    trainer_root = Path(args.trainer_root).expanduser()
+    python_executable = Path(args.python).expanduser()
+    shape = ProbeShape(
+        latent_length=args.latent_length,
+        encoder_length=args.encoder_length,
+        samples=args.samples,
+    )
+    workspace = (
+        Path(args.workspace).expanduser()
+        if args.workspace
+        else default_workspace(trainer_root, f"profile-{args.run_id}")
+    )
+
+    request = ProfileRequest(
+        plan=plan,
+        shape=shape,
+        trainer_root=trainer_root,
+        python_executable=python_executable,
+        model_dir=Path(args.model_dir).expanduser(),
+        workspace=workspace,
+        envelope=bounded_envelope_for(shape),
+        model_variant=args.model_variant,
+        timeout_seconds=float(args.timeout),
+        sample_interval_seconds=float(args.sample_interval),
+        gate_report=_gate_report(args),
+        dataset_dir=Path(args.dataset_dir).expanduser() if args.dataset_dir else None,
+        runs_control_plane=args.runs_control_plane,
+        luber_commit=_luber_commit(args),
+        measure_resume=args.measure_resume,
+    )
+    profile = profile_memory(request)
+
+    directory = _profile_directory(args)
+    path = write_profile(profile, directory)
+    (directory / f"{profile.profile_id}.md").write_text(render_markdown(profile), encoding="utf-8")
+    orchestrator.record_memory_profile(args.run_id, profile.to_dict())
+
+    if args.cleanup:
+        cleanup_workspace(workspace)
+    _print({"profile": str(path), **profile.to_dict()})
+    return 0 if profile.completed else 1
+
+
+def cmd_capacity(args: argparse.Namespace) -> int:
+    """What the stored profiles say about running this configuration."""
+    from luber_training.cli import _orchestrator
+
+    orchestrator = _orchestrator(args)
+    plan = _plan(orchestrator, args)
+    capability = _capability(args.python)
+    device = args.device or plan.requirements.execution_device or ComputeDevice.CPU.value
+    decision = _capacity_decision(
+        args,
+        plan,
+        capability,
+        device,
+        latent_length=args.latent_length,
+        encoder_length=args.encoder_length,
+    )
+    _print(
+        {
+            **decision.to_dict(),
+            "policy": DEFAULT_POLICY.to_dict(),
+            "profiles_considered": len(load_profiles(_profile_directory(args))),
+        }
+    )
+    return 0 if decision.qualification == CapacityQualification.QUALIFIED.value else 1
+
+
+def _luber_commit(args: argparse.Namespace) -> str | None:
+    import subprocess
+
+    root = Path(args.repository).expanduser() if args.repository else Path.cwd()
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return (result.stdout.strip() or None) if result.returncode == 0 else None
+
+
 # ── parser ───────────────────────────────────────────────────────────
 
 
@@ -306,6 +482,24 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--curation-build", help="curation build directory, for the gates")
     parser.add_argument("--evaluation-only", help="file of track ids that may never train")
     parser.add_argument("--allow-self-generated", action="store_true")
+    parser.add_argument("--model-variant", default="turbo")
+    parser.add_argument(
+        "--latent-length",
+        type=int,
+        default=PRODUCTION_LATENT_LENGTH,
+        help=(
+            "latent frames per sample. Defaults to the production maximum "
+            f"({PRODUCTION_LATENT_LENGTH} frames = 240s at 25 frames/s); a profile does "
+            "not qualify a longer one than it measured"
+        ),
+    )
+    parser.add_argument("--encoder-length", type=int, default=DEFAULT_PROBE_ENCODER_LENGTH)
+    parser.add_argument(
+        "--runs-control-plane",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="whether this machine also serves the API, the database and the queue",
+    )
 
 
 def add_preflight_parsers(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -374,11 +568,39 @@ def add_preflight_parsers(sub: argparse._SubParsersAction[argparse.ArgumentParse
     )
     ace.set_defaults(func=cmd_canary_ace_step)
 
+    profile = sub.add_parser(
+        "profile-memory",
+        help="measure what one configuration costs, inside the real trainer",
+    )
+    _add_common(profile)
+    profile.add_argument("--samples", type=int, default=2)
+    profile.add_argument(
+        "--timeout", type=float, default=DEFAULT_PROFILE_TIMEOUT_SECONDS, help="wall clock"
+    )
+    profile.add_argument("--sample-interval", type=float, default=0.25)
+    profile.add_argument("--workspace", help="where the profile writes; beneath the trainer root")
+    profile.add_argument("--dataset-dir", help="gate-cleared tensors instead of a fixture")
+    profile.add_argument(
+        "--measure-resume",
+        action="store_true",
+        help="run a second bounded leg from the checkpoint, and record its peak separately",
+    )
+    profile.add_argument("--cleanup", action="store_true")
+    profile.set_defaults(func=cmd_profile_memory)
+
+    capacity = sub.add_parser(
+        "capacity", help="what the stored profiles permit for this configuration"
+    )
+    _add_common(capacity)
+    capacity.set_defaults(func=cmd_capacity)
+
 
 __all__ = [
     "DEFAULT_CANARY_DIRNAME",
     "add_preflight_parsers",
     "cmd_canary_ace_step",
     "cmd_canary_orchestration",
+    "cmd_capacity",
     "cmd_preflight",
+    "cmd_profile_memory",
 ]

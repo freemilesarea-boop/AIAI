@@ -153,6 +153,58 @@ observed rather than state it assumed — a trainer process that vanished
 without this worker owning it yields an unknown exit code and a state
 that says so.
 
+## 8a. Qualify the hardware before trusting it with a long run
+
+Phases 33 and 34 added four steps between "the worker is registered" and
+"start a real run". Run them in order, on the worker, and do not skip
+one by citing a measurement from another machine.
+
+```bash
+# 1. preflight — can this machine execute this plan at all
+uv run python -m luber_training preflight --run-id <run-id> --device CUDA \
+    --location REMOTE --intent CANARY \
+    --trainer-root /path/to/ace-step --python /path/to/.venv/bin/python \
+    --model-dir /path/to/checkpoints
+
+# 2. bounded canary — real model, real LoRA, real step, real checkpoint
+uv run python -m luber_training canary ace-step --run-id <run-id> --device CUDA \
+    --trainer-root /path/to/ace-step --python /path/to/.venv/bin/python \
+    --model-dir /path/to/checkpoints --samples 2 --resume
+
+# 3. memory profile at production sequence length
+uv run python -m luber_training profile-memory --run-id <run-id> --device CUDA \
+    --trainer-root /path/to/ace-step --python /path/to/.venv/bin/python \
+    --model-dir /path/to/checkpoints \
+    --latent-length 6000 --encoder-length 256 --samples 2 --measure-resume \
+    --no-runs-control-plane
+
+# 4. capacity — what the measured evidence permits
+uv run python -m luber_training capacity --run-id <run-id> --device CUDA \
+    --latent-length 6000 --encoder-length 256
+```
+
+On CUDA the profiler uses the runtime's own high-water marks
+(`max_memory_reserved`, with `reset_peak_memory_stats` at the start), so
+a CUDA peak is a `RUNTIME_PEAK` rather than the `SAMPLED_PEAK` an Apple
+machine gets — and it is judged against a smaller safety margin for that
+reason.
+
+`--no-runs-control-plane` is right on a rented trainer: it is not
+carrying the API, the database or the queue, so the extra 4 GiB reserve
+does not apply.
+
+**Only real NVIDIA measurements may qualify CUDA capacity.** The
+qualifier refuses to let an Apple profile, or any fixture, stand in for
+one; there is a test that asserts it refuses. Until step 4 has been run
+on real hardware, CUDA capacity is `UNVERIFIED` and a `FULL_TRAINING`
+preflight will not reach READY.
+
+Multi-GPU is a separate question again: `num_devices` is part of the
+profile identity, so a single-GPU measurement cannot qualify a
+multi-GPU run.
+
+Details: `docs/TRAINING_MEMORY_CAPACITY.md`.
+
 ## 9. Checkpoints come back to the Mac
 
 Collected checkpoints load on Apple silicon and on a CPU. That is
@@ -188,3 +240,8 @@ CUDA path in this repository is exercised against fixtures. This runbook
 is written from the code that will run and from the trainer's own
 source; the first person to follow it end to end will be the first
 person to test it, and should expect to correct it.
+
+As of Phase 34 that includes the memory profiler: the CUDA branches call
+the real `torch.cuda` memory APIs behind runtime availability checks and
+are exercised against fixtures only. **Real CUDA profile: NOT RUN. CUDA
+capacity: UNVERIFIED. CUDA profiler logic: synthetically verified.**

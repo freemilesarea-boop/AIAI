@@ -212,8 +212,20 @@ const STATUS_TONE: Record<string, Tone> = {
   PASSED: "good",
   NOT_RUN: "unknown",
   MEASURED: "good",
+  // Arithmetic over measurements. Not a measurement, not a guess.
+  DERIVED: "neutral",
   // An estimate is not a measurement and must not look like one.
   ESTIMATED: "warn",
+  // Phase 34 capacity. QUALIFIED is absent for the same reason READY
+  // is: the caller decides the tone, because the word means different
+  // things in different places.
+  INSUFFICIENT: "bad",
+  MARGIN_LOW: "warn",
+  REPRESENTATIVE: "good",
+  PARTIALLY_REPRESENTATIVE: "warn",
+  NOT_REPRESENTATIVE: "bad",
+  COMPLETED_PROFILE: "good",
+  PROFILE_TIMEOUT: "bad",
 };
 
 export function OpsStatus({

@@ -174,13 +174,73 @@ interpreter: MPS is built and available, fp32/fp16/bf16 all compute, a
 tiny training loop runs, and checkpoints move between MPS and CPU with
 optimizer state intact.
 
-**Not verified:** that ACE-Step's LoRA training converges on MPS, or
-that the 2B DiT plus optimizer state plus activations fits in 24 GB.
-Nobody has run it. The first real run on this hardware is the
-measurement, and until then memory feasibility reads `UNKNOWN`.
+**Since Phase 33 and 34, more is known — about a different machine.**
+On the development **M4 Pro / 24 GB**, a bounded canary loaded the real
+ACE-Step DiT on MPS in bf16, injected a real LoRA, took an optimizer
+step, wrote a checkpoint and resumed from it; and a bounded memory
+profile at **production sequence length** (6000 latent frames = 240 s of
+audio) peaked at **9 855 MiB of unified memory** with a LoRA rank of 32,
+which the capacity policy qualifies on a 24 GB machine.
+
+**That does not qualify this Mac mini.** An M4 Pro and a base M4 share a
+memory capacity and not a GPU configuration. Memory-capacity evidence
+may be informative across the two; it is not qualification.
+
+**Still not verified anywhere:** that ACE-Step's LoRA training
+*converges* on MPS. A memory profile measures memory.
 
 The trainer accepts `--device mps` (read from its own parser at the
-pinned commit) and defaults MPS to fp16.
+pinned commit) and defaults MPS to fp16 — **and fp16 cannot train**:
+Fabric's GradScaler refuses to unscale fp16 gradients and the run dies
+at the first clip, after the model has loaded. Request `bf16` or `fp32`
+explicitly. `auto` resolves to fp16 here and hits the same wall.
+
+### On-device qualification procedure
+
+Run in this order on the Mac mini itself. Nothing may be skipped by
+citing a measurement from another machine.
+
+```bash
+# 1. bootstrap: sections 2-6 of this runbook
+# 2. hardware probe — what this machine can actually reach
+uv run python -m luber_hardware probe --python ~/ace-step-1.5/.venv/bin/python
+uv run python -m luber_hardware readiness --python ~/ace-step-1.5/.venv/bin/python
+
+# 3. preflight — can this machine execute the plan at all
+uv run python -m luber_training preflight --run-id <run-id> --device MPS \
+    --intent CANARY --trainer-root ~/ace-step-1.5 \
+    --python ~/ace-step-1.5/.venv/bin/python --model-dir ~/ace-step-1.5/checkpoints
+
+# 4. bounded canary — does the trainer actually run here
+uv run python -m luber_training canary ace-step --run-id <run-id> --device MPS \
+    --trainer-root ~/ace-step-1.5 --python ~/ace-step-1.5/.venv/bin/python \
+    --model-dir ~/ace-step-1.5/checkpoints --samples 2 --resume
+
+# 5. memory profile — what the intended configuration costs HERE
+uv run python -m luber_training profile-memory --run-id <run-id> --device MPS \
+    --trainer-root ~/ace-step-1.5 --python ~/ace-step-1.5/.venv/bin/python \
+    --model-dir ~/ace-step-1.5/checkpoints \
+    --latent-length 6000 --encoder-length 256 --samples 2 --measure-resume
+
+# 6. capacity — what the local evidence permits
+uv run python -m luber_training capacity --run-id <run-id> --device MPS \
+    --latent-length 6000 --encoder-length 256
+
+# 7. only then: a full-training preflight
+uv run python -m luber_training preflight --run-id <run-id> --device MPS \
+    --intent FULL_TRAINING ...
+```
+
+Until step 6 returns `QUALIFIED` **on this machine**, this Mac mini's
+status is `REQUIRES ON-DEVICE QUALIFICATION`. A profile from the
+development M4 Pro is a different identity's evidence and the qualifier
+will say so.
+
+Note `--runs-control-plane` defaults on, which adds a 4 GiB reserve. On
+this machine that default is correct: it is the API, Postgres, Redis and
+the orchestrator before it is a trainer.
+
+Details: `docs/TRAINING_MEMORY_CAPACITY.md`.
 
 ## 10. Restart and recovery
 

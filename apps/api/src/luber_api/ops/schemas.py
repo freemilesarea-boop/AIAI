@@ -403,6 +403,104 @@ class CanaryView(BaseModel):
     resume_detail: str = ""
 
 
+class MemoryPeakView(BaseModel):
+    """One domain's peak, with the kind of peak it is.
+
+    ``kind`` is never dropped. A `SAMPLED_PEAK` is the largest value a
+    sampler observed and therefore a lower bound; a `RUNTIME_PEAK` is a
+    high-water mark the runtime kept. Rendering them identically would
+    turn one into the other.
+    """
+
+    domain: Literal["HOST", "APPLE_UNIFIED", "CUDA_DEVICE"]
+    kind: Literal["RUNTIME_PEAK", "SAMPLED_PEAK", "NOT_AVAILABLE"]
+    source: Literal["MEASURED", "DERIVED", "ESTIMATED", "UNKNOWN"] = "UNKNOWN"
+    peak_mib: int | None = None
+    baseline_mib: int | None = None
+    growth_mib: int | None = None
+    total_mib: int | None = None
+    sample_count: int = 0
+    detail: str = ""
+
+
+class CapacityDomainView(BaseModel):
+    """One domain judged against the headroom policy."""
+
+    domain: Literal["HOST", "APPLE_UNIFIED", "CUDA_DEVICE"]
+    qualification: Literal["QUALIFIED", "MARGIN_LOW", "INSUFFICIENT", "UNVERIFIED"]
+    peak_mib: int | None = None
+    peak_kind: str = "NOT_AVAILABLE"
+    required_mib: int | None = None
+    reserved_mib: int | None = None
+    budget_mib: int | None = None
+    total_mib: int | None = None
+    detail: str = ""
+
+
+class MemoryProfileView(BaseModel):
+    """The measurement a capacity decision rests on.
+
+    ``representativeness`` is here rather than buried: a completed
+    profile of an unrealistic workload is a real measurement of the
+    wrong thing, and an operator reading a peak needs to know which
+    they are looking at.
+    """
+
+    profile_id: str
+    outcome: Literal["COMPLETED", "FAILED", "PROFILE_TIMEOUT", "BLOCKED", "NOT_RUN"]
+    representativeness: Literal[
+        "REPRESENTATIVE", "PARTIALLY_REPRESENTATIVE", "NOT_REPRESENTATIVE", "UNKNOWN"
+    ] = "UNKNOWN"
+    representativeness_detail: str = ""
+    identity_digest: str | None = None
+    device: str | None = None
+    precision: str | None = None
+    optimizer: str | None = None
+    micro_batch_size: int | None = None
+    gradient_accumulation: int | None = None
+    effective_batch_size: int | None = None
+    lora_rank: int | None = None
+    gradient_checkpointing: bool | None = None
+    #: The sequence the measurement was taken on. The field that decides
+    #: whether a profile is evidence about production.
+    latent_length: int | None = None
+    latent_seconds: float | None = None
+    encoder_length: int | None = None
+    peaks: list[MemoryPeakView] = Field(default_factory=list)
+    checkpoint_peak_mib: int | None = None
+    resume_peak_mib: int | None = None
+    optimizer_steps: int | None = None
+    not_observed: dict[str, str] = Field(default_factory=dict)
+    torch_version: str | None = None
+    ace_step_commit: str | None = None
+    measured_at: str | None = None
+    failure_reason: str = ""
+    failure_kind: str = "NOT_A_MEMORY_FAILURE"
+
+
+class CapacityView(BaseModel):
+    """Whether measured evidence permits a run of this configuration.
+
+    ``UNVERIFIED`` means no applicable profile exists, which is a gap in
+    what anybody has measured rather than a fault in the machine. It is
+    never rendered as a pass.
+    """
+
+    available: bool = False
+    unavailable_reason: str | None = None
+    qualification: Literal["QUALIFIED", "MARGIN_LOW", "INSUFFICIENT", "UNVERIFIED"] = "UNVERIFIED"
+    device: str | None = None
+    policy_version: str | None = None
+    policy: dict[str, Any] = Field(default_factory=dict)
+    applicability: str | None = None
+    applicability_detail: str = ""
+    reasons: list[str] = Field(default_factory=list)
+    domains: list[CapacityDomainView] = Field(default_factory=list)
+    evidence: list[CapacityEvidenceView] = Field(default_factory=list)
+    profile: MemoryProfileView | None = None
+    measured_at: str | None = None
+
+
 class TrainingPreflightView(BaseModel):
     """Phase 33's verdict: can this machine execute this plan?
 
@@ -432,6 +530,7 @@ class TrainingPreflightView(BaseModel):
     checkpoint_status: str = "NOT_APPLICABLE"
     canary_status: str = "NOT_RUN"
     capacity_status: str = "UNKNOWN"
+    capacity_qualification: str = "UNVERIFIED"
     checks: list[TrainingPreflightCheckView] = Field(default_factory=list)
     capacity: list[CapacityEvidenceView] = Field(default_factory=list)
     blocking_reasons: list[str] = Field(default_factory=list)
@@ -657,6 +756,7 @@ class RunDetail(BaseModel):
     remote_preflight: PreflightView
     training_preflight: TrainingPreflightView
     canary: CanaryView
+    capacity: CapacityView
     gates: list[GateView] = Field(default_factory=list)
     gates_available: bool = False
     gates_unavailable_reason: str | None = None
