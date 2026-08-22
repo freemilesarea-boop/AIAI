@@ -86,6 +86,32 @@ class BaseServiceSettings(BaseSettings):
     # for it twice. Removed when the generation reaches a terminal state.
     candidate_workspace_dir: str = "data/generation-candidates"
 
+    # ── Provider resilience (Phase 31) ────────────────────────────
+    #
+    # Off restores the pre-Phase-31 path exactly: the configured
+    # provider is called directly, no circuit is consulted, no routing
+    # decision recorded. On, a provider that stops answering is refused
+    # fast instead of timing out once per attempt.
+    provider_resilience_enabled: bool = False
+
+    # DISABLED | SAFE_EQUIVALENT_ONLY | OPERATOR_FORCED.
+    #
+    # DISABLED by default and deliberately: this deployment configures
+    # one production provider, so there is nowhere to fail over to, and
+    # a mode that silently became active the day a second one appeared
+    # would change behaviour without anybody deciding to.
+    provider_failover_mode: str = "DISABLED"
+
+    # Preference order, comma-separated. Empty means configuration
+    # order — the deployment's own stated preference rather than one
+    # this code invents.
+    provider_preference: str = ""
+
+    # Distinct providers one generation may touch. Not multiplied
+    # against Phase 29's attempt budget: failover redirects attempts
+    # rather than adding them.
+    provider_maximum_per_generation: int = 2
+
     # ── Inference observability (Phase 30) ────────────────────────
     #
     # Whether a finished generation is projected into the analytics

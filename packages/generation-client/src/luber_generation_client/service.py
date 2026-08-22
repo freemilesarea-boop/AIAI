@@ -22,6 +22,7 @@ import tempfile
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from luber_audio_utils import (
@@ -58,6 +59,14 @@ from luber_generation_client.provider import (
     GenerationResult,
     MusicGenerationProvider,
     ReferenceAudioInput,
+)
+from luber_generation_client.resilience import (
+    GateResult,
+    ResilienceGate,
+    Stopwatch,
+    failure_from_category,
+    needs_for,
+    refusal_to_failure,
 )
 from luber_inference_qc import Budget, CandidatePolicy, QCTrace, RequestExpectation, request_digest
 from luber_inference_qc.controller import CandidateGenerationController, ControllerResult
@@ -168,10 +177,16 @@ class GenerationService:
         qc_policy: str = "STANDARD",
         qc_enabled: bool = True,
         candidate_workspace_dir: str = "data/generation-candidates",
+        resilience: ResilienceGate | None = None,
     ) -> None:
         self._repository = repository
         self._provider = provider
         self._storage = storage
+        # Phase 31. ``None`` restores the pre-Phase-31 path exactly: the
+        # configured provider is called directly, no circuit is
+        # consulted and no routing decision is recorded. A deployment
+        # that has not enabled resilience behaves as it did.
+        self._resilience = resilience
         # Phase 29. Off restores the pre-Phase-29 behaviour exactly: one
         # provider call, no candidate QC, no retry. It exists so a QC
         # regression that rejects good output can be switched off and
@@ -520,15 +535,49 @@ class GenerationService:
         await repo.update_status(generation_id, GenerationStatus.GENERATING.value)
 
         if not self._qc_enabled:
-            return await call(generation.seed), None
+            provider = self._provider
+            if self._resilience is not None:
+                # Even without QC the circuit still gates: refusing fast
+                # when a provider is down is the part that has value with
+                # a single provider, and it does not depend on candidates.
+                decision = await self._resilience.route(needs_for(generation), attempted=())
+                if not decision.permitted:
+                    raise refusal_to_failure(decision)
+                assert decision.selected is not None
+                provider = self._resilience.provider_for(decision.selected)
+                watch = Stopwatch()
+                try:
+                    result = await call(provider, generation.seed)
+                except BaseException as exc:
+                    await self._resilience.record_failure(
+                        decision, exc, latency_seconds=watch.elapsed(), attempt=0
+                    )
+                    raise
+                await self._resilience.record_success(
+                    decision, latency_seconds=watch.elapsed(), attempt=0
+                )
+                return result, None
+            return await call(provider, generation.seed), None
 
         policy = self._policy_for(generation)
         workspace = self._workspace_for(generation_id)
+
+        # Declared before `persist`, which reads it. The trace is written
+        # after every attempt, so the routing record has to exist by the
+        # time the first one lands.
+        needs = needs_for(generation)
+        gate = GateResult()
+        attempt_index = 0
 
         async def persist(trace: QCTrace, budget: Budget) -> None:
             # After every attempt, not once at the end. The record of an
             # expensive call has to survive the process that made it, or
             # a resumed job pays for it twice.
+            if self._resilience is not None:
+                # Routing rides along in the same document, so an
+                # operator asking "why did this go where it went" reads
+                # one record rather than correlating two.
+                trace.resilience = gate.to_dict()
             await repo.record_inference_qc_trace(generation_id, trace=trace.to_json(budget))
 
         controller = CandidateGenerationController(
@@ -538,10 +587,62 @@ class GenerationService:
         )
 
         async def guarded(seed: int | None) -> GenerationResult:
+            """One attempt, routed and recorded.
+
+            Phase 31 lives entirely inside this closure. It adds no loop
+            of its own: the controller decides *whether* there is another
+            attempt and this decides *where* that attempt goes, so the
+            budget stays in one place and no layer multiplies another.
+            """
+            nonlocal attempt_index
+            index = attempt_index
+            attempt_index += 1
+
+            if self._resilience is None:
+                try:
+                    return await call(self._provider, seed)
+                except Exception as exc:
+                    raise as_controller_failure(exc) from exc
+
+            decision = await self._resilience.route(
+                needs, attempted=tuple(gate.providers_attempted)
+            )
+            gate.decisions.append(decision.to_dict())
+            if not decision.permitted:
+                # A typed refusal, not a silent substitution and not a
+                # call to a provider we already know will not answer.
+                raise refusal_to_failure(decision)
+
+            assert decision.selected is not None
+            if decision.selected not in gate.providers_attempted:
+                gate.providers_attempted.append(decision.selected)
+            if decision.fallback_used:
+                gate.failovers += 1
+
+            provider = self._resilience.provider_for(decision.selected)
+            watch = Stopwatch()
             try:
-                return await call(seed)
+                result = await call(provider, seed)
+            except asyncio.CancelledError:
+                # The user withdrew. Nothing was learned about the
+                # provider, so the probe slot goes back and no evidence
+                # is recorded — a cancellation must never look like a
+                # provider failure.
+                await self._resilience.abandon(decision)
+                raise
             except Exception as exc:
-                raise as_controller_failure(exc) from exc
+                record, category = await self._resilience.record_failure(
+                    decision, exc, latency_seconds=watch.elapsed(), attempt=index
+                )
+                gate.attempts.append(record)
+                raise failure_from_category(category, exc) from exc
+
+            gate.attempts.append(
+                await self._resilience.record_success(
+                    decision, latency_seconds=watch.elapsed(), attempt=index
+                )
+            )
+            return result
 
         outcome = await controller.run(
             generation_id=str(generation_id),
@@ -584,13 +685,20 @@ class GenerationService:
 
     async def _prepare_call(
         self, generation: Generation, stack: AsyncExitStack
-    ) -> tuple[Callable[[int | None], Awaitable[GenerationResult]], RequestExpectation, str]:
+    ) -> tuple[Callable[[Any, int | None], Awaitable[GenerationResult]], RequestExpectation, str]:
         """Build the provider call for this task, once.
 
         The request is constructed and traced here rather than per
         attempt: every candidate is an attempt at the *same* request, and
         rebuilding it each time would be the one place a retry could
-        silently become a different question.
+        silently become a different question. That property is why the
+        digest below stays constant across a failover — the semantic
+        request did not change, only who is being asked.
+
+        The returned callable takes the provider as an argument rather
+        than capturing one. Phase 31 may answer successive attempts with
+        different providers, and a closure that had captured the first
+        would quietly keep using it.
         """
         generation_id = generation.id
 
@@ -607,11 +715,21 @@ class GenerationService:
                 )
             cover_request = await self._to_cover_request(generation, stack)
             await self._record_cover_trace(generation_id, cover_request)
-            provider = self._provider
 
-            async def run_cover(_seed: int | None) -> GenerationResult:
+            async def run_cover(
+                provider: MusicGenerationProvider, _seed: int | None
+            ) -> GenerationResult:
                 # The seed is ignored: a cover runs once, so there is
                 # never a second attempt for a different one to vary.
+                if not isinstance(provider, AudioToAudioProvider):
+                    # The router refuses a provider that cannot do this,
+                    # so reaching here means the two disagree. Failing is
+                    # the only safe answer: the alternative is a cover
+                    # that silently became a fresh generation.
+                    raise GenerationProviderError(
+                        "routed provider cannot generate from audio",
+                        error_code=ErrorCode.MODEL_LOAD_FAILED,
+                    )
                 return await provider.create_from_audio(cover_request)
 
             return (
@@ -632,11 +750,17 @@ class GenerationService:
                 )
             edit_request = await self._to_edit_request(generation, stack)
             await self._record_edit_trace(generation_id, edit_request)
-            editor = self._provider
 
-            async def run_edit(_seed: int | None) -> GenerationResult:
+            async def run_edit(
+                provider: MusicGenerationProvider, _seed: int | None
+            ) -> GenerationResult:
                 # As above: an edit runs once.
-                return await editor.edit(edit_request)
+                if not isinstance(provider, AudioEditingProvider):
+                    raise GenerationProviderError(
+                        "routed provider cannot edit audio",
+                        error_code=ErrorCode.MODEL_LOAD_FAILED,
+                    )
+                return await provider.edit(edit_request)
 
             return (
                 run_edit,
@@ -649,13 +773,15 @@ class GenerationService:
             update={"reference_audio": reference}
         )
         await self._record_trace(generation_id, request)
-        engine = self._provider
 
-        async def run_generate(seed: int | None) -> GenerationResult:
+        async def run_generate(
+            provider: MusicGenerationProvider, seed: int | None
+        ) -> GenerationResult:
             # The seed is the only thing a retry changes. Everything
             # else — prompt, lyrics, duration, key, and the reference
-            # track — is carried across untouched.
-            return await engine.generate(request.model_copy(update={"seed": seed}))
+            # track — is carried across untouched, including across a
+            # failover to a different provider.
+            return await provider.generate(request.model_copy(update={"seed": seed}))
 
         return (
             run_generate,

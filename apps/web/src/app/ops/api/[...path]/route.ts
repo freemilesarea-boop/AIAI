@@ -79,7 +79,7 @@ const FORWARDED = ["content-type", "accept", "origin"];
  * later would become browser-reachable by having been mounted rather
  * than by anybody deciding it should be.
  */
-const NAMESPACES = new Set(["training", "inference"]);
+const NAMESPACES = new Set(["training", "inference", "resilience"]);
 
 async function proxy(request: Request, path: string[]): Promise<Response> {
   if (!consoleEnabled()) return notFound();

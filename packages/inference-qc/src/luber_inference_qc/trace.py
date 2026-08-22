@@ -70,6 +70,12 @@ class QCTrace:
     finishing_outcome: str | None = None
     base_seed: int | None = None
     timings: dict[str, float] = field(default_factory=dict)
+    #: Phase 31's routing record, when a resilience layer is configured.
+    #: Additive and ignored by everything here: which provider served an
+    #: attempt is not a question about the audio, and Phase 29 neither
+    #: sets nor reads it. It lives in this document so one record still
+    #: answers the whole question of why a file was delivered.
+    resilience: dict[str, Any] | None = None
 
     def add(self, candidate: CandidateGeneration) -> None:
         self.candidates.append(candidate)
@@ -95,6 +101,7 @@ class QCTrace:
             "outcome": self.outcome,
             "outcome_detail": self.outcome_detail,
             "finishing_outcome": self.finishing_outcome,
+            "resilience": self.resilience,
             "exhausted": self.exhausted,
             "timings": {name: round(value, 3) for name, value in self.timings.items()},
         }

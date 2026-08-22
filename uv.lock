@@ -22,6 +22,7 @@ members = [
     "luber-inference-observability",
     "luber-inference-qc",
     "luber-music-ai",
+    "luber-provider-resilience",
     "luber-schemas",
     "luber-shared",
     "luber-training",
@@ -1097,6 +1098,21 @@ dev = [
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.25" },
     { name = "ruff", specifier = ">=0.9" },
+]
+
+[[package]]
+name = "luber-provider-resilience"
+version = "0.1.0"
+source = { editable = "packages/provider-resilience" }
+dependencies = [
+    { name = "luber-schemas" },
+    { name = "luber-shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "luber-schemas", editable = "packages/schemas" },
+    { name = "luber-shared", editable = "packages/shared" },
 ]
 
 [[package]]

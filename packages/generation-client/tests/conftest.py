@@ -16,6 +16,10 @@ from luber_database.models.generation import (
     Project,
     ReferenceAudio,
 )
+from luber_database.models.resilience import (
+    ProviderCircuitRow,
+    ProviderCircuitTransitionRow,
+)
 
 GENERATION_TABLES = [
     ReferenceAudio.__table__,
@@ -25,6 +29,12 @@ GENERATION_TABLES = [
     GenerationQA.__table__,
     LyricLineQA.__table__,
     Project.__table__,
+    # Phase 31. Present here rather than in a separate fixture because
+    # the service now consults circuit state on the generation path, and
+    # a table list that omitted these would fail on the first routed
+    # request rather than in whatever test forgot them.
+    ProviderCircuitRow.__table__,
+    ProviderCircuitTransitionRow.__table__,
 ]
 
 

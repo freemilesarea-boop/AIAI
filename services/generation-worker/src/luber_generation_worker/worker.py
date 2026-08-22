@@ -22,11 +22,13 @@ from luber_audio_utils import storage_from_settings
 from luber_database import (
     GenerationRepository,
     ObservabilityRepository,
+    ResilienceRepository,
     create_async_engine_from_url,
     create_session_factory,
 )
 from luber_database.models.generation import Generation
 from luber_generation_client import GENERATION_QUEUE_NAME, GenerationService, provider_from_settings
+from luber_generation_client.resilience_factory import build_resilience_gate
 from luber_generation_worker.singleton import (
     EXIT_ALREADY_RUNNING,
     SingleWorkerLock,
@@ -58,13 +60,22 @@ async def generate(ctx: dict[str, Any], generation_id: str) -> str:
     session_factory = ctx["session_factory"]
     config: WorkerConfig = ctx["config"]
     async with session_factory() as session:
+        provider = provider_from_settings(config)
         service = GenerationService(
             GenerationRepository(session),
-            provider_from_settings(config),
+            provider,
             storage_from_settings(config),
             qc_policy=config.inference_qc_policy,
             qc_enabled=config.inference_qc_enabled,
             candidate_workspace_dir=config.candidate_workspace_dir,
+            # Built once per job and handed the same provider the
+            # service holds, so the common path does not construct a
+            # second HTTP client for the same endpoint.
+            resilience=build_resilience_gate(
+                config, repository=ctx["resilience_repository"], provider=provider
+            )
+            if ctx.get("resilience_repository") is not None
+            else None,
         )
         status = await service.execute(uuid.UUID(generation_id), worker_id=ctx.get("worker_id"))
         await _record_observation(session, uuid.UUID(generation_id), config)
@@ -151,6 +162,13 @@ async def startup(ctx: dict[str, Any]) -> None:
     ctx["worker_id"] = config.worker_id
     ctx["db_engine"] = engine
     ctx["session_factory"] = create_session_factory(engine)
+    # Phase 31. One repository per worker process, over the engine that
+    # already exists: circuit state is shared between workers through
+    # the database, so a provider one worker has given up on is a
+    # provider every worker has given up on.
+    ctx["resilience_repository"] = (
+        ResilienceRepository(engine) if config.provider_resilience_enabled else None
+    )
     logger.info(
         "generation worker started",
         extra={"worker_id": config.worker_id, "lock": str(lock.path)},

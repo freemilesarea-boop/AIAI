@@ -21,13 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from luber_api.settings import get_settings
 from luber_audio_utils import AudioStorage
-from luber_database import GenerationRepository
+from luber_database import GenerationRepository, ResilienceRepository
 from luber_generation_client import (
     GENERATION_JOB_NAME,
     GENERATION_QUEUE_NAME,
     GenerationService,
     MusicGenerationProvider,
 )
+from luber_generation_client.resilience_factory import build_resilience_gate
 
 
 class GenerationEnqueuer(Protocol):
@@ -81,6 +82,11 @@ class InlineGenerationRunner:
     async def enqueue(self, generation_id: UUID) -> None:
         async with self._session_factory() as session:
             settings = get_settings()
+            # Built the same way the worker builds it, so the two paths
+            # cannot drift. Under the mock provider this is `None` by
+            # design — the factory refuses to route to a test double —
+            # which makes it a no-op in exactly the configuration this
+            # runner exists for.
             service = GenerationService(
                 GenerationRepository(session),
                 self._provider,
@@ -88,6 +94,11 @@ class InlineGenerationRunner:
                 qc_policy=settings.inference_qc_policy,
                 qc_enabled=settings.inference_qc_enabled,
                 candidate_workspace_dir=settings.candidate_workspace_dir,
+                resilience=build_resilience_gate(
+                    settings,
+                    repository=ResilienceRepository(self._session_factory),
+                    provider=self._provider,
+                ),
             )
             await service.execute(generation_id, worker_id="inline")
 

@@ -25,6 +25,7 @@ const NAV = [
   { href: "/ops/inference", label: "Health", exact: true },
   { href: "/ops/inference/incidents", label: "Incidents" },
   { href: "/ops/inference/providers", label: "Providers" },
+  { href: "/ops/inference/circuits", label: "Circuits" },
   { href: "/ops/inference/generations", label: "Generations" },
 ];
 

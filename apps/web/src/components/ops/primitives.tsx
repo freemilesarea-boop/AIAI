@@ -194,6 +194,16 @@ const STATUS_TONE: Record<string, Tone> = {
   // System checks
   OK: "good",
   DEGRADED: "warn",
+  // Provider circuits. CLOSED is the healthy one: a closed circuit
+  // conducts. Worth stating, because "closed" reads as "shut" to
+  // everyone who has not met a circuit breaker before.
+  CLOSED: "good",
+  OPEN: "bad",
+  HALF_OPEN: "warn",
+  AVAILABLE: "good",
+  NOT_CONFIGURED: "unknown",
+  AUTOMATIC: "neutral",
+  MANUAL: "warn",
 };
 
 export function OpsStatus({
