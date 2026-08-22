@@ -90,6 +90,10 @@ CANARY_RECORD_NAME = "canary.json"
 #: configuration regardless of which run produced it.
 MEMORY_PROFILE_RECORD_NAME = "training_memory_profile.json"
 
+#: Phase 35's. A pilot is a run that happened; its record sits beside
+#: the run it belongs to and is never overwritten by a canary's.
+PILOT_RECORD_NAME = "pilot.json"
+
 
 class OrchestrationError(RuntimeError):
     """Raised when an operation is not legal in the current state."""
@@ -718,6 +722,31 @@ class Orchestrator:
             outcome=profile.get("outcome"),
             profile_id=profile.get("profile_id"),
             representativeness=profile.get("representativeness"),
+        )
+        return path
+
+    def record_pilot(self, run_id: str, pilot: dict[str, Any]) -> Path:
+        """Store a bounded pilot's result beside the run it trained for.
+
+        Written whatever the outcome. A pilot that produced a non-finite
+        loss is the record an operator most needs to find again, and one
+        that only appeared on success would be a record of good news.
+        """
+        directory = Path(self.get_run(run_id).output_directory or self.artifacts_root / run_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / PILOT_RECORD_NAME
+        path.write_text(
+            json.dumps(pilot, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.registry.append_audit(
+            registry_module.PILOT_RECORDED,
+            run_id,
+            "run",
+            outcome=pilot.get("outcome"),
+            signal=pilot.get("signal"),
+            completed_steps=pilot.get("completed_steps"),
+            dataset_kind=pilot.get("dataset_kind"),
         )
         return path
 

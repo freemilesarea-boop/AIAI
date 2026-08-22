@@ -118,6 +118,8 @@ CANARY_RECORDED = "CANARY_RECORDED"
 #: Phase 34. Recorded whatever the outcome: a profile that failed is
 #: the record an operator needs most.
 MEMORY_PROFILE_RECORDED = "MEMORY_PROFILE_RECORDED"
+#: Phase 35. Recorded whatever the outcome, including a numeric failure.
+PILOT_RECORDED = "PILOT_RECORDED"
 
 
 class Registry:

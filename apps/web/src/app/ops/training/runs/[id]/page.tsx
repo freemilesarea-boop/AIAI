@@ -63,6 +63,7 @@ import type {
   Capacity,
   GateView,
   MemoryDomain,
+  Pilot,
   Preflight,
   RunDetail,
   TrainingPreflight,
@@ -340,6 +341,23 @@ export default function RunDetailPage({ params }: { params: Promise<{ id: string
             tone={detail.training_preflight.status === "BLOCKED" ? "danger" : "default"}
           >
             <TrainingPreflightPanel preflight={detail.training_preflight} />
+          </Panel>
+
+          <Panel
+            title="Bounded pilot"
+            subtitle={
+              "Tens of optimizer steps on rights-cleared data, to show the training path " +
+              "produces a coherent signal. Not a convergence result and not a quality result."
+            }
+            id="pilot"
+            tone={
+              detail.pilot.outcome === "FAILED_NUMERIC" ||
+              detail.pilot.outcome === "FAILED_RUNTIME"
+                ? "danger"
+                : "default"
+            }
+          >
+            <PilotPanel pilot={detail.pilot} />
           </Panel>
 
           <Panel
@@ -1168,6 +1186,115 @@ function CapacityPanel({ capacity }: { capacity: Capacity }) {
       <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
         A memory profile says what a configuration cost. It says nothing about music quality,
         convergence, or whether the resulting model is any good.
+      </p>
+    </div>
+  );
+}
+
+function PilotPanel({ pilot }: { pilot: Pilot }) {
+  if (!pilot.available) return <Unavailable reason={pilot.unavailable_reason} />;
+  const stats = pilot.loss_statistics as Record<string, number | string | null>;
+  const parameters = pilot.parameters as Record<string, number | boolean | null>;
+  const gradients = pilot.gradients as Record<string, number | boolean | null>;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <OpsStatus
+          status={pilot.outcome}
+          tone={pilot.outcome === "COMPLETED_VALID_SIGNAL" ? "good" : undefined}
+        />
+        <OpsStatus
+          status={pilot.signal}
+          tone={pilot.signal === "VALID_SIGNAL" ? "good" : undefined}
+        />
+        {/* The one label that must never be mistaken for the other. */}
+        <OpsStatus
+          status={pilot.dataset_kind}
+          tone={pilot.dataset_kind === "REAL_RIGHTS_CLEARED" ? "good" : "warn"}
+        />
+      </div>
+
+      <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+        {pilot.signal_detail}
+      </p>
+
+      {pilot.dataset_kind === "SYNTHETIC_FIXTURE" && (
+        <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
+          This pilot ran on a synthetic fixture. It shows that the mechanism works and is not
+          evidence about real music.
+        </p>
+      )}
+
+      <KeyValue
+        columns={2}
+        items={[
+          {
+            label: "Steps",
+            value: (
+              <span>
+                {pilot.completed_steps} of {pilot.expected_steps} (ceiling {pilot.step_ceiling})
+              </span>
+            ),
+          },
+          {
+            label: "Configuration",
+            value: (
+              <span>
+                {pilot.precision} · batch {pilot.micro_batch_size} · accum{" "}
+                {pilot.gradient_accumulation} · rank {pilot.lora_rank} · seed {pilot.seed}
+              </span>
+            ),
+          },
+          { label: "Loss first → last", value: `${stats.first} → ${stats.last}` },
+          { label: "Loss min / max", value: `${stats.minimum} / ${stats.maximum}` },
+          { label: "Finite ratio", value: <Maybe value={stats.finite_ratio} /> },
+          { label: "Slope (DERIVED)", value: <Maybe value={stats.slope} /> },
+          {
+            label: "Trainable tensors changed",
+            value: `${parameters.changed_tensor_count} of ${parameters.trainable_tensor_count}`,
+          },
+          {
+            label: "Base model preserved",
+            value:
+              parameters.base_model_preserved === null ? (
+                <Maybe value={null} />
+              ) : (
+                <OpsStatus status={parameters.base_model_preserved ? "PASS" : "FAIL"} />
+              ),
+          },
+          {
+            label: "Gradients finite / non-zero",
+            value: `${gradients.finite_steps} / ${gradients.nonzero_steps} of ${gradients.observed_steps}`,
+          },
+          { label: "Capacity", value: <Maybe value={pilot.capacity_qualification} /> },
+        ]}
+      />
+
+      {pilot.segments.length > 0 && (
+        <div>
+          <p className="text-[11px] font-medium text-[var(--text-secondary)]">Segments</p>
+          <ul className="mt-1 space-y-1">
+            {pilot.segments.map((segment) => (
+              <li key={segment.name} className="text-[11px] text-[var(--text-muted)]">
+                <span className="text-[var(--text-secondary)]">{segment.name}</span>:{" "}
+                {segment.completed_steps} step(s) ({segment.first_step}→{segment.last_step})
+                {segment.resumed_from && `, resumed from ${segment.resumed_from}`}
+                {segment.checkpoint_id && `, checkpoint ${segment.checkpoint_id}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {pilot.failure && (
+        <p className="text-xs text-[var(--danger)]">
+          {pilot.failure}: {pilot.failure_detail}
+        </p>
+      )}
+
+      <p className="text-[11px] text-[var(--text-muted)]">
+        Artifact class: {pilot.artifact_class.join(", ")}. A pilot says nothing about
+        convergence, music quality or whether the adapter improves anything.
       </p>
     </div>
   );

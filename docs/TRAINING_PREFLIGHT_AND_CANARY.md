@@ -438,5 +438,7 @@ a browser can reach.
 * `docs/REMOTE_GPU_EXECUTION.md` — Phase 27: how work reaches a worker
 * `docs/TRAINING_MEMORY_CAPACITY.md` — Phase 34: what a run costs, and
   whether that leaves enough room
+* `docs/REAL_LORA_PILOT.md` — Phase 35: tens of steps on real data, and
+  whether the training path produces a signal
 * `docs/TRAINING_ORCHESTRATION.md` — Phase 25: gates, plans, lifecycle
 * `docs/TRAINING_CONSOLE.md` — Phase 28: the operator console

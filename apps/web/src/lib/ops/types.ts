@@ -457,6 +457,90 @@ export interface Capacity {
   measured_at: string | null;
 }
 
+/**
+ * Phase 35. The signal vocabulary tops out at `VALID_SIGNAL`: tens of
+ * steps cannot support a convergence or quality claim, so there is no
+ * word here for one.
+ */
+export type PilotOutcome =
+  | "COMPLETED_VALID_SIGNAL"
+  | "COMPLETED_INSUFFICIENT_SIGNAL"
+  | "BLOCKED"
+  | "FAILED_NUMERIC"
+  | "FAILED_RUNTIME"
+  | "CANCELLED"
+  | "TIMEOUT"
+  | "NOT_RUN";
+export type TrainingSignal =
+  | "VALID_SIGNAL"
+  | "NUMERICALLY_UNSTABLE"
+  | "NO_UPDATE"
+  | "INSUFFICIENT_EVIDENCE";
+/** A synthetic fixture validates the mechanism and is never real-data evidence. */
+export type PilotDatasetKind = "REAL_RIGHTS_CLEARED" | "SYNTHETIC_FIXTURE" | "UNKNOWN";
+
+export interface LossPoint {
+  step: number;
+  loss: number;
+  epoch: number | null;
+  learning_rate: number | null;
+  grad_norm: number | null;
+  elapsed_seconds: number | null;
+  segment: string;
+  finite: boolean;
+}
+
+export interface PilotSegment {
+  name: string;
+  completed_steps: number;
+  first_step: number | null;
+  last_step: number | null;
+  checkpoint_id: string | null;
+  resumed_from: string | null;
+  exit_code: number | null;
+  wall_seconds: number | null;
+  detail: string;
+}
+
+export interface Pilot {
+  available: boolean;
+  unavailable_reason: string | null;
+  pilot_id: string | null;
+  outcome: PilotOutcome;
+  signal: TrainingSignal;
+  signal_detail: string;
+  failure: string | null;
+  failure_detail: string;
+  dataset_kind: PilotDatasetKind;
+  expected_steps: number;
+  completed_steps: number;
+  step_ceiling: number;
+  within_budget: boolean;
+  device: string | null;
+  precision: string | null;
+  lora_rank: number | null;
+  micro_batch_size: number | null;
+  gradient_accumulation: number | null;
+  latent_length: number | null;
+  seed: number | null;
+  plan_digest: string | null;
+  dataset_manifest_digest: string | null;
+  capacity_qualification: string | null;
+  capacity_profile_id: string | null;
+  preflight_status: string | null;
+  loss: LossPoint[];
+  loss_statistics: Record<string, unknown>;
+  parameters: Record<string, unknown>;
+  gradients: Record<string, unknown>;
+  segments: PilotSegment[];
+  checkpoint: Record<string, unknown> | null;
+  resume: Record<string, unknown> | null;
+  artifact_class: string[];
+  started_at: string | null;
+  finished_at: string | null;
+  wall_seconds: number | null;
+}
+
 export interface Reproducibility {
   luber_commit: string | null;
   luber_dirty: boolean | null;
@@ -693,6 +777,7 @@ export interface RunDetail {
   training_preflight: TrainingPreflight;
   canary: CanaryRun;
   capacity: Capacity;
+  pilot: Pilot;
   gates: GateView[];
   gates_available: boolean;
   gates_unavailable_reason: string | null;

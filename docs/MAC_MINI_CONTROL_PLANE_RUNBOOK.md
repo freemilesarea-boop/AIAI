@@ -226,10 +226,19 @@ uv run python -m luber_training profile-memory --run-id <run-id> --device MPS \
 uv run python -m luber_training capacity --run-id <run-id> --device MPS \
     --latent-length 6000 --encoder-length 256
 
-# 7. only then: a full-training preflight
+# 7. a full-training preflight
 uv run python -m luber_training preflight --run-id <run-id> --device MPS \
     --intent FULL_TRAINING ...
+
+# 8. a bounded pilot on rights-cleared material — tens of steps, and the
+#    first evidence that training produces a signal on this machine
+uv run python -m luber_training pilot prepare --run-id <run-id> --device MPS ...
+uv run python -m luber_training pilot run     --run-id <run-id> --device MPS ...
 ```
+
+Step 8 needs a rights-cleared dataset. There is none today
+(`docs/PHASE35_REAL_DATA_AUDIT.md`), and the pilot refuses to start
+without one — there is no override.
 
 Until step 6 returns `QUALIFIED` **on this machine**, this Mac mini's
 status is `REQUIRES ON-DEVICE QUALIFICATION`. A profile from the

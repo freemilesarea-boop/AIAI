@@ -74,11 +74,14 @@ from luber_api.ops.schemas import (
     HeartbeatView,
     HumanReviewView,
     LogView,
+    LossPointView,
     MemoryPeakView,
     MemoryProfileView,
     ModelBaselineView,
     OverviewResponse,
     Page,
+    PilotSegmentView,
+    PilotView,
     PreflightCheckView,
     PreflightView,
     PresetOption,
@@ -161,6 +164,9 @@ CANARY_RECORD_NAME = "canary.json"
 #: evidence indexed by configuration; this is the run-scoped copy the
 #: console reads.
 MEMORY_PROFILE_NAME = "training_memory_profile.json"
+
+#: Phase 35's record, beside the run the pilot trained for.
+PILOT_RECORD_NAME = "pilot.json"
 
 #: The order of the Phase 25 run state machine, for the timeline.
 LINEAR_STATES: tuple[str, ...] = (
@@ -1214,6 +1220,134 @@ class OpsReadModel:
             measured_at=decision.get("measured_at"),
         )
 
+    def _pilot(self, run_directory: Path | None) -> PilotView:
+        """The bounded pilot recorded for this run, if one has been run.
+
+        Read, never recomputed. The classification was made by the
+        runner on the machine that held the trainer, and a console that
+        re-derived it would eventually disagree with the record an
+        operator is looking at.
+        """
+        if run_directory is None:
+            return PilotView(
+                available=False,
+                unavailable_reason="This run has no artifact directory on this machine.",
+            )
+        payload = _read_json(run_directory / PILOT_RECORD_NAME)
+        if payload is None:
+            return PilotView(
+                available=False,
+                unavailable_reason=(
+                    "No pilot has been run for this run. Run "
+                    "`luber-training pilot run --run-id <id>` on the machine that holds "
+                    "the trainer."
+                ),
+            )
+
+        identity = payload.get("identity") or {}
+        loss = payload.get("loss") or {}
+        raw_outcome = str(payload.get("outcome", "NOT_RUN"))
+        outcome = (
+            raw_outcome
+            if raw_outcome
+            in {
+                "COMPLETED_VALID_SIGNAL",
+                "COMPLETED_INSUFFICIENT_SIGNAL",
+                "BLOCKED",
+                "FAILED_NUMERIC",
+                "FAILED_RUNTIME",
+                "CANCELLED",
+                "TIMEOUT",
+                "NOT_RUN",
+            }
+            else "NOT_RUN"
+        )
+        raw_signal = str(payload.get("signal", "INSUFFICIENT_EVIDENCE"))
+        signal = (
+            raw_signal
+            if raw_signal
+            in {"VALID_SIGNAL", "NUMERICALLY_UNSTABLE", "NO_UPDATE", "INSUFFICIENT_EVIDENCE"}
+            else "INSUFFICIENT_EVIDENCE"
+        )
+        raw_kind = str(payload.get("dataset_kind", "UNKNOWN"))
+        kind = (
+            raw_kind
+            if raw_kind in {"REAL_RIGHTS_CLEARED", "SYNTHETIC_FIXTURE", "UNKNOWN"}
+            else "UNKNOWN"
+        )
+        return PilotView(
+            available=True,
+            pilot_id=payload.get("pilot_id"),
+            outcome=outcome,  # type: ignore[arg-type]
+            signal=signal,  # type: ignore[arg-type]
+            signal_detail=redact_text(str(payload.get("signal_detail", ""))),
+            failure=payload.get("failure"),
+            failure_detail=redact_text(str(payload.get("failure_detail", ""))),
+            dataset_kind=kind,  # type: ignore[arg-type]
+            expected_steps=int(payload.get("expected_steps") or 0),
+            completed_steps=int(payload.get("completed_steps") or 0),
+            step_ceiling=int(payload.get("step_ceiling") or 0),
+            within_budget=bool(payload.get("within_budget", True)),
+            device=identity.get("device"),
+            precision=identity.get("precision"),
+            lora_rank=identity.get("lora_rank"),
+            micro_batch_size=identity.get("micro_batch_size"),
+            gradient_accumulation=identity.get("gradient_accumulation"),
+            latent_length=identity.get("latent_length"),
+            seed=identity.get("seed"),
+            plan_digest=identity.get("plan_digest"),
+            dataset_manifest_digest=identity.get("dataset_manifest_digest"),
+            capacity_qualification=payload.get("capacity_qualification"),
+            capacity_profile_id=payload.get("capacity_profile_id"),
+            preflight_status=payload.get("preflight_status"),
+            loss=[
+                LossPointView(
+                    step=int(item.get("step") or 0),
+                    loss=float(item.get("loss") or 0.0),
+                    epoch=item.get("epoch"),
+                    learning_rate=item.get("learning_rate"),
+                    grad_norm=item.get("grad_norm"),
+                    elapsed_seconds=item.get("elapsed_seconds"),
+                    segment=str(item.get("segment", "A")),
+                    finite=bool(item.get("finite", True)),
+                )
+                for item in loss.get("points") or []
+                if isinstance(item, dict)
+            ],
+            loss_statistics=loss.get("statistics") or {},
+            parameters=payload.get("parameters") or {},
+            gradients=payload.get("gradients") or {},
+            segments=[
+                PilotSegmentView(
+                    name=str(item.get("name", "")),
+                    completed_steps=int(item.get("completed_steps") or 0),
+                    first_step=item.get("first_step"),
+                    last_step=item.get("last_step"),
+                    checkpoint_id=item.get("checkpoint_id"),
+                    resumed_from=item.get("resumed_from"),
+                    exit_code=item.get("exit_code"),
+                    wall_seconds=item.get("wall_seconds"),
+                    detail=redact_text(str(item.get("detail", ""))),
+                )
+                for item in payload.get("segments") or []
+                if isinstance(item, dict)
+            ],
+            checkpoint=payload.get("checkpoint"),
+            resume=payload.get("resume"),
+            artifact_class=[str(item) for item in payload.get("artifact_class") or []],
+            started_at=payload.get("started_at"),
+            finished_at=payload.get("finished_at"),
+            wall_seconds=payload.get("wall_seconds"),
+        )
+
+    def pilot_for(self, run_id: str) -> PilotView:
+        record = next(
+            (item for item in self._all("runs") if str(item.get("run_id")) == run_id), None
+        )
+        if record is None:
+            return PilotView(available=False, unavailable_reason="No such run.")
+        return self._pilot(self.run_directory(record))
+
     def capacity_for(self, run_id: str) -> CapacityView:
         record = next(
             (item for item in self._all("runs") if str(item.get("run_id")) == run_id), None
@@ -1574,6 +1708,7 @@ class OpsReadModel:
             training_preflight=self._training_preflight(run_directory),
             canary=self._canary(run_directory),
             capacity=self._capacity(run_directory),
+            pilot=self._pilot(run_directory),
             gates=gates,
             gates_available=gates_available,
             gates_unavailable_reason=gates_reason,
@@ -2516,6 +2651,7 @@ __all__ = [
     "GATE_REPORT_NAME",
     "MEMORY_PROFILE_NAME",
     "OPS_ARTIFACT_DIR",
+    "PILOT_RECORD_NAME",
     "RUN_CANCEL_REQUESTED",
     "RUN_RECONCILED",
     "RUN_VALIDATION_REQUESTED",

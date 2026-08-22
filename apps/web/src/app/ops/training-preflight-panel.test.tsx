@@ -14,7 +14,14 @@ import { Suspense, type ReactElement } from "react";
 
 import RunDetailPage from "@/app/ops/training/runs/[id]/page";
 import { OpsStatus } from "@/components/ops/primitives";
-import { canaryRun, capacity, memoryProfile, runDetail, trainingPreflight } from "@/test/ops-factories";
+import {
+  canaryRun,
+  capacity,
+  memoryProfile,
+  pilot,
+  runDetail,
+  trainingPreflight,
+} from "@/test/ops-factories";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
@@ -366,5 +373,96 @@ describe("memory and capacity panel", () => {
 
     const panel = screen.getByRole("region", { name: /Memory and capacity/i });
     expect(within(panel).getByText(/nothing about music quality/i)).toBeInTheDocument();
+  });
+});
+
+describe("bounded pilot panel", () => {
+  it("shows a valid signal with the steps it took and the ceiling", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText("COMPLETED_VALID_SIGNAL")).toBeInTheDocument();
+    expect(within(panel).getByText("VALID_SIGNAL")).toBeInTheDocument();
+    expect(within(panel).getByText(/48 of 48 \(ceiling 48\)/)).toBeInTheDocument();
+  });
+
+  it("makes no convergence or quality claim", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    const text = panel.textContent ?? "";
+    expect(text).toMatch(/nothing about\s+convergence, music quality/);
+    expect(text).not.toMatch(/converged|improved the model|higher quality/i);
+  });
+
+  it("labels a synthetic pilot as not evidence about real music", async () => {
+    await renderRun(runDetail({ pilot: pilot({ dataset_kind: "SYNTHETIC_FIXTURE" }) }));
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText("SYNTHETIC_FIXTURE")).toBeInTheDocument();
+    expect(within(panel).getByText(/not\s+evidence about real music/)).toBeInTheDocument();
+  });
+
+  it("marks real rights-cleared material distinctly from a fixture", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText("REAL_RIGHTS_CLEARED")).toBeInTheDocument();
+    expect(within(panel).queryByText(/not\s+evidence about real music/)).not.toBeInTheDocument();
+  });
+
+  it("shows NO_UPDATE as a failure rather than a quiet pass", async () => {
+    await renderRun(
+      runDetail({
+        pilot: pilot({
+          outcome: "FAILED_NUMERIC",
+          signal: "NO_UPDATE",
+          signal_detail: "the loss was finite throughout and no trainable parameter changed",
+          failure: "NO_PARAMETER_UPDATE",
+          failure_detail: "no trainable parameter changed",
+        }),
+      }),
+    );
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText("FAILED_NUMERIC")).toBeInTheDocument();
+    expect(within(panel).getByText("NO_UPDATE")).toBeInTheDocument();
+    expect(within(panel).getByText(/NO_PARAMETER_UPDATE/)).toBeInTheDocument();
+  });
+
+  it("labels the slope as derived rather than as a trend", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText("Slope (DERIVED)")).toBeInTheDocument();
+  });
+
+  it("shows both segments and the resume between them", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText(/resumed from epoch_24_loss_3.3100/)).toBeInTheDocument();
+  });
+
+  it("says every pilot artifact is never auto-promoted", async () => {
+    await renderRun(runDetail());
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText(/NEVER_AUTO_PROMOTE/)).toBeInTheDocument();
+  });
+
+  it("says plainly when no pilot has been run", async () => {
+    await renderRun(
+      runDetail({
+        pilot: pilot({
+          available: false,
+          unavailable_reason: "No pilot has been run for this run.",
+          outcome: "NOT_RUN",
+        }),
+      }),
+    );
+
+    const panel = screen.getByRole("region", { name: /Bounded pilot/i });
+    expect(within(panel).getByText(/No pilot has been run/)).toBeInTheDocument();
   });
 });

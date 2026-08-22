@@ -420,13 +420,17 @@ identity, so a single-GPU profile cannot qualify a multi-GPU run.
 6. **One local profiling workload at a time.** Two concurrent MPS runs
    on shared unified memory would measure each other.
 7. **A qualification is not a schedule.** Phase 34 may prove readiness;
-   it does not start a run.
+   it does not start a run. Phase 35's bounded pilot is the first thing
+   that does, and it requires an applicable QUALIFIED profile for the
+   exact configuration it is about to run.
 
 ---
 
 ## 17. Related documents
 
 * `docs/TRAINING_PREFLIGHT_AND_CANARY.md` — Phase 33: the readiness gate
+* `docs/REAL_LORA_PILOT.md` — Phase 35, which requires an applicable
+  QUALIFIED profile before it will start
 * `docs/HARDWARE_EXECUTION_COMPATIBILITY.md` — Phase 32: devices and placement
 * `docs/MAC_MINI_CONTROL_PLANE_RUNBOOK.md` — on-device qualification
 * `docs/NVIDIA_TRAINING_WORKER_RUNBOOK.md` — CUDA worker qualification

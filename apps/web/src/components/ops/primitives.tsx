@@ -226,6 +226,17 @@ const STATUS_TONE: Record<string, Tone> = {
   NOT_REPRESENTATIVE: "bad",
   COMPLETED_PROFILE: "good",
   PROFILE_TIMEOUT: "bad",
+  // Phase 35. COMPLETED_VALID_SIGNAL and VALID_SIGNAL are absent for the
+  // same reason READY and QUALIFIED are: the caller decides the tone.
+  COMPLETED_INSUFFICIENT_SIGNAL: "warn",
+  FAILED_NUMERIC: "bad",
+  FAILED_RUNTIME: "bad",
+  NUMERICALLY_UNSTABLE: "bad",
+  NO_UPDATE: "bad",
+  INSUFFICIENT_EVIDENCE: "unknown",
+  // A synthetic fixture is never a failure and never a real-data pass.
+  SYNTHETIC_FIXTURE: "warn",
+  REAL_RIGHTS_CLEARED: "good",
 };
 
 export function OpsStatus({

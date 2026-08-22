@@ -129,6 +129,13 @@ WAV plus latents — budget several times the raw audio size.
 Expected bottleneck for a small run is data, not compute. There is no
 corpus yet.
 
+**Phase 35 update.** A bounded pilot contract now exists: tens of
+optimizer steps on rights-cleared material, with a computed step budget,
+a loss series, gradient and parameter-update evidence, and a bounded
+resume. **No real pilot has run**, because no rights-cleared training
+track exists — see `docs/PHASE35_REAL_DATA_AUDIT.md`. The blocker is an
+authorisation, not a capability.
+
 **Phase 33 update.** A bounded canary has now loaded the real ACE-Step
 DiT (2 396 625 030 parameters) on Apple silicon in bf16, injected a
 rank-4 LoRA (2 752 512 trainable), taken an optimizer step, written a

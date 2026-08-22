@@ -48,6 +48,7 @@ from luber_api.ops.schemas import (
     ExperimentSummary,
     LogView,
     OverviewResponse,
+    PilotView,
     RunCreateRequest,
     RunDetail,
     RunListResponse,
@@ -267,6 +268,21 @@ def run_training_preflight(run_id: str, read: ReadModel) -> TrainingPreflightVie
     "we looked and could not establish something".
     """
     view = read.training_preflight_for(run_id)
+    if view.unavailable_reason == "No such run.":
+        raise _not_found("run", run_id)
+    return view
+
+
+@router.get("/runs/{run_id}/pilot", response_model=PilotView)
+def run_pilot_record(run_id: str, read: ReadModel) -> PilotView:
+    """The bounded pilot recorded for this run, if one has been run.
+
+    A read. Starting a pilot trains on real music for tens of steps and
+    belongs to the operator CLI on the machine that holds the trainer;
+    putting a Start button here would move a boundary Phase 28 set
+    deliberately, for a convenience nobody asked for.
+    """
+    view = read.pilot_for(run_id)
     if view.unavailable_reason == "No such run.":
         raise _not_found("run", run_id)
     return view

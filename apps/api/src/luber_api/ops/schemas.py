@@ -501,6 +501,92 @@ class CapacityView(BaseModel):
     measured_at: str | None = None
 
 
+class LossPointView(BaseModel):
+    """One optimizer step, as the trainer reported it."""
+
+    step: int
+    loss: float
+    epoch: int | None = None
+    learning_rate: float | None = None
+    grad_norm: float | None = None
+    elapsed_seconds: float | None = None
+    segment: str = "A"
+    finite: bool = True
+
+
+class PilotSegmentView(BaseModel):
+    name: str
+    completed_steps: int = 0
+    first_step: int | None = None
+    last_step: int | None = None
+    checkpoint_id: str | None = None
+    resumed_from: str | None = None
+    exit_code: int | None = None
+    wall_seconds: float | None = None
+    detail: str = ""
+
+
+class PilotView(BaseModel):
+    """A bounded pilot's evidence, and the claims it may not make.
+
+    ``signal`` tops out at `VALID_SIGNAL`. There is no field here for
+    convergence or quality, because tens of steps cannot support either
+    and a field that could express them would eventually be filled in.
+
+    ``dataset_kind`` is prominent for the same reason: a synthetic
+    fixture validates the mechanism and is never evidence about real
+    music, and the two must not read alike.
+    """
+
+    available: bool = False
+    unavailable_reason: str | None = None
+    pilot_id: str | None = None
+    outcome: Literal[
+        "COMPLETED_VALID_SIGNAL",
+        "COMPLETED_INSUFFICIENT_SIGNAL",
+        "BLOCKED",
+        "FAILED_NUMERIC",
+        "FAILED_RUNTIME",
+        "CANCELLED",
+        "TIMEOUT",
+        "NOT_RUN",
+    ] = "NOT_RUN"
+    signal: Literal[
+        "VALID_SIGNAL", "NUMERICALLY_UNSTABLE", "NO_UPDATE", "INSUFFICIENT_EVIDENCE"
+    ] = "INSUFFICIENT_EVIDENCE"
+    signal_detail: str = ""
+    failure: str | None = None
+    failure_detail: str = ""
+    dataset_kind: Literal["REAL_RIGHTS_CLEARED", "SYNTHETIC_FIXTURE", "UNKNOWN"] = "UNKNOWN"
+    expected_steps: int = 0
+    completed_steps: int = 0
+    step_ceiling: int = 0
+    within_budget: bool = True
+    device: str | None = None
+    precision: str | None = None
+    lora_rank: int | None = None
+    micro_batch_size: int | None = None
+    gradient_accumulation: int | None = None
+    latent_length: int | None = None
+    seed: int | None = None
+    plan_digest: str | None = None
+    dataset_manifest_digest: str | None = None
+    capacity_qualification: str | None = None
+    capacity_profile_id: str | None = None
+    preflight_status: str | None = None
+    loss: list[LossPointView] = Field(default_factory=list)
+    loss_statistics: dict[str, Any] = Field(default_factory=dict)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    gradients: dict[str, Any] = Field(default_factory=dict)
+    segments: list[PilotSegmentView] = Field(default_factory=list)
+    checkpoint: dict[str, Any] | None = None
+    resume: dict[str, Any] | None = None
+    artifact_class: list[str] = Field(default_factory=list)
+    started_at: str | None = None
+    finished_at: str | None = None
+    wall_seconds: float | None = None
+
+
 class TrainingPreflightView(BaseModel):
     """Phase 33's verdict: can this machine execute this plan?
 
@@ -757,6 +843,7 @@ class RunDetail(BaseModel):
     training_preflight: TrainingPreflightView
     canary: CanaryView
     capacity: CapacityView
+    pilot: PilotView
     gates: list[GateView] = Field(default_factory=list)
     gates_available: bool = False
     gates_unavailable_reason: str | None = None

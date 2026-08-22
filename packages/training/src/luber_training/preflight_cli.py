@@ -58,6 +58,24 @@ from luber_training.memory_profiler import (
     write_profile,
 )
 from luber_training.orchestrator import Orchestrator
+from luber_training.pilot import (
+    PILOT_MAX_OPTIMIZER_STEPS,
+    PILOT_MAX_SEGMENT_STEPS,
+    PILOT_MAX_WALL_CLOCK_SECONDS,
+    PilotOutcome,
+    PilotStepBudget,
+)
+from luber_training.pilot_runner import (
+    PILOT_SUBDIR,
+    PilotRequest,
+    render_dataset_report,
+    run_pilot,
+    verify_pilot_dataset,
+    write_pilot_artifacts,
+)
+from luber_training.pilot_runner import (
+    identity_for as pilot_identity_for,
+)
 from luber_training.plan import TrainingPlan
 from luber_training.preflight import PreflightIntent, PreflightStatus
 from luber_training.preflight_collect import (
@@ -460,6 +478,185 @@ def _luber_commit(args: argparse.Namespace) -> str | None:
     return (result.stdout.strip() or None) if result.returncode == 0 else None
 
 
+# ── pilot ────────────────────────────────────────────────────────────
+
+
+def _pilot_request(args: argparse.Namespace, orchestrator: Orchestrator) -> PilotRequest:
+    """Assemble a pilot from the run, the machine and the stored evidence.
+
+    Everything a pilot is allowed to vary comes from the plan. The
+    ceilings do not appear here at all — they are module constants in
+    `luber_training.pilot`, and there is deliberately no argument that
+    reaches them.
+    """
+    plan = _plan(orchestrator, args)
+    run = orchestrator.get_run(args.run_id)
+    trainer_root = Path(args.trainer_root).expanduser()
+    capability = _capability(args.python)
+    device = args.device or plan.requirements.execution_device or ComputeDevice.CPU.value
+    workspace = (
+        Path(args.workspace).expanduser()
+        if args.workspace
+        else default_workspace(trainer_root, f"{PILOT_SUBDIR}-{args.run_id}")
+    )
+    return PilotRequest(
+        plan=plan,
+        dataset_dir=Path(args.dataset_dir).expanduser(),
+        trainer_root=trainer_root,
+        python_executable=Path(args.python).expanduser(),
+        model_dir=Path(args.model_dir).expanduser(),
+        workspace=workspace,
+        dataset_id=args.dataset_id or (run.dataset_ref.dataset_id or "pilot"),
+        latent_length=args.latent_length,
+        encoder_length=args.encoder_length,
+        seed=args.seed,
+        model_variant=args.model_variant,
+        gate_report=_gate_report(args),
+        capacity=_capacity_decision(
+            args,
+            plan,
+            capability,
+            device,
+            latent_length=args.latent_length,
+            encoder_length=args.encoder_length,
+        ),
+        preflight_status=args.preflight_status,
+        allow_synthetic=args.allow_synthetic_fixture,
+        segment_timeout_seconds=float(args.timeout),
+        measure_resume=args.resume,
+    )
+
+
+def cmd_pilot_prepare(args: argparse.Namespace) -> int:
+    """Say what a pilot would do, and start nothing.
+
+    The step budget, the dataset verdict and the capacity position, all
+    computed before any process exists. An operator reads this and knows
+    whether the pilot will be refused before spending anything on it.
+    """
+    from luber_training.cli import _orchestrator
+
+    orchestrator = _orchestrator(args)
+    request = _pilot_request(args, orchestrator)
+    verdict = verify_pilot_dataset(
+        request.dataset_dir,
+        gate_report=request.gate_report,
+        allow_synthetic=request.allow_synthetic,
+    )
+    try:
+        budget = PilotStepBudget.for_ceiling(
+            samples=max(1, verdict.sample_count),
+            micro_batch_size=request.plan.config.batch_size,
+            gradient_accumulation=request.plan.config.gradient_accumulation,
+            ceiling=PILOT_MAX_SEGMENT_STEPS,
+        )
+        budget_payload: dict[str, Any] = budget.to_dict()
+        identity = pilot_identity_for(request, budget, verdict.manifest_digest or "")
+        identity_payload: dict[str, Any] = {
+            "pilot_id": identity.pilot_id(),
+            "digest": identity.digest(),
+            **identity.to_dict(),
+        }
+        report = render_dataset_report(verdict, identity)
+    except Exception as exc:
+        budget_payload = {"error": str(exc)}
+        identity_payload = {}
+        report = ""
+
+    _print(
+        {
+            "dataset": verdict.to_dict(),
+            "step_budget": budget_payload,
+            "identity": identity_payload,
+            "capacity": None if request.capacity is None else request.capacity.to_dict(),
+            "ceilings": {
+                "optimizer_steps": PILOT_MAX_OPTIMIZER_STEPS,
+                "segment_steps": PILOT_MAX_SEGMENT_STEPS,
+                "wall_clock_seconds": PILOT_MAX_WALL_CLOCK_SECONDS,
+            },
+            "dataset_report": report,
+            "note": "prepare starts nothing",
+        }
+    )
+    return 0 if verdict.permitted else 1
+
+
+def cmd_pilot_run(args: argparse.Namespace) -> int:
+    """Run one bounded pilot: two segments, a checkpoint, a resume.
+
+    The only verb in LUBER that trains on real music, and it can only
+    train a bounded amount of it. Every ceiling is a module constant and
+    no argument here reaches one.
+    """
+    from luber_training.cli import _orchestrator
+
+    orchestrator = _orchestrator(args)
+    request = _pilot_request(args, orchestrator)
+    result = run_pilot(request)
+
+    directory = Path(request.workspace)
+    paths = write_pilot_artifacts(result, directory)
+    orchestrator.record_pilot(args.run_id, result.to_dict())
+
+    if args.cleanup:
+        from luber_training.canary import cleanup_workspace
+
+        cleanup_workspace(request.workspace)
+
+    _print({**result.to_dict(), "artifacts": {key: str(value) for key, value in paths.items()}})
+    return 0 if result.outcome == PilotOutcome.COMPLETED_VALID_SIGNAL.value else 1
+
+
+def cmd_pilot_status(args: argparse.Namespace) -> int:
+    """The recorded pilot for a run, if one has been run."""
+    from luber_training.cli import _orchestrator
+
+    orchestrator = _orchestrator(args)
+    run = orchestrator.get_run(args.run_id)
+    directory = Path(run.output_directory or orchestrator.artifacts_root / args.run_id)
+    path = directory / "pilot.json"
+    if not path.is_file():
+        _print({"available": False, "reason": "no pilot has been run for this run"})
+        return 1
+    _print(json.loads(path.read_text(encoding="utf-8")))
+    return 0
+
+
+def cmd_pilot_verify(args: argparse.Namespace) -> int:
+    """Re-check a recorded pilot's evidence without re-running it."""
+    from luber_training.cli import _orchestrator
+    from luber_training.pilot import PilotTrainingResult, classify_signal
+
+    orchestrator = _orchestrator(args)
+    run = orchestrator.get_run(args.run_id)
+    directory = Path(run.output_directory or orchestrator.artifacts_root / args.run_id)
+    path = directory / "pilot.json"
+    if not path.is_file():
+        _print({"available": False, "reason": "no pilot has been run for this run"})
+        return 1
+    result = PilotTrainingResult.from_dict(json.loads(path.read_text(encoding="utf-8")))
+    signal, detail = classify_signal(
+        loss=result.loss,
+        parameters=result.parameters,
+        gradients=result.gradients,
+        expected_steps=result.expected_steps,
+        completed_steps=result.completed_steps,
+    )
+    _print(
+        {
+            "pilot_id": result.pilot_id,
+            "recorded_signal": result.signal,
+            "recomputed_signal": signal,
+            "agrees": signal == result.signal,
+            "detail": detail,
+            "within_budget": result.within_budget,
+            "dataset_kind": result.dataset_kind,
+            "artifact_class": list(result.artifact_class),
+        }
+    )
+    return 0 if signal == result.signal else 1
+
+
 # ── parser ───────────────────────────────────────────────────────────
 
 
@@ -594,6 +791,59 @@ def add_preflight_parsers(sub: argparse._SubParsersAction[argparse.ArgumentParse
     _add_common(capacity)
     capacity.set_defaults(func=cmd_capacity)
 
+    pilot = sub.add_parser("pilot", help="a bounded real LoRA pilot: tens of steps, never more")
+    pilot_sub = pilot.add_subparsers(dest="action", required=True)
+
+    def _add_pilot(parser: argparse.ArgumentParser) -> None:
+        _add_common(parser)
+        parser.add_argument("--dataset-dir", required=True, help="preprocessed pilot tensors")
+        parser.add_argument("--dataset-id", help="stable id for the pilot dataset")
+        parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument("--workspace", help="where the pilot writes; beneath the trainer root")
+        parser.add_argument(
+            "--preflight-status",
+            help="the Phase 33 preflight status; anything but READY blocks the pilot",
+        )
+        parser.add_argument(
+            "--allow-synthetic-fixture",
+            action="store_true",
+            help=(
+                "run against a synthetic fixture to check the mechanism. The result is "
+                "stamped SYNTHETIC_FIXTURE and is never real-data evidence"
+            ),
+        )
+        parser.add_argument(
+            "--timeout",
+            type=float,
+            default=PILOT_MAX_WALL_CLOCK_SECONDS,
+            help="wall clock for one segment, clamped by the module ceiling",
+        )
+        parser.add_argument(
+            "--resume",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help="run a second segment from the checkpoint the first one wrote",
+        )
+
+    prepare = pilot_sub.add_parser("prepare", help="what a pilot would do; starts nothing")
+    _add_pilot(prepare)
+    prepare.set_defaults(func=cmd_pilot_prepare)
+
+    pilot_run = pilot_sub.add_parser("run", help="run one bounded pilot")
+    _add_pilot(pilot_run)
+    pilot_run.add_argument("--cleanup", action="store_true")
+    pilot_run.set_defaults(func=cmd_pilot_run)
+
+    status = pilot_sub.add_parser("status", help="the recorded pilot for a run")
+    _add_common(status)
+    status.set_defaults(func=cmd_pilot_status)
+
+    verify = pilot_sub.add_parser(
+        "verify", help="re-check a recorded pilot's evidence without re-running it"
+    )
+    _add_common(verify)
+    verify.set_defaults(func=cmd_pilot_verify)
+
 
 __all__ = [
     "DEFAULT_CANARY_DIRNAME",
@@ -601,6 +851,10 @@ __all__ = [
     "cmd_canary_ace_step",
     "cmd_canary_orchestration",
     "cmd_capacity",
+    "cmd_pilot_prepare",
+    "cmd_pilot_run",
+    "cmd_pilot_status",
+    "cmd_pilot_verify",
     "cmd_preflight",
     "cmd_profile_memory",
 ]

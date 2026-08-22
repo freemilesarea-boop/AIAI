@@ -23,6 +23,7 @@ import type {
   MemoryProfile,
   MetricSeries,
   Overview,
+  Pilot,
   Preflight,
   Qualification,
   RunDetail,
@@ -416,6 +417,133 @@ export function memoryProfile(overrides: Partial<MemoryProfile> = {}): MemoryPro
   };
 }
 
+/**
+ * A pilot that produced a valid signal on real rights-cleared material.
+ * The default is deliberately the strongest honest case, so a test that
+ * asserts restraint has to work to break it.
+ */
+export function pilot(overrides: Partial<Pilot> = {}): Pilot {
+  return {
+    available: true,
+    unavailable_reason: null,
+    pilot_id: "pilot-mps-bf16-r32-s24-5504d57229c5",
+    outcome: "COMPLETED_VALID_SIGNAL",
+    signal: "VALID_SIGNAL",
+    signal_detail:
+      "48 finite optimizer step(s), finite non-zero gradients, and 384 trainable tensor(s) " +
+      "changed. This says the training path works. It says nothing about convergence or quality",
+    failure: null,
+    failure_detail: "",
+    dataset_kind: "REAL_RIGHTS_CLEARED",
+    expected_steps: 48,
+    completed_steps: 48,
+    step_ceiling: 48,
+    within_budget: true,
+    device: "MPS",
+    precision: "bf16",
+    lora_rank: 32,
+    micro_batch_size: 1,
+    gradient_accumulation: 4,
+    latent_length: 6000,
+    seed: 42,
+    plan_digest: "a".repeat(64),
+    dataset_manifest_digest: "b".repeat(64),
+    capacity_qualification: "QUALIFIED",
+    capacity_profile_id: "mps-bf16-b1-r32-t6000-7f9be176c11d",
+    preflight_status: "READY",
+    loss: [
+      {
+        step: 1,
+        loss: 3.41,
+        epoch: 1,
+        learning_rate: 0.0001,
+        grad_norm: 0.42,
+        elapsed_seconds: 12.1,
+        segment: "A",
+        finite: true,
+      },
+      {
+        step: 2,
+        loss: 3.38,
+        epoch: 2,
+        learning_rate: 0.0001,
+        grad_norm: 0.39,
+        elapsed_seconds: 18.4,
+        segment: "A",
+        finite: true,
+      },
+    ],
+    loss_statistics: {
+      count: 48,
+      finite_count: 48,
+      finite_ratio: 1,
+      first: 3.41,
+      last: 3.29,
+      minimum: 3.24,
+      maximum: 3.44,
+      mean: 3.35,
+      median: 3.35,
+      slope: -0.0021,
+      slope_source: "DERIVED",
+      slope_note:
+        "least squares over the finite losses. Not a convergence claim: over tens of steps " +
+        "this is a line through noise",
+    },
+    parameters: {
+      changed_tensor_count: 384,
+      trainable_tensor_count: 384,
+      parameters_changed: true,
+      base_model_preserved: true,
+      max_absolute_delta: 0.0043,
+    },
+    gradients: {
+      observed_steps: 48,
+      finite_steps: 48,
+      nonzero_steps: 48,
+      mean_grad_norm: 0.41,
+      all_finite: true,
+      any_nonzero: true,
+    },
+    segments: [
+      {
+        name: "A",
+        completed_steps: 24,
+        first_step: 1,
+        last_step: 24,
+        checkpoint_id: "epoch_24_loss_3.3100",
+        resumed_from: null,
+        exit_code: 0,
+        wall_seconds: 210.4,
+        detail: "",
+      },
+      {
+        name: "B",
+        completed_steps: 24,
+        first_step: 25,
+        last_step: 48,
+        checkpoint_id: "epoch_48_loss_3.2900",
+        resumed_from: "epoch_24_loss_3.3100",
+        exit_code: 0,
+        wall_seconds: 205.2,
+        detail: "",
+      },
+    ],
+    checkpoint: { ok: true, step: 24, reopened: true },
+    resume: {
+      performed: true,
+      resumed_from: "epoch_24_loss_3.3100",
+      source_step: 24,
+      final_step: 48,
+      advanced: true,
+    },
+    artifact_class: ["EXPERIMENTAL", "NON_PRODUCTION", "NEVER_AUTO_PROMOTE"],
+    started_at: "2026-08-22T23:00:00+00:00",
+    finished_at: "2026-08-22T23:07:00+00:00",
+    wall_seconds: 420,
+    ...overrides,
+  };
+}
+
 export function canaryRun(overrides: Partial<CanaryRun> = {}): CanaryRun {
   return {
     available: true,
@@ -674,6 +802,7 @@ export function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
     training_preflight: trainingPreflight(),
     canary: canaryRun(),
     capacity: capacity(),
+    pilot: pilot(),
     remote_preflight: unavailablePreflight("The worker has not recorded a preflight."),
     gates: gates(),
     gates_available: true,
