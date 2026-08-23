@@ -43,6 +43,13 @@ class RightsStatus(StrEnum):
     USER_OWNED = "USER_OWNED"
     LICENSED = "LICENSED"
     PUBLIC_DOMAIN = "PUBLIC_DOMAIN"
+    #: A named operator authorised a named scope for training, and
+    #: that authorisation is the whole of the evidence. Weaker than
+    #: every status above it: nobody produced a licence, a contract or
+    #: an ownership document, and this value must never be read as
+    #: though somebody had. It is separate from VERIFIED and USER_OWNED
+    #: precisely so the difference stays visible in every export.
+    OPERATOR_AUTHORIZED = "OPERATOR_AUTHORIZED"
     UNKNOWN = "UNKNOWN"
     RESTRICTED = "RESTRICTED"
 
@@ -73,6 +80,11 @@ PERMISSIVE_STATUSES: frozenset[str] = frozenset(
         RightsStatus.USER_OWNED.value,
         RightsStatus.LICENSED.value,
         RightsStatus.PUBLIC_DOMAIN.value,
+        # Permissive because an operator's explicit authorisation is a
+        # decision, not a guess — which is the line this module polices.
+        # It is still the weakest entry here, and the status name is
+        # what carries that downstream rather than a footnote.
+        RightsStatus.OPERATOR_AUTHORIZED.value,
     }
 )
 

@@ -27,10 +27,19 @@ Priority of sources:
   composers/producers/vocalists.
 - **C** — Datasets explicitly licensed for commercial ML training.
 - **D** — Catalogs licensed via separate agreements.
+- **E** — Material in a directory the operator explicitly authorised for
+  training. The weakest of the five and recorded as such: basis
+  `OPERATOR_AUTHORIZED_SCOPE`, rights status `OPERATOR_AUTHORIZED`, and
+  `lyrics_rights_confirmed` / `performer_rights_confirmed` left false
+  because nobody produced a publisher clearance or a performer
+  agreement. It authorises the named scope and nothing beyond it. See
+  `OPERATOR_AUTHORIZED_TRAINING_DATA.md`.
 
 Hard rules:
 
-- A file with no license metadata **fails** dataset validation.
+- A file with no license metadata **fails** dataset validation. An
+  operator authorisation is metadata only when it is actually recorded:
+  a source, a scope and a date. A folder name is still not a licence.
 - `commercial_training_allowed = false` ⇒ automatically excluded from
   production training pipelines.
 - Every dataset asset records provenance: source, creator, owner,

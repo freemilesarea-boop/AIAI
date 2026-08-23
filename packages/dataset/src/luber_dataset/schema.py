@@ -185,6 +185,12 @@ class TrainingTrack:
     caption: str = ""
     notes: str = ""
 
+    #: Which supplied group this track came from — a folder name under
+    #: an operator-authorised root, say. Provenance only: it records
+    #: where the file sat, and asserts nothing about rights, which is
+    #: what the rights record is for.
+    source_group: str = ""
+
     @property
     def vocal_presence(self) -> VocalPresence:
         """Parsed vocal state; anything unrecognised reads as UNKNOWN."""
@@ -232,6 +238,7 @@ class TrainingTrack:
         data: dict[str, Any] = {
             "track_id": self.track_id,
             "source": self.source,
+            "source_group": self.source_group,
             "rights": {
                 k: str(v) if isinstance(v, StrEnum) else v for k, v in asdict(self.rights).items()
             },

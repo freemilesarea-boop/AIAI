@@ -21,6 +21,23 @@ Two things remain absolute:
    name, a filename, or the mere fact that a file exists on disk may
    set `CONFIRMED`. Only an operator decision backed by a documented
    rights record can do that.
+
+Phase 35B added the one basis that expresses an operator decision
+directly: :attr:`RightsBasis.OPERATOR_AUTHORIZED_SCOPE`. It exists
+because the alternative was worse. An operator who authorises a
+directory for training has made a real decision, and the choices before
+this were to record it as a licence it is not, as original work nobody
+established, or to refuse it and have no way to represent an operator's
+own material at all.
+
+It does not weaken rule 2. The authorisation is a *record* — a stated
+source, a stated scope, a timestamp — and `validate_rights` refuses the
+basis unless all three are present. A folder name still cannot set
+`CONFIRMED`; an operator saying so, on the record, can. What the basis
+deliberately does **not** claim is third-party verification: no
+contract, no licence, no publisher clearance and no performer agreement
+is asserted by it, and anything reading a record with this basis is
+reading an operator's word and should know that.
 """
 
 from __future__ import annotations
@@ -60,6 +77,15 @@ class RightsBasis(StrEnum):
     #: Output of a generative service whose terms grant the operator
     #: commercial rights, where the operator has confirmed this.
     AI_SERVICE_OUTPUT_OWNED = "AI_SERVICE_OUTPUT_OWNED"
+    #: The operator explicitly authorised a scoped location for training.
+    #:
+    #: The weakest basis in this enum, and the most honest about it. It
+    #: asserts exactly one thing: a named operator authorised a named
+    #: scope on a named date. It asserts **nothing** about copyright
+    #: ownership, licences, publisher clearance or performer agreements
+    #: — a reader seeing it is reading an operator's word, and the
+    #: record says so rather than implying otherwise.
+    OPERATOR_AUTHORIZED_SCOPE = "OPERATOR_AUTHORIZED_SCOPE"
     NONE = "NONE"
 
 
@@ -138,6 +164,19 @@ class RightsRecord:
     commercial_training_allowed: bool
     notes: str = ""
 
+    # ── operator authorisation, where that is the basis ──────────────
+    #: How the authorisation was given. The only value that means
+    #: anything today is ``OPERATOR_EXPLICIT_AUTHORIZATION``; it is a
+    #: string rather than an enum so a future mechanism can be added
+    #: without a record from this one becoming unreadable.
+    authorization_source: str = ""
+    #: What the authorisation covers, as the operator stated it. A scope
+    #: is part of the evidence: an authorisation with no boundary is not
+    #: a decision anybody could check later.
+    authorization_scope: str = ""
+    #: When it was recorded. Not when the audio was made.
+    authorization_recorded_at: str = ""
+
 
 def _matches(haystack: str, markers: tuple[str, ...]) -> str | None:
     """Word-boundary match so "LUBER studio" never trips "udio"."""
@@ -185,6 +224,21 @@ def validate_rights(record: RightsRecord, *, has_lyrics: bool, has_vocals: bool)
     if record.basis is RightsBasis.NONE:
         raise RightsError("rights are marked CONFIRMED but no basis is recorded")
 
+    # 3a. An operator authorisation must be an actual record. Without a
+    #     source, a scope and a date it is a folder name wearing a
+    #     basis, which rule 2 exists to refuse.
+    if record.basis is RightsBasis.OPERATOR_AUTHORIZED_SCOPE:
+        for field_name in (
+            "authorization_source",
+            "authorization_scope",
+            "authorization_recorded_at",
+        ):
+            if not str(getattr(record, field_name)).strip():
+                raise RightsError(
+                    f"basis is OPERATOR_AUTHORIZED_SCOPE but {field_name} is empty; an "
+                    "operator authorisation has to name who authorised what, and when"
+                )
+
     for field_name in ("source", "rights_holder", "document_reference", "confirmed_on"):
         if not str(getattr(record, field_name)).strip():
             raise RightsError(f"rights record is missing {field_name}")
@@ -193,10 +247,19 @@ def validate_rights(record: RightsRecord, *, has_lyrics: bool, has_vocals: bool)
         raise RightsError("audio use rights are not confirmed")
     if not record.commercial_training_allowed:
         raise RightsError("commercial ML training rights are not confirmed")
-    if has_lyrics and not record.lyrics_rights_confirmed:
-        raise RightsError("track has lyrics but lyrics rights are not confirmed")
-    if has_vocals and not record.performer_rights_confirmed:
-        raise RightsError("track has vocals but performer rights are not confirmed")
+    # An operator authorising a scope authorises the works in it as
+    # they were supplied — vocals, lyrics and all. What they did not do
+    # is produce a performer agreement or a publisher clearance, so the
+    # record leaves those two flags false and this validator does not
+    # demand a claim nobody made. Requiring them here would only teach
+    # the ingestion path to set them, which is the fabrication the
+    # module docstring forbids. The basis and the two false flags keep
+    # the weakness legible to anyone reading the record afterwards.
+    if record.basis is not RightsBasis.OPERATOR_AUTHORIZED_SCOPE:
+        if has_lyrics and not record.lyrics_rights_confirmed:
+            raise RightsError("track has lyrics but lyrics rights are not confirmed")
+        if has_vocals and not record.performer_rights_confirmed:
+            raise RightsError("track has vocals but performer rights are not confirmed")
 
 
 def is_trainable(record: RightsRecord, *, has_lyrics: bool, has_vocals: bool) -> bool:

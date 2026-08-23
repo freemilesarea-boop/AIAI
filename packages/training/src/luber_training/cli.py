@@ -23,7 +23,7 @@ from typing import Any
 
 from luber_training import registry as registry_module
 from luber_training.backends import DRY_RUN, REMOTE_GPU, LocalDryRunBackend
-from luber_training.config import PRESET_INTENT, PRESETS, preset
+from luber_training.config import PRESET_INTENT, PRESETS, Precision, TrainingConfig, preset
 from luber_training.entities import (
     CheckpointKind,
     ModelBaseline,
@@ -191,6 +191,24 @@ def cmd_worker_list(args: argparse.Namespace) -> int:
 # ── run ──────────────────────────────────────────────────────────────
 
 
+def _preset_config(args: argparse.Namespace) -> TrainingConfig:
+    """The preset, with an explicitly requested precision applied.
+
+    `--precision` exists because "auto" is not portable. On Apple
+    silicon the installed trainer resolves it to fp16 and no step
+    completes — Phase 33 measured that — so a run there has to name
+    bf16 or fp32. The operator names it: nothing in this code path
+    substitutes one dtype for another on a machine's behalf, because a
+    precision quietly changed underneath a run is a different run
+    reported as the same one.
+    """
+    config = preset(args.preset)
+    requested = getattr(args, "precision", None)
+    if requested:
+        config = config.with_overrides(precision=requested)
+    return config
+
+
 def cmd_run_create(args: argparse.Namespace) -> int:
     orchestrator = _orchestrator(args)
     curation_dir = Path(args.curation_build).expanduser()
@@ -214,7 +232,7 @@ def cmd_run_create(args: argparse.Namespace) -> int:
     run = orchestrator.create_run(
         experiment_id=args.experiment_id,
         dataset_ref=dataset_ref,
-        config=preset(args.preset),
+        config=_preset_config(args),
         execution_backend=args.backend,
         worker_id=args.worker_id,
         parent_run_id=args.parent_run_id,
@@ -496,6 +514,14 @@ def build_parser() -> argparse.ArgumentParser:
     run_create = run.add_parser("create", parents=[gates])
     run_create.add_argument("--experiment-id", required=True)
     run_create.add_argument("--preset", default="LORA_STANDARD", choices=sorted(PRESETS))
+    run_create.add_argument(
+        "--precision",
+        choices=[item.value for item in Precision],
+        help=(
+            "override the preset's precision. Required on Apple silicon, where 'auto' "
+            "resolves to fp16 and the trainer cannot complete a step"
+        ),
+    )
     run_create.add_argument("--backend", default=DRY_RUN, choices=[DRY_RUN, REMOTE_GPU])
     run_create.add_argument("--worker-id")
     run_create.add_argument("--parent-run-id")

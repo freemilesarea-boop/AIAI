@@ -5,6 +5,15 @@ on today?
 
 **Answer: no.** Zero tracks are `ELIGIBLE_FOR_TRAINING`.
 
+> **Superseded in part by Phase 35B.** After this audit was written the
+> operator explicitly authorised a directory of their own material for
+> training. That authorisation changed the answer for that directory and
+> for nothing else: see `docs/OPERATOR_AUTHORIZED_TRAINING_DATA.md`. The
+> classifications below still stand for everything outside the
+> authorised scope — including the 100 commercial reference recordings,
+> which remain reference-only and did not enter the training library
+> even though a copy of that group sits inside the authorised root.
+
 This audit changes no rights metadata, moves no file, and acquires
 nothing. It reports what is on this machine and what the project's own
 policy says about it. Sources are described by group and count;

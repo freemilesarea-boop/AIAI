@@ -337,6 +337,54 @@ status: UNVERIFIED.**
 
 ---
 
+## 15b. The first real-data pilot (Phase 35B)
+
+Run against the **real ACE-Step trainer** on **real, operator-authorised
+music** — four tracks, 12.4 minutes, all five Phase 25 gates passed. See
+`docs/OPERATOR_AUTHORIZED_TRAINING_DATA.md` for what the authorisation
+does and does not establish. Apple M4 Pro / 24 GB, MPS, bf16, LoRA rank
+16 / alpha 32, micro batch 1, accumulation 4, seed 42, latents up to the
+production maximum of 6000 frames:
+
+| | |
+|---|---|
+| Outcome | `COMPLETED_VALID_SIGNAL` |
+| Dataset kind | **`REAL_RIGHTS_CLEARED`** |
+| Preflight / capacity | `READY` / `QUALIFIED` |
+| Steps | 48 of 48 (24 per segment, ceiling 48) |
+| Loss | first 1.372, last 1.253, min 1.150, max 1.591, **finite ratio 1.0** |
+| Slope (DERIVED) | −0.00155 — a line through noise, not a convergence claim |
+| Gradients | 24 of 24 finite, 24 non-zero, mean norm 0.475 |
+| Trainable tensors changed | **384 of 384**, 11 010 048 trainable parameters |
+| Base model | preserved (file digest identical before and after) |
+| Resume | epoch 24 → 48, step counter advanced, exit 0 |
+| Wall clock | 1465 s across both segments (~30 s/step) |
+
+Two things the run established beyond the signal itself:
+
+- **The 25 frames/s latent rate holds on real audio.** A 178.8 s track
+  preprocessed to 4470 latent frames, 134.4 s to 3360, and a 258 s track
+  to exactly 6000 — the 240 s production cap. Phase 34 derived that rate
+  from the VAE's downsampling ratios; real music confirms it.
+- **The conditioning length is longer than the profile default.** Real
+  preprocessing produced 769 encoder frames, not the 256 the earlier
+  profiles used, so the capacity qualifier correctly refused them and a
+  fresh profile was measured at the real shape (9.43 GiB Apple unified,
+  sampled peak, REPRESENTATIVE).
+
+**Known gap, carried forward.** The checkpoint integrity check reports
+`ok: false` on both segments with one problem: *no provenance record was
+written beside this checkpoint*. The checkpoint itself is sound — it
+reopened, holds 384 tensors and optimizer state, and the resume ran from
+it — but the pilot runner, unlike the canary, writes no provenance
+sidecar, so a pilot checkpoint cannot be tied back to its plan by
+anything next to it on disk. This predates Phase 35B: the synthetic
+mechanism run reported the same problem. It is a metadata gap, not an
+integrity one, and it was left as found rather than changed underneath a
+completed run.
+
+---
+
 ## 15a. Mechanism validation — synthetic, and not real-data evidence
 
 The pilot path has been run end to end against the **real ACE-Step

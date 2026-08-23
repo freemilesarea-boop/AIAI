@@ -223,9 +223,19 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         check_source_files=args.check_files,
     )
     output_dir = Path(run.output_directory or orchestrator.artifacts_root / args.run_id)
+    # Naming the tensors is what lets this verb answer "can the trainer
+    # read its input" and "does the path survive the trainer's own root
+    # check" at all. Without it both stay UNKNOWN, and a preflight that
+    # cannot see the data it is clearing has no business reporting
+    # READY — so the two questions arrive together or not at all.
+    dataset_dir = (
+        Path(args.dataset_dir).expanduser() if getattr(args, "dataset_dir", None) else None
+    )
     storage = collect_storage_evidence(
+        dataset_dir=dataset_dir,
         output_dir=output_dir,
         checkpoint_dir=output_dir / "checkpoints",
+        trainer_root=trainer_root,
     )
     remote = collect_remote_evidence(worker, location=args.location)
     device = args.device or plan.requirements.execution_device or ComputeDevice.CPU.value
@@ -718,6 +728,13 @@ def add_preflight_parsers(sub: argparse._SubParsersAction[argparse.ArgumentParse
         "--check-files",
         action="store_true",
         help="verify every referenced source file exists on this machine",
+    )
+    preflight.add_argument(
+        "--dataset-dir",
+        help=(
+            "preprocessed tensors the run will read. Without it the storage checks stay "
+            "UNKNOWN, because nothing was looked at"
+        ),
     )
     preflight.add_argument("--json", action="store_true")
     preflight.set_defaults(func=cmd_preflight)

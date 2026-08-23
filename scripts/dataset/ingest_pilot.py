@@ -10,6 +10,21 @@ has already populated with material they hold rights to.
 
     uv run python scripts/dataset/ingest_pilot.py --input /path/to/drop --limit 5
 
+Phase 35B added a second, narrower mode for material an operator has
+authorised as a whole directory rather than annotated track by track:
+
+    uv run python scripts/dataset/ingest_pilot.py \
+        --input ~/Desktop/LUBER_TRAINING_DATA --recursive \
+        --operator-authorized-scope '~/Desktop/LUBER_TRAINING_DATA/**' \
+        --operator 'the operator' --limit 0
+
+In that mode the rights record is synthesised from the authorisation
+itself — basis `OPERATOR_AUTHORIZED_SCOPE`, with the source, the scope
+and the date recorded — and it claims nothing else. No contract, no
+licence and no performer agreement is asserted, because none was shown.
+A per-track JSON, where one exists, still wins: an operator who
+annotated a track meant what they wrote.
+
 Expected drop layout (basename-matched, mirroring upstream's trainer):
 
     drop/
@@ -56,6 +71,7 @@ import argparse
 import hashlib
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +106,53 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+#: What an operator-authorised record says, in one place so the wording
+#: cannot drift between the manifest and the report.
+OPERATOR_AUTHORIZATION_SOURCE = "OPERATOR_EXPLICIT_AUTHORIZATION"
+
+OPERATOR_AUTHORIZATION_NOTES = (
+    "The operator explicitly authorised this source directory for LUBER model training. "
+    "That authorisation is the entire evidence: no contract, licence, publisher clearance "
+    "or performer agreement was produced or verified, and none is claimed here."
+)
+
+
+def _operator_rights(*, scope: str, operator: str, recorded_at: str, group: str) -> RightsRecord:
+    """A rights record whose only evidence is the operator's own decision.
+
+    Every field says what it means. `origin_type` stays UNKNOWN because
+    nobody established how the audio was made — a directory of files
+    does not say whether a human or a model produced them, and guessing
+    would be the fabrication this whole module exists to prevent.
+
+    The confirmation booleans are set from the operator's authorisation
+    and from nothing else. They record that the operator authorised the
+    material for training; they are not a claim that a third party
+    signed anything, and the basis and notes say so on every record.
+    """
+    return RightsRecord(
+        origin_type=OriginType.UNKNOWN,
+        training_rights_status=TrainingRightsStatus.CONFIRMED,
+        basis=RightsBasis.OPERATOR_AUTHORIZED_SCOPE,
+        source=f"operator-authorised directory, group {group!r}",
+        rights_holder=operator,
+        document_reference=f"operator authorisation of {scope}",
+        confirmed_on=recorded_at,
+        audio_use_confirmed=True,
+        # False because nobody produced a performer agreement or a
+        # publisher clearance. The operator authorised the works; that
+        # is a different, weaker thing, and the record says which one
+        # it has rather than rounding it up to the stronger claim.
+        lyrics_rights_confirmed=False,
+        performer_rights_confirmed=False,
+        commercial_training_allowed=True,
+        notes=OPERATOR_AUTHORIZATION_NOTES,
+        authorization_source=OPERATOR_AUTHORIZATION_SOURCE,
+        authorization_scope=scope,
+        authorization_recorded_at=recorded_at,
+    )
 
 
 def _rights_from(meta: dict[str, Any]) -> RightsRecord:
@@ -131,7 +194,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True, help="Directory of supplied audio")
     parser.add_argument("--dataset-id", default="LUBER_TRAINSET_PILOT_V1")
-    parser.add_argument("--limit", type=int, default=5, help="Smoke-test a few tracks first")
+    parser.add_argument(
+        "--limit", type=int, default=5, help="Smoke-test a few tracks first; 0 means all"
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="descend into subdirectories, keeping the first level as a source group",
+    )
+    parser.add_argument(
+        "--operator-authorized-scope",
+        help=(
+            "record an operator authorisation covering this scope, and synthesise a rights "
+            "record from it for any track without its own annotation JSON"
+        ),
+    )
+    parser.add_argument(
+        "--operator", default="", help="who authorised the scope; recorded as rights_holder"
+    )
+    parser.add_argument(
+        "--authorized-on",
+        default="",
+        help=(
+            "ISO date the authorisation was recorded; defaults to today. Pass the original "
+            "date to reproduce an earlier manifest digest byte for byte"
+        ),
+    )
+    parser.add_argument(
+        "--extensions",
+        default=".wav",
+        help="comma-separated audio extensions to ingest (default: .wav)",
+    )
     parser.add_argument(
         "--out", type=Path, default=REPO_ROOT / "data" / "trainset" / "pilot_manifest.json"
     )
@@ -144,30 +237,74 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ABORT: {args.input} is not a directory", file=sys.stderr)
         return 2
 
-    audio_files = sorted(p for p in args.input.iterdir() if p.suffix.lower() in {".wav", ".flac"})
+    wanted = {item.strip().lower() for item in args.extensions.split(",") if item.strip()}
+    walker = args.input.rglob("*") if args.recursive else args.input.iterdir()
+    audio_files = sorted(
+        path
+        for path in walker
+        if path.is_file() and not path.name.startswith(".") and path.suffix.lower() in wanted
+    )
     if not audio_files:
-        print(f"ABORT: no .wav/.flac found in {args.input}", file=sys.stderr)
+        print(f"ABORT: no {'/'.join(sorted(wanted))} found in {args.input}", file=sys.stderr)
         print("Lossy sources must be decoded to WAV before ingestion.", file=sys.stderr)
         return 2
-    audio_files = audio_files[: args.limit]
+    if args.limit:
+        audio_files = audio_files[: args.limit]
+
+    authorization_recorded_at = args.authorized_on or datetime.now(UTC).date().isoformat()
+    if args.operator_authorized_scope:
+        print(f"operator authorisation: {args.operator_authorized_scope}")
+        print(f"recorded on           : {authorization_recorded_at}")
+        print(
+            "evidence              : the operator's own authorisation. No contract, "
+            "licence or performer agreement is claimed.\n"
+        )
+
+    # Byte-identical files are one piece of audio however many paths
+    # point at it. Ingesting both would weight it twice in training and
+    # make the manifest digest depend on how the operator arranged
+    # folders.
+    seen_digests: dict[str, str] = {}
 
     print(f"ingesting {len(audio_files)} track(s) from {args.input}\n")
     candidates: list[TrainingTrack] = []
+    source_paths: dict[str, str] = {}
     hard_failures = 0
 
     for audio in audio_files:
         stem = audio.stem
-        print(f"── {stem}")
+        relative = audio.relative_to(args.input)
+        group = relative.parts[0] if len(relative.parts) > 1 else args.input.name
+        # A stable, path-independent id. Filenames are operator-chosen
+        # text that ends up in reports; a digest prefix does not.
+        digest = sha256_file(audio)
+        track_id = f"{digest[:16]}"
+        print(f"── {track_id}  (group {group})")
+
+        if digest in seen_digests:
+            print(f"   EXCLUDED: byte-identical to {seen_digests[digest]}\n")
+            hard_failures += 1
+            continue
+        seen_digests[digest] = track_id
+
         meta_path = audio.with_suffix(".json")
         lyrics_path = audio.with_name(f"{stem}.lyrics.txt")
+        meta: dict[str, Any] = {}
 
-        if not meta_path.is_file():
+        if meta_path.is_file():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            rights = _rights_from(meta)
+        elif args.operator_authorized_scope:
+            rights = _operator_rights(
+                scope=args.operator_authorized_scope,
+                operator=args.operator or "operator",
+                recorded_at=authorization_recorded_at,
+                group=group,
+            )
+        else:
             print("   EXCLUDED: no annotation/rights JSON\n")
             hard_failures += 1
             continue
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-
-        rights = _rights_from(meta)
         lyrics_text = lyrics_path.read_text(encoding="utf-8") if lyrics_path.is_file() else ""
         # Absent metadata means unknown. Defaulting to "instrumental"
         # would assert a musical fact nobody established and would
@@ -207,14 +344,18 @@ def main(argv: list[str] | None = None) -> int:
 
         candidates.append(
             TrainingTrack(
-                track_id=stem,
+                track_id=track_id,
                 source=rights.source,
                 rights=rights,
-                audio_sha256=sha256_file(audio),
+                audio_sha256=digest,
                 duration_seconds=audio_q.duration_seconds,
                 sample_rate=audio_q.sample_rate,
                 channels=audio_q.channels,
-                language=str(meta.get("language", "ko")),
+                # "ko" is the drop-format default for annotated tracks.
+                # An unannotated track has no stated language, and
+                # guessing one would put a fact in the manifest that
+                # nobody established.
+                language=str(meta.get("language", "ko" if meta else "unknown")),
                 genre=str(meta.get("genre", "")),
                 subgenre=str(meta.get("subgenre", "")),
                 vocal_gender=vocal_gender,
@@ -231,14 +372,20 @@ def main(argv: list[str] | None = None) -> int:
                 audio_quality_flags=audio_q.flags,
                 lyrics_qa_flags=lyrics_q.flags if lyrics_text.strip() else [],
                 caption=str(meta.get("caption", "")),
+                source_group=group,
             )
         )
+        source_paths[track_id] = str(audio)
         print()
 
     manifest = build_manifest(
         args.dataset_id,
         candidates,
-        notes="Phase 7 pilot ingestion smoke test. Real supplied audio only.",
+        notes=(
+            "Operator-authorised ingestion. Real supplied audio only."
+            if args.operator_authorized_scope
+            else "Phase 7 pilot ingestion smoke test. Real supplied audio only."
+        ),
     )
 
     print("=" * 62)
@@ -253,6 +400,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"duration : {manifest.total_duration_seconds / 60:.1f} min")
         manifest.write(args.out)
         print(f"manifest : {args.out}")
+        # The manifest deliberately carries no filesystem paths, so a
+        # later stage still needs to find the audio. That map is
+        # machine-local and private: it lives beside the manifest under
+        # the gitignored data root and is never committed.
+        path_map = args.out.with_suffix(".paths.json")
+        path_map.write_text(
+            json.dumps(
+                {
+                    "note": "machine-local source paths; never commit",
+                    "authorization_scope": args.operator_authorized_scope or "",
+                    "tracks": source_paths,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"path map : {path_map} (local only)")
     else:
         print("\nNo track passed. REAL_DATA_PIPELINE_PASS not achieved.")
         return 1

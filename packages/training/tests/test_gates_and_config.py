@@ -9,6 +9,7 @@ in a loss curve.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -89,6 +90,52 @@ class TestTrainingConfig:
         """Re-audit before training against a different ACE-Step tree."""
         with pytest.raises(ConfigError, match="re-audit"):
             validate(TrainingConfig(ace_step_commit="deadbeef" * 5))
+
+
+class TestPrecisionOverride:
+    """`run create --precision`, added in Phase 35B.
+
+    A run on Apple silicon has to name its dtype: the preset default is
+    "auto", the installed trainer resolves that to fp16 on MPS, and no
+    step completes. The override exists so the *operator* names it —
+    nothing here substitutes one precision for another on a machine's
+    behalf, because a run reported as bf16 that trained in fp32 is a
+    different run wearing the same name.
+    """
+
+    def _args(self, **overrides):
+        import argparse
+
+        namespace = argparse.Namespace(preset="LORA_SMALL", precision=None)
+        for key, value in overrides.items():
+            setattr(namespace, key, value)
+        return namespace
+
+    def test_without_the_flag_the_preset_is_untouched(self):
+        from luber_training.cli import _preset_config
+
+        assert _preset_config(self._args()) == preset("LORA_SMALL")
+
+    @pytest.mark.parametrize("precision", ["bf16", "fp32", "fp16", "auto"])
+    def test_the_requested_precision_is_the_one_recorded(self, precision):
+        from luber_training.cli import _preset_config
+
+        assert _preset_config(self._args(precision=precision)).precision == precision
+
+    def test_it_changes_the_config_digest(self):
+        """The override is part of the run's identity, not a flag beside it."""
+        from luber_training.cli import _preset_config
+
+        assert (
+            _preset_config(self._args(precision="bf16")).digest()
+            != _preset_config(self._args()).digest()
+        )
+
+    def test_nothing_else_about_the_preset_moves(self):
+        from luber_training.cli import _preset_config
+
+        base, overridden = preset("LORA_SMALL"), _preset_config(self._args(precision="bf16"))
+        assert overridden == replace(base, precision="bf16")
 
 
 class TestDatasetLockGate:
