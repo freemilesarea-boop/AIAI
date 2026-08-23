@@ -349,7 +349,7 @@ production maximum of 6000 frames:
 | | |
 |---|---|
 | Outcome | `COMPLETED_VALID_SIGNAL` |
-| Dataset kind | **`REAL_RIGHTS_CLEARED`** |
+| Dataset kind | **`REAL_OPERATOR_AUTHORIZED`** (recorded at the time as `REAL_RIGHTS_CLEARED`; renamed in Phase 36) |
 | Preflight / capacity | `READY` / `QUALIFIED` |
 | Steps | 48 of 48 (24 per segment, ceiling 48) |
 | Loss | first 1.372, last 1.253, min 1.150, max 1.591, **finite ratio 1.0** |

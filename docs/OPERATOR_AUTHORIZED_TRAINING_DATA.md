@@ -141,7 +141,7 @@ The four staged tracks were preprocessed by ACE-Step itself into real
 latents — every tensor finite, latent lengths 3360 / 4296 / 4470 / 6000
 frames — and a bounded LoRA pilot ran on them under the Phase 35 hard
 cap of 48 optimizer steps. It completed with `VALID_SIGNAL` on
-`REAL_RIGHTS_CLEARED` material. The numbers are in
+`REAL_OPERATOR_AUTHORIZED` material. The numbers are in
 `docs/REAL_LORA_PILOT.md` §15b.
 
 What that establishes: this authorised material moves through ingestion,
@@ -163,3 +163,18 @@ Git.
   `UNKNOWN` on every record.
 - 124 of the 128 library tracks have never been preprocessed or trained
   on. The pilot used four.
+
+## A rename, and why
+
+Phase 35B recorded the pilot's dataset kind as `REAL_RIGHTS_CLEARED`.
+That name claims more than this material has. What clears it is an
+operator's authorisation of a directory — no ownership document, no
+licence, no publisher clearance, no performer agreement — and a reader
+seeing "rights cleared" would reasonably infer all four.
+
+Phase 36 renamed the value to **`REAL_OPERATOR_AUTHORIZED`**. The old
+spelling is still read, never written: records that already exist say
+what they said, and the API, the console and `DatasetKind.is_real`
+accept both. No rights gate was weakened by the rename — the gates
+still require exactly what they required, and the value only describes
+their outcome more accurately.

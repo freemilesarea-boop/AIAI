@@ -407,7 +407,7 @@ describe("bounded pilot panel", () => {
     await renderRun(runDetail());
 
     const panel = screen.getByRole("region", { name: /Bounded pilot/i });
-    expect(within(panel).getByText("REAL_RIGHTS_CLEARED")).toBeInTheDocument();
+    expect(within(panel).getByText("REAL_OPERATOR_AUTHORIZED")).toBeInTheDocument();
     expect(within(panel).queryByText(/not\s+evidence about real music/)).not.toBeInTheDocument();
   });
 

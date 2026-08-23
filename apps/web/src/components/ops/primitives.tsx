@@ -236,6 +236,7 @@ const STATUS_TONE: Record<string, Tone> = {
   INSUFFICIENT_EVIDENCE: "unknown",
   // A synthetic fixture is never a failure and never a real-data pass.
   SYNTHETIC_FIXTURE: "warn",
+  REAL_OPERATOR_AUTHORIZED: "good",
   REAL_RIGHTS_CLEARED: "good",
 };
 

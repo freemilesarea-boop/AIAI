@@ -405,6 +405,99 @@ def leakage_gate(
     )
 
 
+# ── 4a. split contamination ──────────────────────────────────────────
+
+
+def split_leakage_gate(splits_payload: dict[str, Any]) -> GateResult:
+    """No track may hold more than one role in an experiment.
+
+    The gate that has to hold before Phase 36's experiment starts. A
+    track appearing in both training and evaluation makes every later
+    measurement a statement about memorisation, and the mistake is
+    silent: the numbers simply come out better than they should.
+
+    The check is delegated to :func:`luber_dataset.leakage_report`,
+    which compares every pair of splits by audio digest *and* by track
+    id, and it runs against the split manifest **as written to disk**
+    rather than against the builder's in-memory result. A builder that
+    is correct and a file that is correct are two different claims.
+    """
+    name = "split_leakage"
+    from luber_dataset.splits import (
+        EVALUATION,
+        TRAIN,
+        VALIDATION,
+        ExperimentSplits,
+        Split,
+        SplitMember,
+        leakage_report,
+    )
+
+    def _split(key: str) -> Split:
+        raw = splits_payload.get(key) or {}
+        members = tuple(
+            SplitMember(
+                track_id=str(item.get("track_id", "")),
+                audio_sha256=str(item.get("audio_sha256", "")),
+                source_group=str(item.get("source_group", "")),
+                duration_seconds=float(item.get("duration_seconds", 0.0)),
+            )
+            for item in raw.get("tracks") or []
+        )
+        return Split(name=raw.get("name") or key.upper(), members=members)
+
+    try:
+        splits = ExperimentSplits(
+            dataset_id=str(splits_payload.get("dataset_id", "")),
+            library_content_hash=str(splits_payload.get("library_content_hash", "")),
+            seed=int(splits_payload.get("seed", 0)),
+            train=_split("train"),
+            validation=_split("validation"),
+            evaluation=_split("evaluation"),
+        )
+    except (TypeError, ValueError) as exc:
+        return GateResult(
+            name=name,
+            passed=False,
+            detail=f"the split manifest could not be read: {exc}",
+            failure_code=FailureCode.EVALUATION_LEAKAGE.value,
+        )
+
+    empty = [split.name for split in splits.splits if not split.members]
+    if empty:
+        return GateResult(
+            name=name,
+            passed=False,
+            detail=f"{', '.join(sorted(empty))} is empty; an empty split proves nothing",
+            failure_code=FailureCode.EVALUATION_LEAKAGE.value,
+        )
+
+    report = leakage_report(splits)
+    if not report.passed:
+        offending = sorted({item for f in report.findings for item in f.identities})
+        return GateResult(
+            name=name,
+            passed=False,
+            detail=report.detail,
+            failure_code=FailureCode.EVALUATION_LEAKAGE.value,
+            offending_ids=offending[:20],
+            offending_count=len(offending),
+            evidence={"findings": [f.to_dict() for f in report.findings]},
+        )
+
+    return GateResult(
+        name=name,
+        passed=True,
+        detail=report.detail,
+        evidence={
+            "splits_digest": splits.digest(),
+            TRAIN: splits.train.digest(),
+            VALIDATION: splits.validation.digest(),
+            EVALUATION: splits.evaluation.digest(),
+        },
+    )
+
+
 # ── 5. self-generated data ───────────────────────────────────────────
 
 

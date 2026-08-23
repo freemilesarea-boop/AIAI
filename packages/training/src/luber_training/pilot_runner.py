@@ -82,14 +82,37 @@ PILOT_DATASET_REPORT = "pilot_dataset.md"
 
 
 class DatasetKind:
-    """What a pilot trained on. Two values, never blurred."""
+    """What a pilot trained on. Never blurred.
 
-    #: Real music the project holds training rights to.
+    The real-material value was renamed in Phase 36. It used to be
+    ``REAL_RIGHTS_CLEARED``, and that name claimed more than the
+    evidence supports: what actually clears this material is an
+    operator's authorisation of a directory, with no ownership
+    document, licence, publisher clearance or performer agreement
+    behind it. A reader seeing "rights cleared" would reasonably infer
+    all four. The old spelling still reads, because records written
+    before the rename exist and rewriting history is worse than
+    carrying a legacy name.
+    """
+
+    #: Real music an operator explicitly authorised for training. Says
+    #: nothing about ownership or third-party clearance — see
+    #: :class:`luber_dataset.RightsBasis.OPERATOR_AUTHORIZED_SCOPE`.
+    REAL_OPERATOR_AUTHORIZED = "REAL_OPERATOR_AUTHORIZED"
+    #: Deprecated spelling of the value above. Read, never written.
     REAL_RIGHTS_CLEARED = "REAL_RIGHTS_CLEARED"
     #: Generated tensors with no recording in them. Validates the
     #: mechanism and is never evidence about real data.
     SYNTHETIC_FIXTURE = "SYNTHETIC_FIXTURE"
     UNKNOWN = "UNKNOWN"
+
+    #: Every spelling that means "real material a pilot may train on".
+    REAL_VALUES = frozenset({REAL_OPERATOR_AUTHORIZED, REAL_RIGHTS_CLEARED})
+
+    @classmethod
+    def is_real(cls, value: str) -> bool:
+        """Whether a recorded kind names real material, old name or new."""
+        return value in cls.REAL_VALUES
 
 
 def _now() -> str:
@@ -217,7 +240,7 @@ def verify_pilot_dataset(
     if len(samples) < minimum_tracks:
         return DatasetVerdict(
             False,
-            DatasetKind.REAL_RIGHTS_CLEARED,
+            DatasetKind.REAL_OPERATOR_AUTHORIZED,
             sample_count=len(samples),
             manifest_digest=digest,
             detail=(
@@ -228,10 +251,14 @@ def verify_pilot_dataset(
 
     return DatasetVerdict(
         True,
-        DatasetKind.REAL_RIGHTS_CLEARED,
+        DatasetKind.REAL_OPERATOR_AUTHORIZED,
         sample_count=len(samples),
         manifest_digest=digest,
-        detail=f"{len(samples)} rights-cleared sample(s), every Phase 25 gate passed",
+        detail=(
+            f"{len(samples)} operator-authorised sample(s), every Phase 25 gate passed. "
+            "The gates establish that an operator authorised this material, not that "
+            "anyone verified ownership or a third-party licence"
+        ),
     )
 
 

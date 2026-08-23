@@ -157,7 +157,14 @@ select = [
 # The in-process pilot probe: same contract — it is the trainer process,
 # and its one stdout line is what the launcher reads.
 "packages/training/src/luber_training/_pilot_probe.py" = ["T20"]
+# The tensor probe: runs under the trainer's interpreter and reports its
+# document on stdout, which is the only channel it has.
+"packages/training/src/luber_training/_tensor_probe.py" = ["T20"]
+# The in-process experiment probe: same contract as the pilot probe.
+"packages/training/src/luber_training/_experiment_probe.py" = ["T20"]
 "benchmarks/*/scripts/*.py" = ["T20"]
+# Operator scripts: their stdout is the report an operator reads.
+"scripts/training/*.py" = ["T20"]
 # Embedded HTML/JS template: wrapping would alter the rendered page.
 "benchmarks/music_quality/scripts/bench/listening.py" = ["E501"]
 "**/alembic/**" = ["I"]

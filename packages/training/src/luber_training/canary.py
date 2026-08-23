@@ -55,6 +55,11 @@ from pathlib import Path
 from typing import Any
 
 from luber_training import _checkpoint_probe
+from luber_training.checkpoint_provenance import (
+    ProvenanceVerdict,
+    read_checkpoint_provenance,
+    verify_checkpoint_provenance,
+)
 from luber_training.config import TrainingConfig
 from luber_training.gates import GateReport
 from luber_training.plan import TrainingPlan
@@ -455,6 +460,8 @@ class CheckpointIntegrity:
     has_optimizer_state: bool | None = None
     provenance_present: bool = False
     provenance_plan_digest: str | None = None
+    #: The full provenance judgement, where one was made.
+    provenance_verdict: ProvenanceVerdict | None = None
     problems: list[str] = field(default_factory=list)
 
     @property
@@ -567,16 +574,25 @@ def inspect_checkpoint(
     if integrity.size_bytes == 0:
         integrity.problems.append("the checkpoint directory holds no bytes")
 
-    provenance_path = checkpoint_dir / PROVENANCE_NAME
-    integrity.provenance_present = provenance_path.is_file()
-    if integrity.provenance_present:
-        try:
-            recorded = json.loads(provenance_path.read_text(encoding="utf-8"))
-            integrity.provenance_plan_digest = recorded.get("plan_digest")
-        except (OSError, json.JSONDecodeError):
-            integrity.problems.append("the provenance record is unreadable")
-    else:
+    # Phase 36 moved the reading and the completeness rules into their
+    # own module, so a checkpoint written by an experiment and one
+    # written by a canary are judged by the same code. A canary's own
+    # record still counts as present — it predates the experiment
+    # fields and is not pretended to answer them.
+    verdict = verify_checkpoint_provenance(checkpoint_dir)
+    integrity.provenance_present = verdict.present
+    integrity.provenance_verdict = verdict
+    if not verdict.present:
         integrity.problems.append("no provenance record was written beside this checkpoint")
+    else:
+        recorded = read_checkpoint_provenance(checkpoint_dir) or {}
+        integrity.provenance_plan_digest = recorded.get("plan_digest")
+        if not recorded:
+            integrity.problems.append("the provenance record is unreadable")
+        elif verdict.missing_fields and not verdict.legacy:
+            integrity.problems.append(
+                f"the provenance record is missing {', '.join(verdict.missing_fields)}"
+            )
 
     if (
         expected_plan_digest is not None

@@ -75,12 +75,23 @@ def _build_config(args: argparse.Namespace) -> FactoryConfig:
         Path(args.quality_config) if getattr(args, "quality_config", None) else None,
         config.quality,
     )
-    split = SplitConfig(
-        train=config.split.train,
-        validation=config.split.validation,
-        test=config.split.test,
-        seed=getattr(args, "seed", None) or config.split.seed,
-    )
+    # `--all-train` says: every group in this build belongs to the
+    # training split, because the held-out sets were decided outside it
+    # and live in their own directories. The factory's internal split
+    # exists to stop train/test leakage *within* one dataset; when the
+    # dataset is one externally-decided split, an internal split would
+    # silently hold back material the operator already allocated. The
+    # flag makes that an explicit statement rather than something
+    # arranged by picking a lucky seed.
+    if getattr(args, "all_train", False):
+        split = SplitConfig(train=1.0, validation=0.0, test=0.0, seed=config.split.seed)
+    else:
+        split = SplitConfig(
+            train=config.split.train,
+            validation=config.split.validation,
+            test=config.split.test,
+            seed=getattr(args, "seed", None) or config.split.seed,
+        )
     return config.with_overrides(
         quality=quality,
         split=split,
@@ -406,6 +417,14 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--output", required=True, help="dataset build directory")
     common.add_argument("--seed", type=int, help="split seed; determines the assignment")
+    common.add_argument(
+        "--all-train",
+        action="store_true",
+        help=(
+            "assign every group to TRAIN. For a build that is itself one externally "
+            "decided split, with validation and evaluation held elsewhere"
+        ),
+    )
     common.add_argument(
         "--min-tier", choices=["A", "B", "C"], help="lowest quality tier admitted to training"
     )

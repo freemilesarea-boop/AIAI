@@ -789,7 +789,7 @@ class PilotTrainingResult:
     capacity_profile_id: str | None = None
     capacity_qualification: str | None = None
     preflight_status: str | None = None
-    #: Whether the training material was real, rights-cleared music or a
+    #: Whether the training material was real, authorised music or a
     #: synthetic fixture. A synthetic pilot validates mechanics and can
     #: never be real-data evidence, so the two are never conflated.
     dataset_kind: str = "UNKNOWN"

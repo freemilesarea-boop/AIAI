@@ -557,7 +557,12 @@ class PilotView(BaseModel):
     signal_detail: str = ""
     failure: str | None = None
     failure_detail: str = ""
-    dataset_kind: Literal["REAL_RIGHTS_CLEARED", "SYNTHETIC_FIXTURE", "UNKNOWN"] = "UNKNOWN"
+    #: ``REAL_RIGHTS_CLEARED`` is the pre-Phase-36 spelling of
+    #: ``REAL_OPERATOR_AUTHORIZED``. Records written before the rename
+    #: still carry it, so both read.
+    dataset_kind: Literal[
+        "REAL_OPERATOR_AUTHORIZED", "REAL_RIGHTS_CLEARED", "SYNTHETIC_FIXTURE", "UNKNOWN"
+    ] = "UNKNOWN"
     expected_steps: int = 0
     completed_steps: int = 0
     step_ceiling: int = 0

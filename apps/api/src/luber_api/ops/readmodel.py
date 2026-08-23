@@ -1272,7 +1272,13 @@ class OpsReadModel:
         raw_kind = str(payload.get("dataset_kind", "UNKNOWN"))
         kind = (
             raw_kind
-            if raw_kind in {"REAL_RIGHTS_CLEARED", "SYNTHETIC_FIXTURE", "UNKNOWN"}
+            if raw_kind
+            in {
+                "REAL_OPERATOR_AUTHORIZED",
+                "REAL_RIGHTS_CLEARED",
+                "SYNTHETIC_FIXTURE",
+                "UNKNOWN",
+            }
             else "UNKNOWN"
         )
         return PilotView(

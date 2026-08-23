@@ -477,7 +477,14 @@ export type TrainingSignal =
   | "NO_UPDATE"
   | "INSUFFICIENT_EVIDENCE";
 /** A synthetic fixture validates the mechanism and is never real-data evidence. */
-export type PilotDatasetKind = "REAL_RIGHTS_CLEARED" | "SYNTHETIC_FIXTURE" | "UNKNOWN";
+// "REAL_RIGHTS_CLEARED" is the pre-Phase-36 spelling of
+// "REAL_OPERATOR_AUTHORIZED"; records written before the rename still
+// carry it, so the console has to render both.
+export type PilotDatasetKind =
+  | "REAL_OPERATOR_AUTHORIZED"
+  | "REAL_RIGHTS_CLEARED"
+  | "SYNTHETIC_FIXTURE"
+  | "UNKNOWN";
 
 export interface LossPoint {
   step: number;

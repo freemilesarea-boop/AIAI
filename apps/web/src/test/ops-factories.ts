@@ -434,7 +434,7 @@ export function pilot(overrides: Partial<Pilot> = {}): Pilot {
       "changed. This says the training path works. It says nothing about convergence or quality",
     failure: null,
     failure_detail: "",
-    dataset_kind: "REAL_RIGHTS_CLEARED",
+    dataset_kind: "REAL_OPERATOR_AUTHORIZED",
     expected_steps: 48,
     completed_steps: 48,
     step_ceiling: 48,

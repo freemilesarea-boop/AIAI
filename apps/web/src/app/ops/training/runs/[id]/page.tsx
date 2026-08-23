@@ -1210,7 +1210,12 @@ function PilotPanel({ pilot }: { pilot: Pilot }) {
         {/* The one label that must never be mistaken for the other. */}
         <OpsStatus
           status={pilot.dataset_kind}
-          tone={pilot.dataset_kind === "REAL_RIGHTS_CLEARED" ? "good" : "warn"}
+          tone={
+            pilot.dataset_kind === "REAL_OPERATOR_AUTHORIZED" ||
+            pilot.dataset_kind === "REAL_RIGHTS_CLEARED"
+              ? "good"
+              : "warn"
+          }
         />
       </div>
 
