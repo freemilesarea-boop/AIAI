@@ -36,7 +36,7 @@ from typing import Any
 
 #: Hard ceilings. No CLI flag, config field or request may raise these —
 #: they are checked on construction and there is nothing to override.
-EXPERIMENT_MAX_OPTIMIZER_STEPS = 240
+EXPERIMENT_MAX_OPTIMIZER_STEPS = 600
 EXPERIMENT_MAX_EPOCHS = 40
 EXPERIMENT_MAX_WALL_CLOCK_SECONDS = 7_200.0
 #: Whatever a caller asks for, one segment cannot run longer than this.
@@ -229,6 +229,8 @@ class LossPoint:
     learning_rate: float | None = None
     grad_norm: float | None = None
     elapsed_seconds: float | None = None
+    #: What the device reported holding when this step finished.
+    device_allocated_bytes: int | None = None
     segment: str = ""
 
     @property
@@ -243,6 +245,7 @@ class LossPoint:
             "learning_rate": self.learning_rate,
             "grad_norm": self.grad_norm,
             "elapsed_seconds": self.elapsed_seconds,
+            "device_allocated_bytes": self.device_allocated_bytes,
             "segment": self.segment,
             "finite": self.finite,
         }
@@ -256,6 +259,7 @@ class LossPoint:
             learning_rate=payload.get("learning_rate"),
             grad_norm=payload.get("grad_norm"),
             elapsed_seconds=payload.get("elapsed_seconds"),
+            device_allocated_bytes=payload.get("device_allocated_bytes"),
             segment=str(payload.get("segment") or ""),
         )
 
@@ -304,6 +308,39 @@ class LossSeries:
             ),
         }
 
+    def memory_trend(self) -> dict[str, Any]:
+        """Whether device memory grew across the run, and by how much.
+
+        Phase 36 died four times to cumulative allocator growth that
+        nothing was watching. The comparison is between the first and
+        last quarter of the run rather than first-versus-last point,
+        because a single reading is noise and a trend is not.
+        """
+        values = [
+            point.device_allocated_bytes for point in self.points if point.device_allocated_bytes
+        ]
+        if len(values) < 4:
+            return {"measured": False, "detail": "too few readings to describe a trend"}
+        quarter = max(1, len(values) // 4)
+        head = sum(values[:quarter]) / quarter
+        tail = sum(values[-quarter:]) / quarter
+        growth = (tail - head) / head if head else 0.0
+        return {
+            "measured": True,
+            "readings": len(values),
+            "start_bytes": values[0],
+            "peak_bytes": max(values),
+            "end_bytes": values[-1],
+            "first_quarter_mean_bytes": round(head),
+            "last_quarter_mean_bytes": round(tail),
+            "growth_fraction": round(growth, 4),
+            "detail": (
+                f"device memory went from {head / 2**30:.2f} GiB to {tail / 2**30:.2f} GiB "
+                f"between the first and last quarter of the run ({growth * 100:+.1f}%), "
+                f"peaking at {max(values) / 2**30:.2f} GiB"
+            ),
+        }
+
     def slope(self) -> float | None:
         """Least squares gradient, or ``None`` below three points."""
         points = [
@@ -325,6 +362,7 @@ class LossSeries:
         return {
             "name": self.name,
             "statistics": self.statistics(),
+            "memory_trend": self.memory_trend(),
             "points": [point.to_dict() for point in self.points],
         }
 

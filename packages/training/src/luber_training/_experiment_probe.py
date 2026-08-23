@@ -344,6 +344,11 @@ class Recorder:
                     "learning_rate": _as_float(getattr(update, "learning_rate", None)),
                     "grad_norm": self.grad_norms[-1] if self.grad_norms else None,
                     "elapsed_seconds": round(time.perf_counter() - self.started, 3),
+                    # Recorded every step because Phase 36's failure was
+                    # cumulative allocator growth, and a trend is only
+                    # visible if somebody wrote the numbers down before
+                    # the process died.
+                    "device_allocated_bytes": _device_allocated(),
                 }
             )
         if self.step_ceiling and step > self.step_ceiling:

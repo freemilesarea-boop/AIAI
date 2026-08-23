@@ -270,6 +270,10 @@ MEMORY_RELEVANT_FIELDS: dict[str, str] = {
     "target_modules": "which modules carry an adapter decides how many there are",
     "attention_type": "which attention blocks are adapted",
     "latent_length": "activation memory scales with the sequence being trained on",
+    "latent_shape_count": (
+        "Metal keeps an allocator working set per tensor shape, so a dataset with many "
+        "distinct latent lengths costs far more than its longest one alone"
+    ),
     "encoder_length": "cross-attention memory scales with the conditioning length",
     "model_variant": "a different model has a different parameter count",
     "base_model_upstream_commit": "a different model revision may have a different shape",
@@ -285,6 +289,13 @@ MEMORY_RELEVANT_FIELDS: dict[str, str] = {
 #: shorter run allocates less of the same thing. The reverse is exactly
 #: the extrapolation this module exists to refuse.
 MONOTONIC_FIELDS: frozenset[str] = frozenset({"latent_length", "encoder_length"})
+
+#: Fields where a *smaller* measured value cannot cover a larger request
+#: and there is no useful ordering to exploit — they simply have to
+#: match or be measured again. `latent_shape_count` is here rather than
+#: in MONOTONIC_FIELDS because a profile measured over one shape says
+#: nothing about a run over twenty, in either direction.
+EXACT_FIELDS: frozenset[str] = frozenset({"latent_shape_count"})
 
 
 def _as_int(value: Any) -> int | None:
@@ -321,6 +332,11 @@ def applicability(
         want = requested.get(field_name)
         have = measured.get(field_name)
         if want is None or have == want:
+            continue
+        if field_name in EXACT_FIELDS:
+            differences.append(
+                f"{field_name}: measured over {have} shape(s), asked about {want} — {why}"
+            )
             continue
         if field_name in MONOTONIC_FIELDS:
             measured_value = _as_int(have)

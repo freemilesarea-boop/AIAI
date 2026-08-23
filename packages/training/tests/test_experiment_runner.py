@@ -17,7 +17,7 @@ from luber_dataset.splits import build_experiment_splits
 from luber_training.capacity_policy import CapacityDecision
 from luber_training.checkpoint_provenance import REQUIRED_FIELDS
 from luber_training.config import TrainingConfig
-from luber_training.experiment import ExperimentFailure, ExperimentOutcome
+from luber_training.experiment import ExperimentError, ExperimentFailure, ExperimentOutcome
 from luber_training.experiment_runner import (
     ExperimentRequest,
     compose_provenance,
@@ -216,7 +216,20 @@ class TestTheBudget:
         assert result.identity.expected_steps == 60
         assert result.identity.epochs == 10
 
-    @pytest.mark.parametrize("asked", [1_000, 10_000])
+    @pytest.mark.parametrize("asked", [1_000, 10_000, 100_000])
     def test_no_requested_budget_raises_the_module_ceiling(self, tmp_path, asked):
+        """The ceiling is the module's, whatever a caller asks for."""
+        from luber_training.experiment import EXPERIMENT_MAX_OPTIMIZER_STEPS
+
         result = run_experiment(_request(tmp_path, step_budget=asked, preflight_status="BLOCKED"))
-        assert result.identity.expected_steps <= 120
+        # Two segments, so one segment may take at most half the ceiling.
+        assert result.identity.expected_steps <= EXPERIMENT_MAX_OPTIMIZER_STEPS // 2
+        assert result.step_ceiling == EXPERIMENT_MAX_OPTIMIZER_STEPS
+
+    def test_the_phase_37_ceiling_is_six_hundred_steps(self):
+        """Named by the phase brief, and no flag lifts it."""
+        from luber_training.experiment import EXPERIMENT_MAX_OPTIMIZER_STEPS, StepBudget
+
+        assert EXPERIMENT_MAX_OPTIMIZER_STEPS == 600
+        with pytest.raises(ExperimentError, match="exceeds the experiment ceiling"):
+            StepBudget(samples=128, micro_batch_size=1, gradient_accumulation=4, epochs=20)

@@ -312,6 +312,16 @@ class MemoryProfileIdentity:
     ace_step_commit: str
     num_devices: int = 1
     offload_encoder: bool = False
+    #: How many *distinct* latent lengths the dataset holds.
+    #:
+    #: Phase 36 found this the hard way. Metal keeps an allocator
+    #: working set per tensor shape, so a dataset of 24 different
+    #: lengths reached 29 GiB where four tracks at the same maximum
+    #: length peaked at 9.4 — and every attempt died at the same step.
+    #: `latent_length` alone said the two workloads were identical.
+    #: One means a fixed-shape dataset; a profile measured at one shape
+    #: does not qualify a run over many.
+    latent_shape_count: int = 1
 
     @property
     def effective_batch_size(self) -> int:
@@ -350,6 +360,7 @@ class MemoryProfileIdentity:
             "attention_type": self.attention_type,
             "latent_length": self.latent_length,
             "encoder_length": self.encoder_length,
+            "latent_shape_count": self.latent_shape_count,
             "model_variant": self.model_variant,
             "base_model_upstream_commit": self.base_model_upstream_commit,
             "ace_step_commit": self.ace_step_commit,
@@ -388,6 +399,10 @@ class MemoryProfileIdentity:
             attention_type=str(payload.get("attention_type", "")),
             latent_length=int(payload.get("latent_length", 0)),
             encoder_length=int(payload.get("encoder_length", 0)),
+            # Profiles written before Phase 37 measured one shape,
+            # because that is all a fixture generator produces. Reading
+            # them as 1 is the truth about them, not a default.
+            latent_shape_count=int(payload.get("latent_shape_count", 1)),
             model_variant=str(payload.get("model_variant", "")),
             base_model_upstream_commit=str(payload.get("base_model_upstream_commit", "")),
             ace_step_commit=str(payload.get("ace_step_commit", "")),

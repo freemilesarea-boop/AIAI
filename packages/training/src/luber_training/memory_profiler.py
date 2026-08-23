@@ -130,6 +130,11 @@ class ProbeShape:
     latent_length: int
     encoder_length: int = DEFAULT_PROBE_ENCODER_LENGTH
     samples: int = 2
+    #: How many distinct latent lengths the dataset holds. A profiler
+    #: generates one shape, so a *measurement* is always 1; a caller
+    #: asking about a real dataset passes that dataset's count, and the
+    #: two only match when the dataset is fixed-shape.
+    latent_shape_count: int = 1
 
     @property
     def latent_seconds(self) -> float:
@@ -164,6 +169,7 @@ class ProbeShape:
             "latent_seconds": round(self.latent_seconds, 2),
             "encoder_length": self.encoder_length,
             "samples": self.samples,
+            "latent_shape_count": self.latent_shape_count,
         }
 
 
@@ -196,6 +202,7 @@ def identity_for(
         target_modules=tuple(config.target_modules),
         attention_type=config.attention_type,
         latent_length=shape.latent_length,
+        latent_shape_count=shape.latent_shape_count,
         encoder_length=shape.encoder_length,
         model_variant=model_variant,
         base_model_upstream_commit=plan.base_model_upstream_commit,

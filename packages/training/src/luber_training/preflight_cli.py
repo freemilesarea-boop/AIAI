@@ -118,7 +118,11 @@ def _capacity_decision(
     request; a request never adopts a profile's shape to make itself
     qualify.
     """
-    shape = ProbeShape(latent_length=latent_length, encoder_length=encoder_length)
+    shape = ProbeShape(
+        latent_length=latent_length,
+        encoder_length=encoder_length,
+        latent_shape_count=max(1, int(getattr(args, "latent_shape_count", 1) or 1)),
+    )
     identity = identity_for(plan, shape, model_variant=args.model_variant)
     requested = identity.to_dict()
     requested["torch_version"] = capability.torch_version
@@ -701,6 +705,16 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument("--encoder-length", type=int, default=DEFAULT_PROBE_ENCODER_LENGTH)
+    parser.add_argument(
+        "--latent-shape-count",
+        type=int,
+        default=1,
+        help=(
+            "how many distinct latent lengths the dataset holds. Metal keeps an allocator "
+            "working set per shape, so a profile measured over one shape does not qualify "
+            "a run over many — Phase 36 lost four runs to exactly that"
+        ),
+    )
     parser.add_argument(
         "--runs-control-plane",
         action=argparse.BooleanOptionalAction,
