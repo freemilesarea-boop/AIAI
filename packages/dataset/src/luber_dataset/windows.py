@@ -32,7 +32,7 @@ for leakage at the level that matters — the source recording.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -365,17 +365,142 @@ def sampling_weights(manifest: WindowManifest) -> dict[str, float]:
 __all__ = [
     "DEFAULT_WINDOW_FRAMES",
     "LATENT_FRAMES_PER_SECOND",
+    "MAX_BEAT_SNAP_FRAMES",
     "MAX_OVERLAP_FRACTION",
     "MAX_WINDOWS_PER_TRACK",
     "WINDOW_POSITIONS",
     "Window",
     "WindowError",
     "WindowManifest",
+    "arrangement_weighted_sampling",
+    "beat_aware_offsets",
     "eligible_tracks",
     "plan_track_windows",
     "plan_windows",
+    "rank_windows_by_arrangement",
     "sampling_weights",
+    "snap_to_beat",
     "track_frames",
     "window_count_for",
     "window_offsets",
 ]
+
+
+# ── Phase 38: beat-aware placement and arrangement-aware choice ──────
+
+#: How far a window start may move to land on a beat, in latent frames.
+#: 50 frames is two seconds — enough to reach the next downbeat at any
+#: tempo in range, small enough that a window still covers roughly the
+#: section the even spacing chose.
+MAX_BEAT_SNAP_FRAMES = 50
+
+
+def snap_to_beat(
+    start_frame: int,
+    onset_frames: Sequence[int],
+    *,
+    max_shift: int = MAX_BEAT_SNAP_FRAMES,
+    limit: int | None = None,
+) -> tuple[int, str]:
+    """Move a window start onto the nearest onset, if one is close.
+
+    An arbitrary crop can begin halfway through a snare hit, so the
+    model's first frames are the tail of an event whose attack it never
+    saw. Starting on an onset keeps the rhythmic phrasing of the window
+    intact.
+
+    Returns the frame and *why* it is there, because a start that could
+    not be snapped is a fact worth carrying: it means the section had no
+    onset nearby, which is itself information about the material.
+    """
+    if not onset_frames:
+        return start_frame, "NO_ONSETS"
+    candidates = [
+        frame for frame in onset_frames if abs(frame - start_frame) <= max_shift and frame >= 0
+    ]
+    if limit is not None:
+        candidates = [frame for frame in candidates if frame <= limit]
+    if not candidates:
+        return start_frame, "NO_ONSET_IN_RANGE"
+    best = min(candidates, key=lambda frame: (abs(frame - start_frame), frame))
+    if best == start_frame:
+        return start_frame, "ALREADY_ON_ONSET"
+    return best, "SNAPPED"
+
+
+def beat_aware_offsets(
+    frames: int,
+    count: int,
+    *,
+    onset_frames: Sequence[int],
+    window_frames: int = DEFAULT_WINDOW_FRAMES,
+    max_shift: int = MAX_BEAT_SNAP_FRAMES,
+) -> tuple[tuple[int, str], ...]:
+    """Evenly spread starts, each nudged onto a nearby onset.
+
+    The even spread still decides *which parts of the song* are covered;
+    snapping only decides where inside a couple of seconds each window
+    begins. Two windows can never collapse onto the same frame: a snap
+    that would collide falls back to the unsnapped position.
+    """
+    base = window_offsets(frames, count, window_frames=window_frames)
+    limit = frames - window_frames
+    placed: list[tuple[int, str]] = []
+    taken: set[int] = set()
+    for start in base:
+        frame, reason = snap_to_beat(start, onset_frames, max_shift=max_shift, limit=limit)
+        if frame in taken:
+            frame, reason = start, "COLLISION_KEPT_EVEN_SPACING"
+        taken.add(frame)
+        placed.append((frame, reason))
+    return tuple(placed)
+
+
+def rank_windows_by_arrangement(
+    windows: Sequence[Window], scores: dict[str, float]
+) -> tuple[Window, ...]:
+    """Windows ordered by how much is going on in them, richest first.
+
+    Ties break on window index so the ordering is total and stable —
+    two windows with identical scores must not swap between runs.
+    """
+    return tuple(
+        sorted(
+            windows,
+            key=lambda window: (-scores.get(window.window_id, 0.0), window.window_index),
+        )
+    )
+
+
+def arrangement_weighted_sampling(
+    manifest: WindowManifest,
+    scores: dict[str, float],
+    *,
+    emphasis: float = 1.0,
+) -> dict[str, float]:
+    """Per-window weights that keep tracks equal but favour richer windows.
+
+    Two things at once, and they pull in opposite directions. Every
+    *track* still contributes weight 1 in total, so a four-window song
+    does not outvote a one-window song. Within a track, the split
+    between its own windows is tilted toward the ones that scored higher
+    on arrangement.
+
+    ``emphasis`` of 0 gives the flat split Phase 37 used; 1 makes a
+    window's share proportional to its score. Above that the tilt gets
+    steep enough that a track's quiet windows stop contributing at all,
+    which is a different experiment from this one.
+    """
+    if emphasis < 0:
+        raise WindowError("a negative emphasis would prefer the emptiest windows")
+    per_track: dict[str, list[Window]] = {}
+    for window in manifest.windows:
+        per_track.setdefault(window.track_id, []).append(window)
+
+    weights: dict[str, float] = {}
+    for owned in per_track.values():
+        raw = [1.0 + emphasis * max(0.0, scores.get(window.window_id, 0.5)) for window in owned]
+        total = sum(raw) or float(len(owned))
+        for window, value in zip(owned, raw, strict=True):
+            weights[window.window_id] = value / total
+    return weights

@@ -6,6 +6,13 @@ acquires audio — data is supplied by the operator with documented
 rights, and this package decides whether it may be used.
 """
 
+from luber_dataset.audio_features import (
+    AudioFeatureError,
+    AudioFeatures,
+    TrackAnalysis,
+    analyse_signal,
+    analyse_track,
+)
 from luber_dataset.discovery import (
     AUDIO_EXTENSIONS,
     DiscoveredFile,
@@ -35,6 +42,14 @@ from luber_dataset.quality import (
     LyricsQuality,
     inspect_lyrics,
     inspect_training_audio,
+)
+from luber_dataset.quality_tiers import (
+    AxisScores,
+    QualityAxis,
+    QualityTier,
+    TierAssignment,
+    classify_population,
+    score_population,
 )
 from luber_dataset.rights import (
     REFERENCE_ONLY_CLASSES,
@@ -76,10 +91,23 @@ from luber_dataset.splits import (
     build_experiment_splits,
     leakage_report,
 )
+from luber_dataset.windows import (
+    DEFAULT_WINDOW_FRAMES,
+    Window,
+    WindowError,
+    WindowManifest,
+    arrangement_weighted_sampling,
+    beat_aware_offsets,
+    eligible_tracks,
+    plan_windows,
+    snap_to_beat,
+    window_count_for,
+)
 
 __all__ = [
     "ACCEPTABLE_GRADES",
     "AUDIO_EXTENSIONS",
+    "DEFAULT_WINDOW_FRAMES",
     "DISCOURAGED_STYLES",
     "EVALUATION",
     "PILOT_SUBSET_MAX",
@@ -88,7 +116,10 @@ __all__ = [
     "TRAIN",
     "TRAINABLE_CLASSES",
     "VALIDATION",
+    "AudioFeatureError",
+    "AudioFeatures",
     "AudioQuality",
+    "AxisScores",
     "DatasetManifest",
     "Delivery",
     "DiscoveredFile",
@@ -100,7 +131,9 @@ __all__ = [
     "OriginType",
     "PilotSubset",
     "PronunciationStyle",
+    "QualityAxis",
     "QualityGrade",
+    "QualityTier",
     "RightsBasis",
     "RightsError",
     "RightsRecord",
@@ -110,6 +143,8 @@ __all__ = [
     "SplitMember",
     "SubsetError",
     "SubsetMember",
+    "TierAssignment",
+    "TrackAnalysis",
     "TrainingRightsStatus",
     "TrainingRunManifest",
     "TrainingTrack",
@@ -119,19 +154,32 @@ __all__ = [
     "VocalPresence",
     "VocalStyle",
     "VocalTimbre",
+    "Window",
+    "WindowError",
+    "WindowManifest",
+    "analyse_signal",
+    "analyse_track",
+    "arrangement_weighted_sampling",
+    "beat_aware_offsets",
     "build_experiment_splits",
     "build_manifest",
     "classify",
+    "classify_population",
+    "eligible_tracks",
     "hypothesize_origin",
     "inspect_lyrics",
     "inspect_training_audio",
     "is_trainable",
     "leakage_report",
+    "plan_windows",
     "sanitize",
     "scan",
+    "score_population",
     "select_pilot_subset",
+    "snap_to_beat",
     "summarize",
     "summarize_quality_grade",
     "validate_rights",
     "validate_run_manifest",
+    "window_count_for",
 ]
