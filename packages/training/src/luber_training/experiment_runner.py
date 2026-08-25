@@ -110,6 +110,33 @@ class ExperimentRequest:
     segment_timeout_seconds: float = EXPERIMENT_MAX_WALL_CLOCK_SECONDS
     #: Run the second, resumed segment. On by default.
     measure_resume: bool = True
+    #: The visiting order weighted exposure produced, as
+    #: :meth:`ExposurePlan.to_dict` writes it. ``None`` leaves the
+    #: trainer's own shuffling alone, which is what Phase 37 and 38 did.
+    #: When it *is* supplied the probe refuses to train unless it can
+    #: install it — a weighting that silently fails to apply is the exact
+    #: defect this exists to remove.
+    exposure_plan: dict[str, Any] | None = None
+    #: Sample names in the visiting order. Kept beside the plan because
+    #: the plan's own ``repeats`` map is a summary and the order is what
+    #: the sampler actually needs.
+    exposure_order: tuple[str, ...] | None = None
+    #: Path to the adapter the resume must reproduce. When set, the probe
+    #: compares the weights actually loaded into the model against this
+    #: file and refuses to train on a mismatch. Without it a resume that
+    #: silently loaded nothing is indistinguishable from one that worked.
+    verify_resume_against: Path | None = None
+    #: How often the trainer writes a checkpoint, in epochs. ``None``
+    #: keeps the historical behaviour of writing one at the end, which is
+    #: fine for a short run and useless for inspecting progression across
+    #: a long one.
+    checkpoint_every_epochs: int | None = None
+    #: Adapter directory the first segment starts from. Phase 38 and
+    #: earlier always began at the base model; a continuation begins at a
+    #: previous phase's weights. Pair it with ``verify_resume_against``:
+    #: the trainer's resume is not strict, so "it started from Phase 38"
+    #: is a claim that has to be checked rather than configured.
+    resume_adapter: Path | None = None
 
 
 def split_digests(splits: dict[str, Any]) -> tuple[str, str, str]:
@@ -322,6 +349,10 @@ def _run_segment(
         "validation_seed": request.seed,
         "validation_latent_length": request.validation_latent_length,
         "provenance": {**provenance.to_dict(), "_filename": CHECKPOINT_PROVENANCE_NAME},
+        "exposure_order": list(request.exposure_order or ()) or None,
+        "verify_resume_against": (
+            str(request.verify_resume_against) if request.verify_resume_against else None
+        ),
     }
     log_path = workspace / f"experiment-{name}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -408,7 +439,15 @@ def run_experiment(request: ExperimentRequest) -> ExperimentResult:
     started_at = _now()
     started = time.perf_counter()
 
-    train_samples = len(sorted(Path(request.train_dir).glob("*.pt")))
+    # An epoch is however many samples the trainer visits, which is the
+    # tensor count only when nothing reorders the loader. Weighted
+    # exposure repeats samples, so its order *is* the epoch — budgeting
+    # off the file count would under-count every epoch by the repeat
+    # factor and the run would overshoot its ceiling and die mid-epoch
+    # with nothing saved.
+    train_samples = len(request.exposure_order or ()) or len(
+        sorted(Path(request.train_dir).glob("*.pt"))
+    )
     validation_tracks = len(sorted(Path(request.validation_dir).glob("*.pt")))
 
     segment_count = 2 if request.measure_resume else 1
@@ -556,7 +595,11 @@ def _execute(
             # would give a 120-step run twelve points.
             log_every_steps=1,
             # One checkpoint per segment, which is what the resume needs.
-            checkpoint_every_epochs=budget.epochs,
+            checkpoint_every_epochs=(
+                min(request.checkpoint_every_epochs, budget.epochs)
+                if request.checkpoint_every_epochs
+                else budget.epochs
+            ),
             warmup_steps=0,
             num_workers=0,
             persistent_workers=False,
@@ -590,7 +633,7 @@ def _execute(
         plan,
         name="A",
         step_ceiling=segment_ceiling,
-        resume_from=None,
+        resume_from=request.resume_adapter,
         workspace=workspace,
         provenance=provenance,
     )

@@ -58,6 +58,11 @@ class QualityTier(StrEnum):
     UNRANKED = "UNRANKED"
 
 
+#: Internal key for the texture half of HIGH_END. Not a member of
+#: :class:`QualityAxis`, because the listening evaluation asks about four
+#: axes and this is one half of one of them, not a fifth.
+_HIGH_END_TEXTURE = "HIGH_END_TEXTURE"
+
 #: Which measured features feed each scored axis, and which way is up.
 #: Every one of these is a choice, recorded here rather than buried in
 #: an expression.
@@ -66,6 +71,16 @@ AXIS_FEATURES: dict[str, tuple[tuple[str, bool], ...]] = {
         ("high_frequency_energy_ratio", True),
         ("spectral_centroid_hz", True),
         ("high_band_rms_db", True),
+    ),
+    #: Texture, scored separately from the energy above and combined with
+    #: it at equal weight. Phase 38 tiered on energy alone, selected the
+    #: brightest material in the library, and still produced a high band
+    #: the operator called metallic — because every feature above is a
+    #: *level* measure and the complaint was about *texture*. Flatness up,
+    #: narrow resonances down.
+    _HIGH_END_TEXTURE: (
+        ("high_band_flatness", True),
+        ("high_band_resonance_ratio", False),
     ),
     QualityAxis.RHYTHM.value: (
         ("beat_stability", True),
@@ -89,11 +104,25 @@ TIER_B_PERCENTILE = 0.40
 class AxisScores:
     """One item's position on each scored axis, in [0, 1]."""
 
-    high_end: float
+    #: Level in the high band: energy share, centroid, high-band RMS.
+    high_end_energy: float
+    #: Texture in the high band: flatness up, narrow resonances down.
+    high_end_texture: float
     rhythm: float
     arrangement: float
     #: Never a number. Nothing here can measure it.
     vocal: None = None
+
+    @property
+    def high_end(self) -> float:
+        """Energy and texture at equal weight.
+
+        Equal because there is no evidence for any other split. What
+        there *is* evidence for is that energy alone was not enough:
+        Phase 38 maximised it and the operator still reported a metallic
+        high band.
+        """
+        return (self.high_end_energy + self.high_end_texture) / 2.0
 
     @property
     def combined(self) -> float:
@@ -107,6 +136,8 @@ class AxisScores:
     def to_dict(self) -> dict[str, Any]:
         return {
             "HIGH_END": round(self.high_end, 4),
+            "HIGH_END_ENERGY": round(self.high_end_energy, 4),
+            "HIGH_END_TEXTURE": round(self.high_end_texture, 4),
             "RHYTHM": round(self.rhythm, 4),
             "ARRANGEMENT": round(self.arrangement, 4),
             "VOCAL": None,
@@ -193,7 +224,8 @@ def score_population(
                 parts.append(rank if higher_is_better else 1.0 - rank)
             axis_values[axis] = sum(parts) / len(parts)
         scores[item_id] = AxisScores(
-            high_end=axis_values[QualityAxis.HIGH_END.value],
+            high_end_energy=axis_values[QualityAxis.HIGH_END.value],
+            high_end_texture=axis_values[_HIGH_END_TEXTURE],
             rhythm=axis_values[QualityAxis.RHYTHM.value],
             arrangement=axis_values[QualityAxis.ARRANGEMENT.value],
         )

@@ -99,15 +99,57 @@ is a trainer change and not this phase's variable.
 
 ## What the run produced
 
-336 optimizer steps across two resumed segments, ending at
-`epoch_14_loss_1.1039`. Training loss ran 1.5103 → 1.0962 over 336
-finite steps; held-out loss ran 1.2298 → 0.9362 across 14 measurements
-on 19 tracks no optimizer step touched. 384 of 384 trainable tensors
-changed and the base model digest was identical before and after.
+**This section was corrected on 2026-08-25.** It previously claimed "336
+optimizer steps across two resumed segments"; commit `cbcf865` carries
+that wording, and its message repeats it.
+
+The plan was 336 optimizer steps as one continuation: segment A running
+1–168, segment B resuming A and running 169–336. Segment A did that.
+**Segment B did not resume segment A's weights — it trained 168 steps
+from a fresh LoRA.** The preserved adapter, the one the operator
+evaluated, therefore carries **168 optimizer steps of training, not
+336.** There is no 336-step cumulative adapter; the two segments never
+composed.
+
+Within segment B, the numbers themselves stand: 168 finite steps, 384 of
+384 trainable tensors changed, the base model digest identical before
+and after, and held-out loss 1.2298 → 0.9362 across 14 measurements on
+19 tracks no optimizer step touched. Loss "1.5103 → 1.0962" spans both
+segments and so describes two runs rather than one curve.
 
 That is a training-path result and a generalization signal. It is not a
 quality claim, and the checkpoint stays EXPERIMENTAL, NON_PRODUCTION,
 NEVER_AUTO_PROMOTE.
+
+### Why it looked like a resume
+
+PEFT writes adapter tensors as `...lora_A.weight` and holds them in the
+model as `...lora_A.<adapter>.weight`. The trainer resumes with
+`decoder.load_state_dict(state_dict, strict=False)`, so every key missed,
+nothing was restored, and — because `strict=False` — nothing failed.
+
+Meanwhile `epoch`, `global_step`, the optimizer and the scheduler *did*
+load, from `training_state.pt`. So the run reported a successful resume,
+continued the counter from 168, and wrote a checkpoint labelled step 336.
+Everything downstream believed it.
+
+Three pieces of evidence settle it. Segment A and segment B recorded the
+same first training loss to fifteen decimal places — 1.510331004858017 —
+and the same first gradient norm, 0.26953125. And the mechanism
+reproduces: a PEFT adapter saved with `lora_B = 0.5`, resumed the way the
+trainer does it, comes back with `lora_B` still 0.0.
+
+What there is *no* evidence of is a contemporaneous warning. `strict=False`
+produced none, which is the whole problem.
+
+The loader is now guarded: a continuation re-loads the adapter with the
+name component restored, compares every tensor against the file it came
+from, and refuses to train on a mismatch rather than starting fresh in
+silence.
+
+**None of this changes the audio.** The adapter bytes are untouched and
+the operator's listening verdict below stands exactly as recorded, for
+this 168-step adapter.
 
 ## What the operator heard
 

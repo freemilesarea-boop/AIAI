@@ -39,6 +39,7 @@ import runpy
 import sys
 import time
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -496,12 +497,208 @@ def _digest(values: dict[str, Any]) -> str:
     return running.hexdigest()
 
 
+def _strip_adapter_name(name: str) -> str:
+    """``...lora_A.default.weight`` -> ``...lora_A.weight``.
+
+    PEFT holds the adapter name as a component of the parameter path and
+    drops it when saving, so a model key and a file key for the same
+    tensor never match textually.
+    """
+    parts = name.split(".")
+    for index, part in enumerate(parts[:-2]):
+        if part in ("lora_A", "lora_B", "lora_embedding_A", "lora_embedding_B"):
+            return ".".join(parts[: index + 1] + parts[index + 2 :])
+    return name
+
+
+class ResumeNotVerified(RuntimeError):
+    """Raised when a resumed adapter does not match the weights it claims.
+
+    The trainer resumes with ``load_state_dict(..., strict=False)``, so a
+    key-name mismatch loads nothing, warns nothing, and trains on a fresh
+    adapter that will look like a continuation in every artifact
+    afterwards. The experiment probe cannot catch this on its own: it
+    fingerprints the model at injection, which is *before* the trainer
+    resumes, so both Phase 38 segments recorded the same pre-resume
+    digest. This check runs after the resume and compares the weights
+    actually in the model against the file they were meant to come from.
+    """
+
+
+def install_resume_verification(expected_adapter: str) -> dict[str, Any]:
+    """Prove the resumed adapter is the one that was asked for.
+
+    Wraps the trainer's resume so the comparison happens on the loaded
+    model, not on a file listing. Fatal on mismatch.
+    """
+    from acestep.training_v2 import trainer_fixed  # type: ignore[import-not-found]
+
+    original = trainer_fixed.resume_checkpoint
+    report: dict[str, Any] = {"verified": False, "expected_adapter": expected_adapter}
+
+    def verified_resume(trainer: Any, resume_path: str, optimizer: Any, scheduler: Any) -> Any:
+        result = yield from original(trainer, resume_path, optimizer, scheduler)
+
+        import torch
+        from safetensors.torch import load_file  # type: ignore[import-not-found]
+
+        expected = _normalise(dict(load_file(expected_adapter)))
+        module = getattr(trainer, "module", None)
+        model = getattr(module, "model", None)
+        decoder = getattr(model, "decoder", None)
+        if decoder is None:
+            raise ResumeNotVerified("no decoder on the trainer; cannot verify the resumed adapter")
+        if hasattr(decoder, "_forward_module"):
+            decoder = decoder._forward_module
+
+        # The trainer's own resume cannot load a PEFT adapter file. PEFT
+        # saves `...lora_A.weight` and holds `...lora_A.<adapter>.weight`
+        # in the model, and the resume calls `load_state_dict(...,
+        # strict=False)`, so every key misses and nothing is loaded and
+        # nothing is reported. Measured: Phase 38's two segments began
+        # from byte-identical weights, same first loss to fifteen
+        # decimals and the same first gradient norm.
+        #
+        # So the load is redone here with the adapter name put back,
+        # against the file the caller named, and then checked.
+        repaired = 0
+        by_stripped = {_strip_adapter_name(name): name for name, _ in decoder.named_parameters()}
+        state = {}
+        for key, tensor in load_file(expected_adapter).items():
+            target = by_stripped.get(key)
+            if target is not None:
+                state[target] = tensor
+        if state:
+            decoder.load_state_dict(state, strict=False)
+            repaired = len(state)
+        report["repaired_tensors"] = repaired
+
+        actual = _normalise(
+            {
+                _strip_adapter_name(name): tensor
+                for name, tensor in decoder.named_parameters()
+                if "lora_" in name
+            }
+        )
+
+        missing = sorted(set(expected) - set(actual))
+        compared = 0
+        mismatched: list[str] = []
+        worst = 0.0
+        for name, want in expected.items():
+            have = actual.get(name)
+            if have is None:
+                continue
+            a = want.detach().to("cpu", torch.float32)
+            b = have.detach().to("cpu", torch.float32)
+            compared += 1
+            if a.shape != b.shape:
+                mismatched.append(f"{name}: shape {tuple(a.shape)} != {tuple(b.shape)}")
+                continue
+            delta = float((a - b).abs().max())
+            worst = max(worst, delta)
+            if delta > 0.0:
+                mismatched.append(f"{name}: max |delta| {delta:g}")
+
+        report.update(
+            {
+                "expected_tensors": len(expected),
+                "model_lora_tensors": len(actual),
+                "compared": compared,
+                "absent_from_model": len(missing),
+                "mismatched": len(mismatched),
+                "max_absolute_difference": worst,
+            }
+        )
+        if compared == 0 or mismatched or missing:
+            report["detail"] = (missing[:3] + mismatched[:3]) or ["nothing was compared"]
+            raise ResumeNotVerified(
+                f"resumed adapter does not match {expected_adapter}: compared {compared}, "
+                f"{len(mismatched)} mismatched, {len(missing)} absent from the model. "
+                f"{report['detail']}"
+            )
+        report["verified"] = True
+        return result
+
+    trainer_fixed.resume_checkpoint = verified_resume
+    return report
+
+
+class ExposureNotInstalled(RuntimeError):
+    """Raised when a requested visiting order could not be enforced.
+
+    Deliberately fatal. Phase 37 and Phase 38 both computed per-sample
+    weights that the loader ignored, and both reported weighted exposure
+    they did not have. A weighting that cannot be installed must stop the
+    run, not be noted in a dictionary of things that did not work.
+    """
+
+
+def install_weighted_exposure(order: Sequence[str]) -> dict[str, Any]:
+    """Make the trainer visit samples in ``order`` instead of shuffling.
+
+    Replaces the loader's ``shuffle=True`` with an explicit index
+    sequence, rebuilt from the loader the trainer itself constructed so
+    no batching, worker or collation setting is second-guessed here.
+    """
+    from acestep.training.data_module import (  # type: ignore[import-not-found]
+        PreprocessedDataModule,
+    )
+    from torch.utils.data import DataLoader  # type: ignore[import-not-found]
+
+    original = PreprocessedDataModule.train_dataloader
+    installed: dict[str, Any] = {}
+
+    def train_dataloader(self: Any) -> Any:
+        loader = original(self)
+        dataset = loader.dataset
+        paths = getattr(dataset, "valid_paths", None)
+        if paths is None:
+            raise ExposureNotInstalled(
+                f"{type(dataset).__name__} exposes no valid_paths, so a sample cannot be "
+                "named and an order cannot be applied"
+            )
+        index_of = {Path(str(path)).stem: position for position, path in enumerate(paths)}
+        missing = sorted({name for name in order if name not in index_of})
+        if missing:
+            raise ExposureNotInstalled(
+                f"{len(missing)} planned sample(s) are not in the dataset, e.g. {missing[:3]}"
+            )
+        indices = [index_of[name] for name in order]
+
+        kwargs: dict[str, Any] = {
+            "dataset": dataset,
+            "batch_size": loader.batch_size,
+            "sampler": indices,
+            "num_workers": loader.num_workers,
+            "pin_memory": loader.pin_memory,
+            "collate_fn": loader.collate_fn,
+            "drop_last": loader.drop_last,
+        }
+        if loader.num_workers:
+            kwargs["prefetch_factor"] = loader.prefetch_factor
+            kwargs["persistent_workers"] = loader.persistent_workers
+        installed.update(
+            {
+                "installed": True,
+                "epoch_length": len(indices),
+                "dataset_size": len(index_of),
+                "distinct_samples": len(set(indices)),
+                "batch_size": loader.batch_size,
+            }
+        )
+        return DataLoader(**kwargs)
+
+    PreprocessedDataModule.train_dataloader = train_dataloader
+    return installed
+
+
 def install(recorder: Recorder) -> dict[str, str]:
     """Wrap the trainer's seams. Returns what could not be wrapped."""
     missing: dict[str, str] = {}
 
     try:
-        from acestep.training_v2 import (  # type: ignore[import-not-found]
+        from acestep.training_v2 import (
             fixed_lora_module,
         )
 
@@ -628,6 +825,36 @@ def run(request: dict[str, Any]) -> dict[str, Any]:
     )
     missing = install(recorder)
 
+    resume_check: dict[str, Any] = {}
+    expected_adapter = request.get("verify_resume_against")
+    if expected_adapter:
+        try:
+            resume_check = install_resume_verification(str(expected_adapter))
+        except Exception as exc:
+            return {
+                "outcome": "BLOCKED",
+                "failure_reason": (
+                    f"resume verification could not be installed: {type(exc).__name__}: {exc}"
+                ),
+                "resume_verification": {"verified": False},
+            }
+
+    exposure: dict[str, Any] = {}
+    order = [str(name) for name in (request.get("exposure_order") or [])]
+    if order:
+        try:
+            exposure = install_weighted_exposure(order)
+        except Exception as exc:
+            # Fatal on purpose. See ExposureNotInstalled.
+            return {
+                "outcome": "BLOCKED",
+                "failure_reason": (
+                    f"weighted exposure was requested and could not be installed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "exposure": {"installed": False, "requested_epoch_length": len(order)},
+            }
+
     outcome = "COMPLETED"
     failure_reason = ""
     traceback_tail = ""
@@ -669,6 +896,12 @@ def run(request: dict[str, Any]) -> dict[str, Any]:
         "ceiling_hit": recorder.ceiling_hit,
         "step_ceiling": recorder.step_ceiling,
         "wall_seconds": round(time.perf_counter() - started, 3),
+        # Empty when no order was requested. When one was, this is the
+        # evidence that it reached the loader rather than a file.
+        "exposure": exposure,
+        # Empty when no resume was verified. When a resume was asked for,
+        # this is the proof the weights in the model are the ones named.
+        "resume_verification": resume_check,
     }
 
 

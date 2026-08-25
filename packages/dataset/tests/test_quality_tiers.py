@@ -61,6 +61,63 @@ def _population(count: int = 20):
     ]
 
 
+class TestHighEndIsEnergyAndTexture:
+    """The Phase 38 lesson, encoded as tests.
+
+    Tiering on energy alone selected the brightest material in the
+    library and still produced a high band the operator called metallic.
+    So HIGH_END now carries both halves, and neither may quietly become
+    the whole.
+    """
+
+    def _pair(self):
+        """Two tracks with identical energy and opposite texture."""
+        shared = {
+            "high_frequency_energy_ratio": 0.02,
+            "spectral_centroid_hz": 1_100.0,
+            "high_band_rms_db": -34.0,
+        }
+        return [
+            ("airy", _features(**shared, high_band_flatness=0.92, high_band_resonance_ratio=0.00)),
+            ("metal", _features(**shared, high_band_flatness=0.60, high_band_resonance_ratio=0.20)),
+        ]
+
+    def test_equal_energy_is_separated_by_texture(self):
+        scores = score_population(self._pair())
+        assert scores["airy"].high_end_energy == scores["metal"].high_end_energy
+        assert scores["airy"].high_end_texture > scores["metal"].high_end_texture
+        assert scores["airy"].high_end > scores["metal"].high_end
+
+    def test_resonance_counts_against_a_track(self):
+        ringing = [
+            ("clean", _features(high_band_flatness=0.9, high_band_resonance_ratio=0.0)),
+            ("ringing", _features(high_band_flatness=0.9, high_band_resonance_ratio=0.3)),
+        ]
+        scores = score_population(ringing)
+        assert scores["clean"].high_end_texture > scores["ringing"].high_end_texture
+
+    def test_energy_is_still_scored_and_not_replaced(self):
+        # Same texture, different energy: HIGH_END must still move.
+        pair = [
+            ("dull", _features(high_frequency_energy_ratio=0.001, high_band_rms_db=-60.0)),
+            ("bright", _features(high_frequency_energy_ratio=0.05, high_band_rms_db=-30.0)),
+        ]
+        scores = score_population(pair)
+        assert scores["bright"].high_end_energy > scores["dull"].high_end_energy
+
+    def test_high_end_is_the_mean_of_its_two_halves(self):
+        scores = score_population(self._pair())
+        for score in scores.values():
+            expected = (score.high_end_energy + score.high_end_texture) / 2.0
+            assert score.high_end == pytest.approx(expected)
+
+    def test_the_dictionary_reports_both_halves(self):
+        payload = score_population(self._pair())["airy"].to_dict()
+        assert payload["HIGH_END_ENERGY"] is not None
+        assert payload["HIGH_END_TEXTURE"] is not None
+        assert payload["VOCAL"] is None
+
+
 class TestScoring:
     def test_a_brighter_track_ranks_higher_on_high_end(self):
         scores = score_population(_population())

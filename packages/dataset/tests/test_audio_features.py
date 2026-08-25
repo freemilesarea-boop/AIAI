@@ -70,6 +70,61 @@ class TestHighEnd:
         assert above.high_frequency_energy_ratio > 0.9
 
 
+class TestHighBandTexture:
+    """Flatness and resonance, on signals whose texture is not in doubt.
+
+    The point of these two measures is that they separate *texture* from
+    *level*, which every other high-end feature confounds. So each test
+    holds level roughly constant and moves only the texture.
+    """
+
+    def _hiss(self, seconds: float = 4.0, amplitude: float = 0.2) -> np.ndarray:
+        """Band-limited noise: broadband air, no tonal structure."""
+        rng = np.random.default_rng(11)
+        noise = rng.standard_normal(int(RATE * seconds)).astype(np.float32)
+        spectrum = np.fft.rfft(noise)
+        freqs = np.fft.rfftfreq(noise.size, 1.0 / RATE)
+        spectrum[(freqs < 6_000) | (freqs >= 16_000)] = 0.0
+        shaped = np.fft.irfft(spectrum, n=noise.size).astype(np.float32)
+        return (amplitude * shaped / (np.abs(shaped).max() + 1e-9)).astype(np.float32)
+
+    def _ringing(self, seconds: float = 4.0, amplitude: float = 0.2) -> np.ndarray:
+        """A few steady partials in the same band: metallic, not airy."""
+        t = np.arange(int(RATE * seconds), dtype=np.float32) / RATE
+        out = np.zeros_like(t)
+        for hz in (6_500.0, 8_200.0, 9_900.0, 12_400.0, 14_800.0):
+            out += np.sin(2 * math.pi * hz * t).astype(np.float32)
+        return (amplitude * out / (np.abs(out).max() + 1e-9)).astype(np.float32)
+
+    def test_noise_is_flatter_than_ringing_partials(self):
+        hiss = analyse_signal(self._hiss(), RATE).high_band_flatness
+        ring = analyse_signal(self._ringing(), RATE).high_band_flatness
+        assert hiss > ring
+
+    def test_ringing_partials_are_counted_as_resonances_and_noise_is_not(self):
+        hiss = analyse_signal(self._hiss(), RATE).high_band_resonance_ratio
+        ring = analyse_signal(self._ringing(), RATE).high_band_resonance_ratio
+        assert ring > hiss
+
+    def test_texture_is_independent_of_level(self):
+        loud = analyse_signal(self._hiss(amplitude=0.4), RATE)
+        quiet = analyse_signal(self._hiss(amplitude=0.02), RATE)
+        # Same shape, 26 dB apart in level: the level measures must move
+        # and the texture measures must not.
+        assert loud.high_band_rms_db - quiet.high_band_rms_db > 20
+        assert abs(loud.high_band_flatness - quiet.high_band_flatness) < 0.05
+
+    def test_silence_reports_no_texture_rather_than_a_number(self):
+        quiet = analyse_signal(np.zeros(RATE * 2, dtype=np.float32), RATE)
+        assert quiet.high_band_flatness == 0.0
+        assert quiet.high_band_resonance_ratio == 0.0
+
+    def test_flatness_stays_in_range(self):
+        for signal in (self._hiss(), self._ringing(), _tone(12_000), _clicks(2.0)):
+            value = analyse_signal(signal, RATE).high_band_flatness
+            assert 0.0 <= value <= 1.0
+
+
 class TestRhythm:
     def test_a_steady_click_train_reports_its_tempo(self):
         features = analyse_signal(_clicks(2.0), RATE)
@@ -136,6 +191,8 @@ class TestBoundaries:
             "tempo_bpm",
             "drum_bass_alignment",
             "layer_density",
+            "high_band_flatness",
+            "high_band_resonance_ratio",
         ):
             assert name in payload, name
 

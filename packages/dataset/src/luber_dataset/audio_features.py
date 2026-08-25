@@ -41,6 +41,24 @@ HOP_SIZE = 512
 #: is above the fundamental range of everything in a mix and squarely in
 #: the region a dull master loses first.
 HIGH_BAND_HZ = 8_000.0
+
+#: The band the Phase 38 listening evaluation actually complained about.
+#: Energy there was never the problem — texture was, so it is measured
+#: separately and over its own range rather than folded into the 8 kHz
+#: figure above.
+HIGH_TEXTURE_LOW_HZ = 6_000.0
+HIGH_TEXTURE_HIGH_HZ = 16_000.0
+
+#: How far above the local spectral floor a bin must stand to count as a
+#: narrow resonance rather than as part of the broadband texture. 6 dB is
+#: a chosen threshold; reference material sits well under it and the
+#: generated audio that prompted this sits well over.
+RESONANCE_EXCESS_DB = 6.0
+#: Width of the running median that estimates that floor, in bins. Odd so
+#: the window is centred; ~31 bins is ~730 Hz at this FFT size, wide
+#: enough to ignore a single resonance and narrow enough to follow the
+#: real spectral shape.
+RESONANCE_FLOOR_BINS = 31
 #: Bass band for the rhythmic-alignment proxy.
 BASS_BAND_HZ = 200.0
 #: Percussive band for the same proxy — cymbals and snare snap.
@@ -102,6 +120,17 @@ class AudioFeatures:
     #: Share of frames whose spectrum is broadly occupied.
     active_band_fraction: float
 
+    #: Spectral flatness of the 6-16 kHz band: geometric mean over
+    #: arithmetic mean, averaged across frames. 1.0 is noise-like — which
+    #: is what air *is*. Low values mean the band is carried by tones.
+    #: Independent of level: a quiet band and a loud band with the same
+    #: shape score the same.
+    high_band_flatness: float = 0.0
+    #: Share of 6-16 kHz bins standing more than :data:`RESONANCE_EXCESS_DB`
+    #: above the local spectral floor. Broadband air gives ~0; a handful
+    #: of ringing partials gives a measurable fraction.
+    high_band_resonance_ratio: float = 0.0
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "duration_seconds": round(self.duration_seconds, 3),
@@ -119,6 +148,8 @@ class AudioFeatures:
             "drum_bass_alignment": round(self.drum_bass_alignment, 4),
             "layer_density": round(self.layer_density, 4),
             "active_band_fraction": round(self.active_band_fraction, 4),
+            "high_band_flatness": round(self.high_band_flatness, 4),
+            "high_band_resonance_ratio": round(self.high_band_resonance_ratio, 4),
         }
 
 
@@ -340,6 +371,59 @@ def _layer_density(magnitude: np.ndarray) -> tuple[float, float]:
     return float(normalised.mean()), float((occupied > 0.25).mean())
 
 
+def _rolling_median(values: np.ndarray, size: int) -> np.ndarray:
+    """Running median of a 1-D array, edges held rather than shrunk.
+
+    scipy has this; adding scipy to read 16-bit PCM would not be worth
+    one filter, and the arrays here are a few hundred bins wide.
+    """
+    if values.size == 0:
+        return values
+    half = max(1, size // 2)
+    if values.size <= 2 * half:
+        return np.full_like(values, float(np.median(values)))
+    padded = np.pad(values, half, mode="edge")
+    windows = np.lib.stride_tricks.sliding_window_view(padded, 2 * half + 1)
+    return np.median(windows, axis=1)[: values.size]
+
+
+def _high_band_texture(magnitude: np.ndarray, freqs: np.ndarray) -> tuple[float, float]:
+    """Flatness and narrow-resonance share of the 6-16 kHz band.
+
+    Two numbers about *texture*, deliberately independent of level. The
+    Phase 38 listening evaluation reported a high band that was both flat
+    and metallic, and no energy measure can tell those apart: a band can
+    be loud and tonal, or quiet and airy. Flatness says which.
+
+    Neither value judges anything. Reference material happens to sit near
+    0.92 flatness with almost no narrow peaks; that is an observation
+    about this library, not a target defined here.
+    """
+    band = (freqs >= HIGH_TEXTURE_LOW_HZ) & (freqs < HIGH_TEXTURE_HIGH_HZ)
+    if magnitude.shape[0] == 0 or band.sum() < 8:
+        return 0.0, 0.0
+
+    power = magnitude[:, band].astype(np.float64) ** 2
+    # Flatness per frame, then averaged over the frames that carry any
+    # energy at all — silence has no texture and averaging it in would
+    # drag every quiet passage toward zero.
+    arithmetic = power.mean(axis=1)
+    usable = arithmetic > 1e-18
+    if not usable.any():
+        return 0.0, 0.0
+    geometric = np.exp(np.log(power[usable] + 1e-18).mean(axis=1))
+    flatness = float(np.clip(geometric / arithmetic[usable], 0.0, 1.0).mean())
+
+    # Resonances are read off the time-averaged spectrum: a partial that
+    # rings through the whole window is the thing being counted, and a
+    # single frame's noise is not.
+    average = power.mean(axis=0)
+    decibels = 10.0 * np.log10(average + 1e-18)
+    excess = decibels - _rolling_median(decibels, RESONANCE_FLOOR_BINS)
+    resonance = float((excess > RESONANCE_EXCESS_DB).mean())
+    return flatness, resonance
+
+
 def analyse_signal(signal: np.ndarray, rate: int, *, channels: int = 1) -> AudioFeatures:
     """Every feature, from one stretch of mono audio."""
     magnitude = _stft_magnitude(np.ascontiguousarray(signal))
@@ -418,6 +502,7 @@ def _features_from_magnitude(
     alignment = max(0.0, _correlation(bass, percussive))
 
     density, active = _layer_density(magnitude)
+    flatness, resonance = _high_band_texture(magnitude, freqs)
 
     return AudioFeatures(
         duration_seconds=duration,
@@ -435,6 +520,8 @@ def _features_from_magnitude(
         drum_bass_alignment=alignment,
         layer_density=density,
         active_band_fraction=active,
+        high_band_flatness=flatness,
+        high_band_resonance_ratio=resonance,
     )
 
 
@@ -507,10 +594,14 @@ __all__ = [
     "BASS_BAND_HZ",
     "FFT_SIZE",
     "HIGH_BAND_HZ",
+    "HIGH_TEXTURE_HIGH_HZ",
+    "HIGH_TEXTURE_LOW_HZ",
     "HOP_SIZE",
     "MAX_BPM",
     "MIN_BPM",
     "PERCUSSIVE_BAND_HZ",
+    "RESONANCE_EXCESS_DB",
+    "RESONANCE_FLOOR_BINS",
     "AudioFeatureError",
     "AudioFeatures",
     "TrackAnalysis",
