@@ -1,8 +1,8 @@
 /**
- * Typed client for the LUBER backend API.
+ * Typed client for the BOORDA backend API.
  *
  * Every network call the browser makes goes through this module. The
- * browser talks only to the LUBER API — it never contacts ACE-Step or
+ * browser talks only to the BOORDA API — it never contacts ACE-Step or
  * any model runtime directly, and it never sees a storage key or a
  * filesystem path. Audio is addressed by generation id.
  *

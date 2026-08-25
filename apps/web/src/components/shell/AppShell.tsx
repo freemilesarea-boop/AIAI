@@ -27,6 +27,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: ReactNode;
+  /** Small marker beside the label. LAB carries one; nothing else does. */
+  badge?: string;
 }
 
 const icon = (path: string) => (
@@ -36,6 +38,11 @@ const icon = (path: string) => (
 );
 
 const NAV: NavItem[] = [
+  {
+    href: "/",
+    label: "Home",
+    icon: icon("M12 3.2 3 10.1V21h6v-6h6v6h6V10.1L12 3.2Z"),
+  },
   {
     href: "/create",
     label: "Create",
@@ -47,27 +54,38 @@ const NAV: NavItem[] = [
     icon: icon("M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"),
   },
   {
-    href: "/projects",
-    label: "Projects",
-    icon: icon("M4 5a2 2 0 0 1 2-2h3.6l2 2H18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z"),
+    href: "/lab",
+    label: "LAB",
+    icon: icon("M9 2v6.2L3.6 17.4A3 3 0 0 0 6.2 22h11.6a3 3 0 0 0 2.6-4.6L15 8.2V2H9Zm2 2h2v4.8l1.6 2.7H9.4L11 8.8V4Z"),
+    badge: "BETA",
+  },
+  {
+    href: "/plans",
+    label: "Plans",
+    icon: icon("M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2H4V6Zm0 4h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Zm3 5h5v2H7v-2Z"),
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: icon("M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.6 7.6 0 0 0-.13-1.4l2-1.55-2-3.46-2.35.95a7.5 7.5 0 0 0-2.42-1.4L16.1 2h-4l-.4 2.54a7.5 7.5 0 0 0-2.42 1.4L6.93 5 4.93 8.45l2 1.55a7.7 7.7 0 0 0 0 2.8l-2 1.55 2 3.46 2.35-.95a7.5 7.5 0 0 0 2.42 1.4L12.1 22h4l.4-2.54a7.5 7.5 0 0 0 2.42-1.4l2.35.95 2-3.46-2-1.55c.09-.46.13-.93.13-1.4Z"),
   },
 ];
 
 function Brand() {
   return (
     <Link
-      href="/create"
+      href="/"
       className="flex items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-1.5"
-      aria-label="LUBER home"
+      aria-label="BOORDA 홈"
     >
       <span
         aria-hidden="true"
         className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--brand)] text-sm font-black text-white"
       >
-        L
+        B
       </span>
       <span className="text-[15px] font-bold tracking-tight text-[var(--text-primary)]">
-        LUBER
+        BOORDA
       </span>
     </Link>
   );
@@ -78,7 +96,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav aria-label="Main" className="flex flex-col gap-1">
       {NAV.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        // `/` is a prefix of everything, so Home matches exactly and
+        // never lights up while the user is somewhere else.
+        const active =
+          item.href === "/"
+            ? pathname === "/"
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link
             key={item.href}
@@ -93,7 +116,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             )}
           >
             {item.icon}
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {item.badge ? (
+              <span className="rounded-[var(--radius-full)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--text-muted)]">
+                {item.badge}
+              </span>
+            ) : null}
           </Link>
         );
       })}

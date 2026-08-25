@@ -9,7 +9,7 @@
  * for this.
  *
  * The preset buttons are honest about what they know: "Last 10 seconds"
- * is a time range and is labelled as one. LUBER has no idea where a verse
+ * is a time range and is labelled as one. BOORDA has no idea where a verse
  * or a chorus begins, so it does not offer to replace either.
  */
 
@@ -204,8 +204,8 @@ export function ReplaceSection({ generation, onReplaced }: ReplaceSectionProps) 
         />
         <p className="mt-1 text-[11px] text-[var(--text-muted)]">
           {/* Honest about the limit: the engine conditions the request as
-              a whole, and LUBER has no lyric-to-time alignment. */}
-          Steers the regenerated part. Lyrics stay as they are — LUBER does not yet know which
+              a whole, and BOORDA has no lyric-to-time alignment. */}
+          Steers the regenerated part. Lyrics stay as they are — BOORDA does not yet know which
           words fall at which time.
         </p>
       </div>

@@ -7,8 +7,8 @@ import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LUBER — AI music generation",
-  description: "Write a brief, add lyrics, and generate a finished track.",
+  title: "BOORDA 부르다 — AI 음악 생성",
+  description: "원하는 분위기를 설명하고 가사를 더하면 완성된 트랙이 나옵니다.",
 };
 
 /**
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <body className="min-h-screen antialiased">
         <AuthProvider>
           <PlayerProvider>

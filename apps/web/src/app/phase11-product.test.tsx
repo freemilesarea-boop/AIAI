@@ -70,7 +70,11 @@ afterEach(() => {
 // ── App shell ─────────────────────────────────────────────────────────
 
 describe("app shell", () => {
-  it("offers the three primary destinations", () => {
+  // BOORDA's information architecture is exactly six product areas.
+  // Projects still exists and is reached from the library it organises,
+  // but it is deliberately not a primary destination: a nav that grows
+  // with every feature stops being navigation.
+  it("offers exactly the six primary destinations", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [] })));
     render(
       <AuthProvider>
@@ -80,9 +84,11 @@ describe("app shell", () => {
       </AuthProvider>,
     );
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
-    expect(within(nav).getByRole("link", { name: "Create" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Library" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Projects" })).toBeInTheDocument();
+    for (const label of ["Home", "Create", "Library", "LAB", "Plans", "Settings"]) {
+      expect(within(nav).getByRole("link", { name: new RegExp(label) })).toBeInTheDocument();
+    }
+    expect(within(nav).getAllByRole("link")).toHaveLength(6);
+    expect(within(nav).queryByRole("link", { name: "Projects" })).not.toBeInTheDocument();
   });
 
   it("marks the current destination for assistive tech", () => {

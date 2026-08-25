@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LUBER UI primitives.
+ * BOORDA UI primitives.
  *
  * Every component here reads from the design tokens in `globals.css`.
  * Nothing in the product should hand-roll a surface colour, a radius or
@@ -12,7 +12,14 @@
  * component framework would add weight without adding capability.
  */
 
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode, Ref } from "react";
+import Link from "next/link";
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  ReactNode,
+  Ref,
+} from "react";
 
 function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -83,6 +90,50 @@ export function Button({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * A link that looks like a button.
+ *
+ * `Button` renders a `<button>` and takes no `asChild`, and a navigation
+ * target must be an anchor: a button with an onClick that pushes a route
+ * loses middle-click, cmd-click and "copy link address", and screen
+ * readers announce it as the wrong thing. So the styling is shared and
+ * the element is not.
+ */
+export interface ButtonLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
+  href: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}
+
+export function buttonClass(
+  variant: ButtonVariant = "secondary",
+  size: ButtonSize = "md",
+  className?: string,
+): string {
+  return cx(
+    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium",
+    "transition-colors disabled:cursor-not-allowed",
+    BUTTON_VARIANT[variant],
+    BUTTON_SIZE[size],
+    className,
+  );
+}
+
+export function ButtonLink({
+  href,
+  variant = "secondary",
+  size = "md",
+  className,
+  children,
+  ...rest
+}: ButtonLinkProps) {
+  return (
+    <Link {...rest} href={href} className={buttonClass(variant, size, className)}>
+      {children}
+    </Link>
   );
 }
 

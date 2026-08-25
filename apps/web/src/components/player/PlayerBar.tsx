@@ -97,7 +97,7 @@ export function PlayerBar() {
               {player.error ? (
                 <span className="text-[var(--danger)]">{player.error}</span>
               ) : (
-                "LUBER"
+                "BOORDA"
               )}
             </p>
           </div>

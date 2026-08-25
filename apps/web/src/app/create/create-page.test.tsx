@@ -253,7 +253,7 @@ describe("form validation", () => {
 });
 
 describe("submission", () => {
-  it("posts to the LUBER API with a fresh Idempotency-Key and Korean lyrics intact", async () => {
+  it("posts to the BOORDA API with a fresh Idempotency-Key and Korean lyrics intact", async () => {
     const user = userEvent.setup();
     const { fetchMock } = stubServer([{ status: "QUEUED" }]);
     renderCreate();
@@ -376,7 +376,7 @@ describe("status rendering", () => {
 });
 
 describe("completed result", () => {
-  it("renders the player and download pointing at the LUBER audio endpoint", async () => {
+  it("renders the player and download pointing at the BOORDA audio endpoint", async () => {
     const user = userEvent.setup();
     stubServer([{ status: "COMPLETED", withMaster: true }]);
     renderCreate();
@@ -390,7 +390,7 @@ describe("completed result", () => {
     // <audio> — two cards with two elements would play over each other.
     expect(document.querySelectorAll("audio")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Play" }));
-    const player = screen.getByLabelText("LUBER audio player");
+    const player = screen.getByLabelText("BOORDA audio player");
     expect(player).toHaveAttribute("src", expect.stringContaining(`/v1/generations/${GEN_ID}/audio`));
     // The compressed preview streams; the master stays the download.
     expect(player).toHaveAttribute("src", expect.stringContaining("asset=preview"));
@@ -505,7 +505,7 @@ describe("failure UX", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Could not reach the LUBER service.");
+    expect(alert).toHaveTextContent("Could not reach the BOORDA service.");
     expect(alert.textContent).not.toContain("ECONNREFUSED");
   });
 

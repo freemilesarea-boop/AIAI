@@ -3,7 +3,7 @@
  *
  * A `?next=` parameter is attacker-controlled: anyone can send a link
  * that logs a user in and then bounces them to a site that looks like
- * LUBER and asks for their password again. The defence is not to
+ * BOORDA and asks for their password again. The defence is not to
  * sanitise the value but to refuse anything that is not a plain
  * in-app path.
  */

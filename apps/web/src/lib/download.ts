@@ -14,14 +14,14 @@
 
 import { findMasterAsset, findPreviewAsset, type Generation } from "@/lib/api";
 
-export const DOWNLOAD_FILENAME_PREFIX = "LUBER - ";
+export const DOWNLOAD_FILENAME_PREFIX = "BOORDA - ";
 export const DOWNLOAD_TITLE_MAX_LENGTH = 60;
 
 /** Characters no mainstream filesystem accepts, plus control characters. */
 const UNSAFE = /[\\/:*?"<>|\x00-\x1f\x7f]+/g;
 
 /**
- * `LUBER - Midnight Window.wav`.
+ * `BOORDA - Midnight Window.wav`.
  *
  * Unicode is kept: this product's main audience writes Korean titles,
  * and a Korean track that downloads as `luber-track-1a2b3c4d.wav` is not

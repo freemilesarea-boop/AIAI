@@ -8,7 +8,7 @@
  * `songcraft.parity.test.ts` asserts this file against the Python source
  * of truth — a drifting constant fails the web test suite.
  *
- * Only parameters LUBER has verified are exposed. Several other engine
+ * Only parameters BOORDA has verified are exposed. Several other engine
  * parameters exist and are deliberately absent; the reasons live next to
  * `UNEXPOSED_ENGINE_PARAMETERS` in the Python module.
  */
@@ -17,7 +17,7 @@
 export const BPM_MIN = 30;
 export const BPM_MAX = 300;
 
-/** Upstream allows 10–600; LUBER caps at 360 (verified path only). */
+/** Upstream allows 10–600; BOORDA caps at 360 (verified path only). */
 export const DURATION_MIN = 10;
 export const DURATION_MAX = 360;
 
@@ -36,7 +36,7 @@ export const TIME_SIGNATURE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export const KEYSCALE_NOTES = ["A", "B", "C", "D", "E", "F", "G"] as const;
-/** Upstream also accepts ♯/♭; LUBER offers one spelling per key. */
+/** Upstream also accepts ♯/♭; BOORDA offers one spelling per key. */
 export const KEYSCALE_ACCIDENTALS = ["", "#", "b"] as const;
 export const KEYSCALE_MODES = ["major", "minor"] as const;
 

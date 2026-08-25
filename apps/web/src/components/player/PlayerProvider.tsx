@@ -241,7 +241,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     <PlayerContext.Provider value={value}>
       {/* Generated music has no caption track; the element is labelled
           instead, and the visible controls live in the player bar. */}
-      <audio ref={audioRef} preload="metadata" aria-label="LUBER audio player" hidden />
+      <audio ref={audioRef} preload="metadata" aria-label="BOORDA audio player" hidden />
       {children}
     </PlayerContext.Provider>
   );

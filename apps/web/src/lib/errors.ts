@@ -104,7 +104,7 @@ export function describeApiError(error: unknown): UserFacingError {
   // Network failure, DNS, offline, CORS — never surface the raw text.
   return {
     message:
-      "Could not reach the LUBER service. Check your connection and try again.",
+      "Could not reach the BOORDA service. Check your connection and try again.",
     retryable: true,
   };
 }

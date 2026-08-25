@@ -751,11 +751,11 @@ describe("duplicate settings", () => {
 
 describe("downloads", () => {
   it("names the file after the song", () => {
-    expect(downloadFilename("Midnight Window", "gen-1")).toBe("LUBER - Midnight Window.wav");
+    expect(downloadFilename("Midnight Window", "gen-1")).toBe("BOORDA - Midnight Window.wav");
   });
 
   it("keeps a Korean title readable", () => {
-    expect(downloadFilename("오늘 밤", "gen-1")).toBe("LUBER - 오늘 밤.wav");
+    expect(downloadFilename("오늘 밤", "gen-1")).toBe("BOORDA - 오늘 밤.wav");
   });
 
   it("strips characters a filesystem would reject", () => {
@@ -766,7 +766,7 @@ describe("downloads", () => {
 
   it("falls back when a title sanitises to nothing", () => {
     expect(downloadFilename("///", "abcdef12-3456-7890-abcd-ef1234567890")).toBe(
-      "LUBER - track-abcdef12.wav",
+      "BOORDA - track-abcdef12.wav",
     );
   });
 
@@ -783,7 +783,7 @@ describe("downloads", () => {
     expect(preview.hint.toLowerCase()).not.toContain("master");
   });
 
-  it("points both downloads at the LUBER audio endpoint", () => {
+  it("points both downloads at the BOORDA audio endpoint", () => {
     renderApp(<SongActions generation={generation()} />);
     const wav = screen.getByRole("link", { name: "Download WAV" });
     const mp3 = screen.getByRole("link", { name: "Download MP3" });
@@ -872,7 +872,7 @@ describe("player integration", () => {
     renderApp(<LibraryPage />);
     await screen.findByText("Other");
 
-    const audio = screen.getByLabelText("LUBER audio player");
+    const audio = screen.getByLabelText("BOORDA audio player");
     await user.click(screen.getByRole("button", { name: "Play Midnight Window" }));
     expect(audio).toHaveAttribute("src", expect.stringContaining("/gen-1/audio"));
 
@@ -895,7 +895,7 @@ describe("player integration", () => {
     await screen.findByText("Midnight Window");
     await user.click(screen.getByRole("button", { name: "Play Midnight Window" }));
 
-    expect(screen.getByLabelText("LUBER audio player")).toHaveAttribute(
+    expect(screen.getByLabelText("BOORDA audio player")).toHaveAttribute(
       "src",
       expect.stringContaining("/gen-1/audio"),
     );

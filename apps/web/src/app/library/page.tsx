@@ -141,6 +141,14 @@ export default function LibraryPage() {
               {selecting ? "Done" : "Select"}
             </Button>
           )}
+          {/*
+            Projects is no longer in the primary navigation — BOORDA's
+            IA is five areas — but the feature still exists and is
+            reached from the library it organises.
+          */}
+          <Link href="/projects">
+            <Button>Projects</Button>
+          </Link>
           <Link href="/create">
             <Button variant="primary">New song</Button>
           </Link>
@@ -257,7 +265,7 @@ export default function LibraryPage() {
       ) : error ? (
         <EmptyState
           title="Could not load your library"
-          description="The LUBER service did not respond. Your tracks are safe — this is a connection problem."
+          description="BOORDA 서버가 응답하지 않았습니다. 저장된 음악은 그대로 있습니다 — 연결 문제입니다."
           action={<Button onClick={() => void load()}>Try again</Button>}
         />
       ) : visible.length === 0 ? (

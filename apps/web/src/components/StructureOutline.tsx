@@ -56,7 +56,7 @@ export function StructureOutline({
                   ? "border-[var(--border-strong)] text-[var(--text-secondary)]"
                   : "border-[var(--accent-muted)] text-[var(--accent)]"
               }`}
-              title={section.recognised ? undefined : "Not a tag LUBER recognises — sent as written"}
+              title={section.recognised ? undefined : "Not a tag BOORDA recognises — sent as written"}
             >
               [{section.label}]
               {!section.has_content && <span className="ml-1 text-[var(--text-muted)]">(empty)</span>}

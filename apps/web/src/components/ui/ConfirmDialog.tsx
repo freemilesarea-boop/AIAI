@@ -3,7 +3,7 @@
 /**
  * The product's confirmation surface for destructive actions.
  *
- * `window.confirm` is not used anywhere in LUBER: it cannot say *how
+ * `window.confirm` is not used anywhere in BOORDA: it cannot say *how
  * many* songs are about to go, cannot mark the destructive choice as
  * destructive, cannot be styled, and blocks the page (and browser
  * automation) while it is open.
