@@ -93,8 +93,8 @@ async function submittedBody(fetchMock: ReturnType<typeof vi.fn>) {
 }
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Title"), "Full Song");
-  await user.type(screen.getByLabelText("Music description"), "Korean pop ballad");
+  await user.type(screen.getByLabelText("제목"), "Full Song");
+  await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Korean pop ballad");
 }
 
 /**
@@ -105,7 +105,7 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
  */
 async function switchToCustom() {
   const user = userEvent.setup();
-  const tab = screen.queryByRole("tab", { name: "Custom" });
+  const tab = screen.queryByRole("tab", { name: "직접 설정" });
   if (tab && tab.getAttribute("aria-selected") !== "true") await user.click(tab);
 }
 
@@ -126,7 +126,7 @@ describe("full-song durations", () => {
     stubServer();
     renderCreate();
     await switchToCustom();
-    const values = within(screen.getByLabelText("Duration"))
+    const values = within(screen.getByLabelText("길이"))
       .getAllByRole("option")
       .map((o) => (o as HTMLOptionElement).value);
     expect(values).toEqual(["30", "60", "120", "180", "240"]);
@@ -136,7 +136,7 @@ describe("full-song durations", () => {
     stubServer();
     renderCreate();
     await switchToCustom();
-    const values = within(screen.getByLabelText("Duration"))
+    const values = within(screen.getByLabelText("길이"))
       .getAllByRole("option")
       .map((o) => (o as HTMLOptionElement).value);
     expect(values).not.toContain("360");
@@ -149,9 +149,9 @@ describe("full-song durations", () => {
     renderCreate();
     await switchToCustom();
     await fillRequired(user);
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     expect((await submittedBody(fetchMock)).duration).toBe(30);
   });
 
@@ -161,10 +161,10 @@ describe("full-song durations", () => {
     renderCreate();
     await switchToCustom();
     await fillRequired(user);
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.selectOptions(screen.getByLabelText("Duration"), "240");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.selectOptions(screen.getByLabelText("길이"), "240");
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     expect((await submittedBody(fetchMock)).duration).toBe(240);
   });
 
@@ -172,7 +172,7 @@ describe("full-song durations", () => {
     stubServer();
     renderCreate();
     await switchToCustom();
-    const labels = within(screen.getByLabelText("Duration"))
+    const labels = within(screen.getByLabelText("길이"))
       .getAllByRole("option")
       .map((o) => o.textContent);
     expect(labels).toEqual([
@@ -206,8 +206,8 @@ describe("song presets", () => {
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
 
-    expect(screen.getByLabelText("Duration")).toHaveValue("180");
-    const lyrics = screen.getByLabelText("Lyrics") as HTMLTextAreaElement;
+    expect(screen.getByLabelText("길이")).toHaveValue("180");
+    const lyrics = screen.getByLabelText("가사") as HTMLTextAreaElement;
     expect(lyrics.value).toContain("[Verse 1]");
     expect(lyrics.value).toContain("[Final Chorus]");
   });
@@ -220,7 +220,7 @@ describe("song presets", () => {
 
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
 
-    const lyrics = (screen.getByLabelText("Lyrics") as HTMLTextAreaElement).value;
+    const lyrics = (screen.getByLabelText("가사") as HTMLTextAreaElement).value;
     const wordLines = lyrics
       .split("\n")
       .filter((line) => line.trim() && !/^\[[^\]]+\]$/.test(line.trim()));
@@ -235,8 +235,8 @@ describe("song presets", () => {
 
     await user.click(presetGroup().getByRole("button", { name: /^Instrumental/ }));
 
-    expect(screen.getByLabelText("Vocal")).toHaveValue("instrumental");
-    expect(screen.getByLabelText("Duration")).toHaveValue("120");
+    expect(screen.getByLabelText("보컬")).toHaveValue("instrumental");
+    expect(screen.getByLabelText("길이")).toHaveValue("120");
   });
 
   it("a preset frame reaches the API", async () => {
@@ -247,7 +247,7 @@ describe("song presets", () => {
 
     await user.click(presetGroup().getByRole("button", { name: /^Ballad/ }));
     await fillRequired(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     const body = await submittedBody(fetchMock);
     expect(body.duration).toBe(240);
@@ -276,7 +276,7 @@ describe("structure templates", () => {
     const group = screen.getByRole("group", { name: "Structure templates" });
     await user.click(within(group).getByRole("button", { name: /R&B/ }));
 
-    const lyrics = (screen.getByLabelText("Lyrics") as HTMLTextAreaElement).value;
+    const lyrics = (screen.getByLabelText("가사") as HTMLTextAreaElement).value;
     expect(lyrics).toContain("[Pre-Chorus]");
     expect(lyrics).toContain("[Outro]");
   });
@@ -291,7 +291,7 @@ describe("structure templates", () => {
     const group = screen.getByRole("group", { name: "Structure templates" });
     await user.click(within(group).getByRole("button", { name: /^Pop/ }));
 
-    const lyrics = (screen.getByLabelText("Lyrics") as HTMLTextAreaElement).value;
+    const lyrics = (screen.getByLabelText("가사") as HTMLTextAreaElement).value;
     const known = new Set([
       "[Intro]", "[Verse 1]", "[Verse 2]", "[Verse 3]", "[Pre-Chorus]", "[Chorus]",
       "[Final Chorus]", "[Post-Chorus]", "[Bridge]", "[Break]", "[Instrumental]", "[Outro]",
@@ -308,7 +308,7 @@ describe("applying structure to existing lyrics", () => {
   const WRITTEN = "[Verse]\n창밖에 비가 내려와";
 
   async function writeLyrics(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste(WRITTEN);
   }
 
@@ -323,7 +323,7 @@ describe("applying structure to existing lyrics", () => {
 
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
     // Nothing has changed yet.
-    expect(screen.getByLabelText("Lyrics")).toHaveValue(WRITTEN);
+    expect(screen.getByLabelText("가사")).toHaveValue(WRITTEN);
   });
 
   it("appends after the existing lyrics when asked to", async () => {
@@ -336,7 +336,7 @@ describe("applying structure to existing lyrics", () => {
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
     await user.click(await screen.findByRole("button", { name: "Add after my lyrics" }));
 
-    const lyrics = (screen.getByLabelText("Lyrics") as HTMLTextAreaElement).value;
+    const lyrics = (screen.getByLabelText("가사") as HTMLTextAreaElement).value;
     expect(lyrics).toContain("창밖에 비가 내려와");
     expect(lyrics).toContain("[Bridge]");
   });
@@ -351,7 +351,7 @@ describe("applying structure to existing lyrics", () => {
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
     await user.click(await screen.findByRole("button", { name: "Replace my lyrics" }));
 
-    const lyrics = (screen.getByLabelText("Lyrics") as HTMLTextAreaElement).value;
+    const lyrics = (screen.getByLabelText("가사") as HTMLTextAreaElement).value;
     expect(lyrics).not.toContain("창밖에 비가 내려와");
     expect(lyrics).toContain("[Verse 1]");
   });
@@ -366,7 +366,7 @@ describe("applying structure to existing lyrics", () => {
     await user.click(presetGroup().getByRole("button", { name: /Full Pop Song/ }));
     await user.click(await screen.findByRole("button", { name: "Cancel" }));
 
-    expect(screen.getByLabelText("Lyrics")).toHaveValue(WRITTEN);
+    expect(screen.getByLabelText("가사")).toHaveValue(WRITTEN);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
@@ -375,14 +375,14 @@ describe("applying structure to existing lyrics", () => {
     stubServer();
     renderCreate();
     await switchToCustom();
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("[Verse]\n[Chorus]");
 
     const group = screen.getByRole("group", { name: "Structure templates" });
     await user.click(within(group).getByRole("button", { name: /^Pop/ }));
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    const swapped = (screen.getByLabelText("Lyrics") as HTMLTextAreaElement).value;
+    const swapped = (screen.getByLabelText("가사") as HTMLTextAreaElement).value;
     expect(swapped).toContain("[Pre-Chorus]");
     expect(swapped).toContain("[Final Chorus]");
   });
@@ -397,6 +397,6 @@ describe("applying structure to existing lyrics", () => {
     await user.click(presetGroup().getByRole("button", { name: /^Ballad/ }));
     await user.click(await screen.findByRole("button", { name: "Add after my lyrics" }));
 
-    expect(screen.getByLabelText("Duration")).toHaveValue("240");
+    expect(screen.getByLabelText("길이")).toHaveValue("240");
   });
 });

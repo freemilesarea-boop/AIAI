@@ -83,10 +83,10 @@ export function FavoriteButton({
     try {
       const updated = await updateGeneration(generation.id, { favorite: next });
       onChanged?.(updated);
-      toast.notify(next ? "Added to favorites" : "Removed from favorites");
+      toast.notify(next ? "즐겨찾기에 추가했습니다" : "즐겨찾기에서 뺐습니다");
     } catch {
       setOptimistic(!next);
-      toast.notifyError("Could not update this favorite.");
+      toast.notifyError("즐겨찾기를 변경하지 못했습니다.");
     }
   };
 
@@ -130,9 +130,9 @@ export function SongActions({
     try {
       const updated = await updateGeneration(generation.id, { title });
       onChanged?.(updated);
-      toast.notify("Renamed");
+      toast.notify("제목을 바꿨습니다");
     } catch {
-      toast.notifyError("Could not rename this song.");
+      toast.notifyError("제목을 바꾸지 못했습니다.");
     }
     setRenaming(false);
   };
@@ -142,14 +142,14 @@ export function SongActions({
     try {
       await deleteGeneration(generation.id);
       onDeleted?.(generation.id);
-      toast.notify("Song deleted");
+      toast.notify("곡을 삭제했습니다");
     } catch (error) {
       // The refusal is the one delete failure with a fix the user can
       // act on, so it must not be flattened into "something went wrong".
       toast.notifyError(
         error instanceof ApiError && error.code === "GENERATION_HAS_DERIVED_VERSIONS"
-          ? "Other versions were made from this song. Delete those first."
-          : "Could not delete this song.",
+          ? "이 곡에서 만든 다른 버전이 있습니다. 그것부터 삭제해 주세요."
+          : "곡을 삭제하지 못했습니다.",
       );
     }
   };
@@ -161,9 +161,9 @@ export function SongActions({
         projectId === "" ? null : projectId,
       );
       onChanged?.(updated);
-      toast.notify(projectId === "" ? "Removed from project" : "Added to project");
+      toast.notify(projectId === "" ? "프로젝트에서 뺐습니다" : "프로젝트에 넣었습니다");
     } catch {
-      toast.notifyError("Could not move this song.");
+      toast.notifyError("곡을 옮기지 못했습니다.");
     }
   };
 
@@ -223,7 +223,7 @@ export function SongActions({
         {/* Duplicate settings opens Create prefilled and records no
             lineage — nothing exists until the user presses Create. */}
         <Link href={`/create?duplicate=${generation.id}`}>
-          <Button size={buttonSize}>Duplicate settings</Button>
+          <Button size={buttonSize}>설정 복제</Button>
         </Link>
 
         {options.map((option) => (
@@ -231,7 +231,7 @@ export function SongActions({
             key={option.kind}
             href={getAudioAssetUrl(generation.id, option.kind, true)}
             download={option.filename}
-            onClick={() => toast.notify("Download started")}
+            onClick={() => toast.notify("다운로드를 시작했습니다")}
             title={`${option.hint} · ${option.filename}`}
           >
             <Button size={buttonSize}>{option.label}</Button>
@@ -249,7 +249,7 @@ export function SongActions({
               onChange={(e) => void moveToProject(e.target.value)}
               className={cx(inputClass, "!w-auto py-1.5 text-xs")}
             >
-              <option value="">No project</option>
+              <option value="">프로젝트 없음</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -266,7 +266,7 @@ export function SongActions({
 
       <ConfirmDialog
         open={confirmingDelete}
-        title="Delete this song?"
+        title="이 곡을 삭제할까요?"
         description={
           <>
             <span className="font-medium text-[var(--text-primary)]">{generation.title}</span>{" "}
@@ -274,7 +274,7 @@ export function SongActions({
             from it, they are kept and this song cannot be deleted until they are.
           </>
         }
-        confirmLabel="Delete song"
+        confirmLabel="곡 삭제"
         destructive
         onConfirm={() => void confirmDelete()}
         onCancel={() => setConfirmingDelete(false)}

@@ -87,10 +87,10 @@ export default function SongDetailPage() {
     return (
       <EmptyState
         title="Song not found"
-        description="This track may have been deleted."
+        description="이 곡은 삭제되었을 수 있습니다."
         action={
           <Link href="/library">
-            <Button variant="primary">Back to library</Button>
+            <Button variant="primary">라이브러리로 돌아가기</Button>
           </Link>
         }
       />
@@ -147,7 +147,7 @@ export default function SongDetailPage() {
               Play
             </Button>
             <Link href={`/create?from=${generation.id}`}>
-              <Button>Generate again</Button>
+              <Button>다시 만들기</Button>
             </Link>
           </div>
         )}
@@ -185,8 +185,8 @@ export default function SongDetailPage() {
           ) : (
             <p className="mt-3 text-xs text-[var(--text-secondary)]">
               {failed
-                ? "This song has no finished audio, so there is nothing to edit."
-                : "Available once this song finishes generating."}
+                ? "완성된 오디오가 없어 편집할 수 없습니다."
+                : "곡이 완성되면 사용할 수 있습니다."}
             </p>
           )}
         </section>
@@ -226,7 +226,7 @@ export default function SongDetailPage() {
 
       {generation.lyrics.trim() && (
         <Card className="p-5">
-          <h2 className="text-sm font-semibold">Lyrics</h2>
+          <h2 className="text-sm font-semibold">가사</h2>
           <pre className="mt-2 whitespace-pre-wrap font-mono text-sm leading-relaxed text-[var(--text-secondary)]">
             {generation.lyrics}
           </pre>

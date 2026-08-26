@@ -100,9 +100,9 @@ export default function LibraryPage() {
     try {
       const { affected } = await bulkDeleteGenerations(ids);
       setItems((current) => (current ? current.filter((item) => !selected.has(item.id)) : current));
-      toast.notify(`${affected} ${affected === 1 ? "song" : "songs"} deleted`);
+      toast.notify(`${affected}곡을 삭제했습니다`);
     } catch {
-      toast.notifyError("Could not delete those songs.");
+      toast.notifyError("곡을 삭제하지 못했습니다.");
     }
     exitSelection();
   };
@@ -114,12 +114,12 @@ export default function LibraryPage() {
       const { affected } = await bulkAssignProject(ids, projectId);
       toast.notify(
         projectId === null
-          ? `${affected} removed from their project`
-          : `${affected} added to the project`,
+          ? `${affected}곡을 프로젝트에서 뺐습니다`
+          : `${affected}곡을 프로젝트에 넣었습니다`,
       );
       await load();
     } catch {
-      toast.notifyError("Could not move those songs.");
+      toast.notifyError("곡을 옮기지 못했습니다.");
     }
     exitSelection();
   };
@@ -130,15 +130,15 @@ export default function LibraryPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Library</h1>
+          <h1 className="text-2xl font-bold tracking-tight">라이브러리</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Every track you have generated.
+            내가 만든 모든 음악입니다.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {items !== null && items.length > 0 && (
             <Button onClick={() => (selecting ? exitSelection() : setSelecting(true))}>
-              {selecting ? "Done" : "Select"}
+              {selecting ? "완료" : "선택"}
             </Button>
           )}
           {/*
@@ -147,10 +147,10 @@ export default function LibraryPage() {
             reached from the library it organises.
           */}
           <Link href="/projects">
-            <Button>Projects</Button>
+            <Button>프로젝트</Button>
           </Link>
           <Link href="/create">
-            <Button variant="primary">New song</Button>
+            <Button variant="primary">새 음악</Button>
           </Link>
         </div>
       </header>
@@ -158,26 +158,26 @@ export default function LibraryPage() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-[200px] flex-1">
           <label htmlFor="library-search" className="sr-only">
-            Search by title or description
+            제목이나 설명으로 검색
           </label>
           <input
             id="library-search"
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title or description"
+            placeholder="제목이나 설명으로 검색"
             className={inputClass}
           />
         </div>
         <Tabs
-          label="Filter by status"
+          label="상태로 거르기"
           value={filter}
           onChange={setFilter}
           options={LIBRARY_FILTERS}
         />
         <div>
           <label htmlFor="library-sort" className="sr-only">
-            Sort
+            정렬
           </label>
           <select
             id="library-sort"
@@ -197,11 +197,11 @@ export default function LibraryPage() {
       {selecting && (
         <div
           role="toolbar"
-          aria-label="Bulk actions"
+          aria-label="선택 항목 작업"
           className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-2"
         >
           <span className="text-sm text-[var(--text-secondary)]">
-            {selected.size} selected
+            {selected.size}개 선택됨
           </span>
           <Button
             size="sm"
@@ -209,7 +209,7 @@ export default function LibraryPage() {
               setSelected(allVisibleSelected ? new Set() : new Set(visible.map((g) => g.id)))
             }
           >
-            {allVisibleSelected ? "Clear all" : "Select all"}
+            {allVisibleSelected ? "선택 해제" : "전체 선택"}
           </Button>
           {projects.length > 0 && (
             // Wrapped: as a direct flex child the select stretches to
@@ -218,7 +218,7 @@ export default function LibraryPage() {
             // shared input class.
             <div>
               <label htmlFor="bulk-project" className="sr-only">
-                Add selected to project
+                선택한 곡을 프로젝트에 추가
               </label>
               <select
                 id="bulk-project"
@@ -228,7 +228,7 @@ export default function LibraryPage() {
                 className={cx(inputClass, "!w-auto py-1.5 text-xs")}
               >
                 <option value="" disabled>
-                  Add to project…
+                  프로젝트에 추가…
                 </option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -257,38 +257,38 @@ export default function LibraryPage() {
       )}
 
       {items === null ? (
-        <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading library">
+        <div className="flex flex-col gap-3" aria-busy="true" aria-label="라이브러리 불러오는 중">
           {[0, 1, 2, 3].map((i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
       ) : error ? (
         <EmptyState
-          title="Could not load your library"
+          title="라이브러리를 불러오지 못했습니다"
           description="BOORDA 서버가 응답하지 않았습니다. 저장된 음악은 그대로 있습니다 — 연결 문제입니다."
-          action={<Button onClick={() => void load()}>Try again</Button>}
+          action={<Button onClick={() => void load()}>다시 시도</Button>}
         />
       ) : visible.length === 0 ? (
         items.length === 0 ? (
           <EmptyState
-            title="No songs yet"
-            description="Write a short brief, add lyrics if you want vocals, and generate your first track."
+            title="아직 만든 음악이 없습니다"
+            description="원하는 분위기를 짧게 적고, 보컬을 원하면 가사를 더해 첫 곡을 만들어 보세요."
             action={
               <Link href="/create">
-                <Button variant="primary">Create your first song</Button>
+                <Button variant="primary">첫 음악 만들기</Button>
               </Link>
             }
           />
         ) : filter === "favorites" ? (
           <EmptyState
-            title="No favorites yet"
-            description="Tap the heart on any song to keep it here."
-            action={<Button onClick={() => setFilter("all")}>Show all songs</Button>}
+            title="즐겨찾기가 없습니다"
+            description="곡의 하트를 누르면 여기에 모입니다."
+            action={<Button onClick={() => setFilter("all")}>전체 보기</Button>}
           />
         ) : (
           <EmptyState
-            title="No matches"
-            description="Nothing here matches that search and filter. Try a different word, or set the filter back to All."
+            title="검색 결과가 없습니다"
+            description="검색어와 필터에 맞는 곡이 없습니다. 다른 단어로 찾거나 필터를 전체로 되돌려 보세요."
             action={
               <Button
                 onClick={() => {
@@ -320,7 +320,7 @@ export default function LibraryPage() {
       <ConfirmDialog
         open={confirmingDelete}
         title={`Delete ${selected.size} ${selected.size === 1 ? "song" : "songs"}?`}
-        description="The selected songs and their audio will be removed permanently. This cannot be undone."
+        description="선택한 곡과 오디오가 영구히 삭제됩니다. 되돌릴 수 없습니다."
         confirmLabel={`Delete ${selected.size}`}
         destructive
         onConfirm={() => void bulkDelete()}

@@ -196,8 +196,8 @@ describe("error translation", () => {
   });
 
   it("falls back to a safe message for unknown codes", () => {
-    expect(describeGenerationFailure(null).message).toContain("Something went wrong");
-    expect(describeGenerationFailure("WEIRD_NEW_CODE").message).toContain("Something went wrong");
+    expect(describeGenerationFailure(null).message).toContain("문제가 생겼습니다");
+    expect(describeGenerationFailure("WEIRD_NEW_CODE").message).toContain("문제가 생겼습니다");
   });
 
   it("describes network failure without exposing raw errors", () => {

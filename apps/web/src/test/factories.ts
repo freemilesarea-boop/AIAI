@@ -29,7 +29,6 @@ export function masterAsset(overrides: Partial<AudioAsset> = {}): AudioAsset {
     bitrate: null,
     channels: 2,
     duration: 30,
-    storage_key: "k",
     sha256: "s",
     file_size: 1,
     created_at: FIXED_CREATED_AT,
@@ -46,7 +45,6 @@ export function previewAsset(overrides: Partial<AudioAsset> = {}): AudioAsset {
     file_extension: "mp3",
     bit_depth: null,
     bitrate: 320000,
-    storage_key: "k2",
     sha256: "s2",
     ...overrides,
   });

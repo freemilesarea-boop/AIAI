@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from asset_fixtures import asset_storage_keys
 
 from luber_api.schemas import MIN_PRESERVED_SECONDS, MIN_REPLACE_SECONDS
 
@@ -248,9 +249,7 @@ async def test_the_provider_receives_the_interior_range_verbatim(client, app):
 
 async def test_the_provider_receives_the_parents_audio(client, app):
     parent = await _completed(client)
-    master_key = next(
-        a["storage_key"] for a in parent["audio_assets"] if a["asset_type"] == "MASTER"
-    )
+    master_key = (await asset_storage_keys(app, parent["id"]))["MASTER"]
     expected = await app.state.audio_storage.open(master_key)
 
     await _replace(client, parent["id"], start_seconds=SPAN_START, end_seconds=SPAN_END)

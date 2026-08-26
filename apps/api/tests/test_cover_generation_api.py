@@ -78,6 +78,28 @@ def test_only_measured_values_are_offered():
 # ── acceptance ────────────────────────────────────────────────────────
 
 
+async def _master_key(app, generation_id: str) -> str:
+    """The master's storage key, read from the database.
+
+    Server-side tests that need the stored object still need the key; it
+    is no longer in the API response, and the database is where it lives.
+    """
+    from sqlalchemy import select
+
+    from luber_database.models.generation import AudioAsset
+
+    async with app.state.session_factory() as session:
+        result = await session.execute(
+            select(AudioAsset.storage_key).where(
+                AudioAsset.generation_id == uuid.UUID(str(generation_id)),
+                AudioAsset.asset_type == "MASTER",
+            )
+        )
+        key = result.scalars().first()
+    assert key, "the completed generation has no MASTER asset"
+    return str(key)
+
+
 async def test_a_completed_song_can_be_covered(client):
     parent = await _completed(client)
     resp = await _cover(client, parent["id"])
@@ -226,10 +248,11 @@ async def test_the_worker_routes_a_cover_to_the_audio_to_audio_path(client, app)
 
 async def test_the_provider_receives_the_sources_real_audio(client, app):
     parent = await _completed(client)
-    master_key = next(
-        a["storage_key"] for a in parent["audio_assets"] if a["asset_type"] == "MASTER"
-    )
-    expected = await app.state.audio_storage.open(master_key)
+    # The raw MASTER row's bytes, read from the database rather than from
+    # the API: the key is no longer serialised to clients, and the
+    # delivery endpoint may resolve to a finished master, which is not
+    # what the provider is handed.
+    expected = await app.state.audio_storage.open(await _master_key(app, parent["id"]))
 
     await _cover(client, parent["id"])
 

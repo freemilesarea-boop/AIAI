@@ -434,9 +434,15 @@ class AudioAssetResponse(BaseModel):
     bitrate: int | None
     channels: int
     duration: float
-    #: Relative, UUID-scoped object key — never a filesystem path, bucket
-    #: name, or URL. Clients address audio by generation id, not by key.
-    storage_key: str
+    #: ``storage_key`` is deliberately absent.
+    #:
+    #: It is how the server finds the bytes, and no client needs it:
+    #: audio is addressed by generation id and asset kind, and the route
+    #: resolves the key itself from the generation it has already checked
+    #: ownership of. A key in a response is an implementation detail
+    #: leaving the building — it cannot be used to fetch anything, but it
+    #: invites a client to try, and it makes the storage layout part of
+    #: the API's observable surface. The column stays on the model.
     sha256: str
     file_size: int
     created_at: datetime

@@ -103,7 +103,7 @@ export function parseSeedInput(raw: string): { seed: number | null; error?: stri
   if (!/^\d+$/.test(trimmed)) return { seed: null, error: "A seed must be a whole number." };
   const value = Number(trimmed);
   if (!Number.isSafeInteger(value) || value > SEED_MAX) {
-    return { seed: null, error: "That seed is too large." };
+    return { seed: null, error: "시드 값이 너무 큽니다." };
   }
   return { seed: value };
 }
@@ -234,17 +234,17 @@ export function GenerationForm({
 
   const validate = (): FieldErrors => {
     const next: FieldErrors = {};
-    if (!title.trim()) next.title = "Add a title for your track.";
+    if (!title.trim()) next.title = "곡 제목을 입력해 주세요.";
     else if (title.length > TITLE_MAX) next.title = `Title must be ${TITLE_MAX} characters or fewer.`;
 
-    if (!prompt.trim()) next.prompt = "Describe the music you want.";
+    if (!prompt.trim()) next.prompt = "원하는 음악을 설명해 주세요.";
     else if (prompt.length > PROMPT_MAX)
       next.prompt = `Description must be ${PROMPT_MAX} characters or fewer.`;
 
     if (lyrics.length > LYRICS_MAX)
       next.lyrics = `Lyrics must be ${LYRICS_MAX} characters or fewer.`;
     if (!instrumental && !lyrics.trim())
-      next.lyrics = "Add lyrics, or switch the vocal to Instrumental.";
+      next.lyrics = "가사를 넣거나 보컬을 연주곡으로 바꿔 주세요.";
 
     // The only advanced-control rejections: values the engine cannot
     // accept. Nothing here rejects a draft for being *unwise*.
@@ -267,7 +267,7 @@ export function GenerationForm({
     // Submitting here would produce an unreferenced song while the form
     // still showed a reference attached, so it is refused instead.
     if (referenceStatus === "SELECTED" || referenceStatus === "UPLOADING") {
-      setErrors({ reference: "Wait for the reference track to finish uploading." });
+      setErrors({ reference: "참고 트랙 업로드가 끝날 때까지 기다려 주세요." });
       return;
     }
 
@@ -314,12 +314,12 @@ export function GenerationForm({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <Tabs
-          label="Generation mode"
+          label="입력 방식"
           value={mode}
           onChange={setMode}
           options={[
-            { value: "simple", label: "Simple" },
-            { value: "custom", label: "Custom" },
+            { value: "simple", label: "간단히" },
+            { value: "custom", label: "직접 설정" },
           ]}
         />
         {!custom && (
@@ -351,7 +351,7 @@ export function GenerationForm({
 
       <div>
         <label htmlFor={ids.title} className={labelClass}>
-          Title
+          제목
         </label>
         <input
           id={ids.title}
@@ -359,7 +359,7 @@ export function GenerationForm({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Midnight Window"
+          placeholder="한밤의 창"
           maxLength={TITLE_MAX}
           disabled={disabled}
           aria-invalid={Boolean(errors.title)}
@@ -375,14 +375,14 @@ export function GenerationForm({
 
       <div>
         <label htmlFor={ids.prompt} className={labelClass}>
-          Music description
+          어떤 음악을 만들까요?
         </label>
         <textarea
           id={ids.prompt}
           ref={promptRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Dreamy Korean indie pop with warm electric piano, soft drums and emotional female lead vocal"
+          placeholder="따뜻한 일렉트릭 피아노와 부드러운 드럼, 감성적인 여성 보컬의 몽환적인 한국 인디 팝"
           rows={4}
           maxLength={PROMPT_MAX}
           disabled={disabled}
@@ -415,7 +415,7 @@ export function GenerationForm({
 
       <div>
         <label htmlFor={ids.lyrics} className={labelClass}>
-          Lyrics
+          가사
         </label>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
           Section tags like [Verse] and [Chorus] are passed through as written. Plain lyrics
@@ -423,7 +423,7 @@ export function GenerationForm({
         </p>
 
         {!instrumental && (
-          <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Insert section tag">
+          <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="구간 태그 넣기">
             {SECTION_TAG_PALETTE.map((tag) => (
               <button
                 key={tag}
@@ -477,7 +477,7 @@ export function GenerationForm({
       <div className={custom ? "grid gap-5 sm:grid-cols-3" : "grid gap-5 sm:grid-cols-1"}>
         <div>
           <label htmlFor={ids.vocal} className={labelClass}>
-            Vocal
+            보컬
           </label>
           <select
             id={ids.vocal}
@@ -497,7 +497,7 @@ export function GenerationForm({
         {custom && (
         <div>
           <label htmlFor={ids.language} className={labelClass}>
-            Language
+            언어
           </label>
           <select
             id={ids.language}
@@ -518,7 +518,7 @@ export function GenerationForm({
         {custom && (
         <div>
           <label htmlFor={ids.duration} className={labelClass}>
-            Duration
+            길이
           </label>
           <select
             id={ids.duration}
@@ -539,7 +539,7 @@ export function GenerationForm({
 
       {custom && (
         <fieldset className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] p-4">
-          <legend className="px-1 text-sm font-medium text-[var(--text-primary)]">Seed</legend>
+          <legend className="px-1 text-sm font-medium text-[var(--text-primary)]">시드</legend>
           <p className="text-xs text-[var(--text-muted)]">
             The seed is the engine&rsquo;s starting point. Reusing one keeps a generation close
             to a previous take — it does not promise identical audio, and this engine makes no
@@ -547,7 +547,7 @@ export function GenerationForm({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Tabs
-              label="Seed mode"
+              label="시드 방식"
               value={seedMode}
               onChange={setSeedMode}
               options={[
@@ -626,10 +626,10 @@ export function GenerationForm({
             focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed
             disabled:bg-[var(--brand-muted)] disabled:text-[var(--text-secondary)]"
         >
-          {busy ? "Sending…" : "Create"}
+          {busy ? "보내는 중…" : "음악 만들기"}
         </button>
         <Tabs
-          label="Number of songs"
+          label="곡 수"
           value={String(resultCount) as "1" | "2"}
           onChange={(value) => setResultCount(value === "2" ? 2 : 1)}
           options={[
@@ -640,7 +640,7 @@ export function GenerationForm({
       </div>
       <p className="text-xs text-[var(--text-muted)]">
         {resultCount === 2
-          ? "Two independent songs so you can compare. Each takes its own turn on the engine."
+          ? "비교할 수 있도록 서로 다른 두 곡을 만듭니다. 각각 차례대로 처리됩니다."
           : "One song."}
       </p>
     </form>

@@ -11,14 +11,17 @@ import { describeGenerationFailure } from "./errors";
 describe("reliability failure codes", () => {
   it("tells the user a busy engine is not their fault", () => {
     const { message } = describeGenerationFailure("PROVIDER_BUSY");
-    expect(message).toMatch(/busy/i);
-    // The distinction the code exists to preserve: nothing failed.
-    expect(message).not.toMatch(/failed|error|wrong/i);
+    expect(message).toMatch(/바쁩니다/);
+    // The distinction the code exists to preserve: nothing failed, and
+    // the user's settings are not at fault. Asserted in the language the
+    // message is actually written in — a negative match against English
+    // words would pass vacuously on Korean copy.
+    expect(message).not.toMatch(/실패|오류|잘못/);
   });
 
   it("asks for a retry after an interruption", () => {
     expect(describeGenerationFailure("GENERATION_INTERRUPTED").message).toMatch(
-      /interrupted/i,
+      /중단되었습니다/,
     );
   });
 

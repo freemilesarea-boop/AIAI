@@ -334,7 +334,7 @@ describe("deleting a song with derived versions", () => {
   async function attemptDelete() {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(screen.getByRole("button", { name: "Delete song" }));
+    await user.click(screen.getByRole("button", { name: "곡 삭제" }));
   }
 
   function renderActions(onDeleted: () => void) {
@@ -360,10 +360,10 @@ describe("deleting a song with derived versions", () => {
     await attemptDelete();
 
     expect(
-      await screen.findByText("Other versions were made from this song. Delete those first."),
+      await screen.findByText("이 곡에서 만든 다른 버전이 있습니다. 그것부터 삭제해 주세요."),
     ).toBeInTheDocument();
     expect(onDeleted).not.toHaveBeenCalled();
-    expect(screen.queryByText("Song deleted")).toBeNull();
+    expect(screen.queryByText("곡을 삭제했습니다")).toBeNull();
   });
 
   it("keeps the generic message for a failure it cannot explain", async () => {
@@ -371,7 +371,7 @@ describe("deleting a song with derived versions", () => {
     renderActions(vi.fn());
     await attemptDelete();
 
-    expect(await screen.findByText("Could not delete this song.")).toBeInTheDocument();
+    expect(await screen.findByText("곡을 삭제하지 못했습니다.")).toBeInTheDocument();
   });
 
   it("does not promise that derived versions are orphaned", async () => {

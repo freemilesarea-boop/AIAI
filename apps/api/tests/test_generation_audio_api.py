@@ -6,6 +6,7 @@ against real bytes, not stubs.
 """
 
 import hashlib
+import json
 import uuid
 
 import pytest
@@ -127,12 +128,27 @@ async def test_response_never_leaks_filesystem_paths(client, tmp_path):
         assert "/Users/" not in joined
 
 
-async def test_detail_response_exposes_no_absolute_path(client):
+async def test_detail_response_exposes_no_storage_location_at_all(client):
+    """Stronger than it was: the key is not relative, it is absent.
+
+    This previously asserted that `storage_key` was a relative key rather
+    than a filesystem path. The field is no longer serialised to clients
+    at all — audio is addressed by generation id and the server resolves
+    the key itself — so the assertion is now that nothing in the response
+    says where the bytes are.
+    """
     generation = await _completed_generation(client)
     master = next(a for a in generation["audio_assets"] if a["asset_type"] == "MASTER")
-    # storage_key is a relative key, never a filesystem location.
-    assert master["storage_key"].startswith("audio/")
-    assert not master["storage_key"].startswith("/")
+    assert "storage_key" not in master
+
+    body = json.dumps(generation)
+    assert "storage_key" not in body
+    for absolute in ("/Users/", "/var/", "/tmp/", "s3://"):
+        assert absolute not in body
+
+    # The facts a player actually needs are still there.
+    for field in ("asset_type", "format", "mime_type", "duration"):
+        assert field in master
 
 
 # ── storage boundary: path traversal ──────────────────────────────────

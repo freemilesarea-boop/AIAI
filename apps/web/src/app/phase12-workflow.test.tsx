@@ -149,7 +149,7 @@ describe("action feedback", () => {
     await user.type(screen.getByLabelText("Song title"), "New Name");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByText("Renamed")).toBeInTheDocument();
+    expect(await screen.findByText("제목을 바꿨습니다")).toBeInTheDocument();
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
@@ -163,7 +163,7 @@ describe("action feedback", () => {
     await user.type(screen.getByLabelText("Song title"), "New Name");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    const toast = await screen.findByText("Could not rename this song.");
+    const toast = await screen.findByText("제목을 바꾸지 못했습니다.");
     expect(toast).toBeInTheDocument();
     // Never the raw network error.
     expect(document.body.textContent).not.toContain("ECONNREFUSED");
@@ -177,9 +177,9 @@ describe("confirmation dialog", () => {
     return (
       <ConfirmDialog
         open
-        title="Delete this song?"
+        title="이 곡을 삭제할까요?"
         description="It will be removed permanently."
-        confirmLabel="Delete song"
+        confirmLabel="곡 삭제"
         destructive
         onConfirm={onConfirm}
         onCancel={() => {}}
@@ -223,7 +223,7 @@ describe("confirmation dialog", () => {
     render(<Harness onConfirm={vi.fn()} />);
 
     const cancel = screen.getByRole("button", { name: "Cancel" });
-    const confirm = screen.getByRole("button", { name: "Delete song" });
+    const confirm = screen.getByRole("button", { name: "곡 삭제" });
 
     await user.tab();
     expect(confirm).toHaveFocus();
@@ -276,7 +276,7 @@ describe("song management", () => {
     renderApp(<SongActions generation={generation()} />);
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
-    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Delete this song?");
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("이 곡을 삭제할까요?");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
@@ -294,7 +294,7 @@ describe("song management", () => {
     // Phase 17 replaced orphaning with a refusal, so the dialog no
     // longer promises that derived versions simply survive the delete.
     expect(dialog).toHaveTextContent(/cannot be deleted until they are/);
-    await user.click(within(dialog).getByRole("button", { name: "Delete song" }));
+    await user.click(within(dialog).getByRole("button", { name: "곡 삭제" }));
 
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("gen-1"));
     expect(calls.some((c) => c.method === "DELETE")).toBe(true);
@@ -399,9 +399,9 @@ describe("library filtering", () => {
     renderApp(<LibraryPage />);
     await screen.findByText("Midnight Window");
 
-    await user.click(screen.getByRole("tab", { name: "Favorites" }));
+    await user.click(screen.getByRole("tab", { name: "즐겨찾기" }));
 
-    expect(await screen.findByText("No favorites yet")).toBeInTheDocument();
+    expect(await screen.findByText("즐겨찾기가 없습니다")).toBeInTheDocument();
   });
 });
 
@@ -423,10 +423,10 @@ describe("selection mode", () => {
     renderApp(<LibraryPage />);
     await screen.findByText("Midnight Window");
 
-    await user.click(screen.getByRole("button", { name: "Select" }));
+    await user.click(screen.getByRole("button", { name: "선택" }));
     await user.click(screen.getByRole("checkbox", { name: "Select Midnight Window" }));
 
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByText("1개 선택됨")).toBeInTheDocument();
   });
 
   it("confirms a bulk delete showing how many songs it will remove", async () => {
@@ -435,8 +435,8 @@ describe("selection mode", () => {
     renderApp(<LibraryPage />);
     await screen.findByText("Midnight Window");
 
-    await user.click(screen.getByRole("button", { name: "Select" }));
-    await user.click(screen.getByRole("button", { name: "Select all" }));
+    await user.click(screen.getByRole("button", { name: "선택" }));
+    await user.click(screen.getByRole("button", { name: "전체 선택" }));
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     const dialog = await screen.findByRole("alertdialog");
@@ -456,9 +456,9 @@ describe("selection mode", () => {
     renderApp(<LibraryPage />);
     await screen.findByText("Midnight Window");
 
-    await user.click(screen.getByRole("button", { name: "Select" }));
+    await user.click(screen.getByRole("button", { name: "선택" }));
     await user.click(screen.getByRole("checkbox", { name: "Select Midnight Window" }));
-    await user.selectOptions(screen.getByLabelText("Add selected to project"), "proj-1");
+    await user.selectOptions(screen.getByLabelText("선택한 곡을 프로젝트에 추가"), "proj-1");
 
     await waitFor(() => {
       const call = calls.find((c) => c.url.includes("bulk-project"));
@@ -484,11 +484,11 @@ describe("two-result generation", () => {
     const { calls } = stubApi({ generations: [] });
     renderApp(<CreatePage />);
 
-    await user.type(screen.getByLabelText("Title"), "Twin");
-    await user.type(screen.getByLabelText("Music description"), "Warm lo-fi");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "Twin");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Warm lo-fi");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       const post = calls.find((c) => c.method === "POST" && !c.url.includes("preflight"));
@@ -504,11 +504,11 @@ describe("two-result generation", () => {
     renderApp(<CreatePage />);
 
     await user.click(screen.getByRole("tab", { name: "1 Song" }));
-    await user.type(screen.getByLabelText("Title"), "Solo");
-    await user.type(screen.getByLabelText("Music description"), "Warm lo-fi");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "Solo");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Warm lo-fi");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       const post = calls.find((c) => c.method === "POST" && !c.url.includes("preflight"));
@@ -578,7 +578,7 @@ describe("generation cards", () => {
     // The working one is fully usable...
     expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
     // ...and the broken one reports itself without claiming the batch failed.
-    expect(screen.getByRole("alert")).toHaveTextContent(/took too long/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/시간이 너무 오래 걸렸습니다/);
   });
 
   it("offers a real retry on a failure", async () => {
@@ -615,7 +615,7 @@ describe("generation cards", () => {
 describe("seed workflow", () => {
   async function openCustom(user: ReturnType<typeof userEvent.setup>) {
     renderApp(<CreatePage />);
-    await user.click(screen.getByRole("tab", { name: "Custom" }));
+    await user.click(screen.getByRole("tab", { name: "직접 설정" }));
   }
 
   it("defaults to a random seed", async () => {
@@ -631,11 +631,11 @@ describe("seed workflow", () => {
     const { calls } = stubApi({ generations: [] });
     await openCustom(user);
 
-    await user.type(screen.getByLabelText("Title"), "T");
-    await user.type(screen.getByLabelText("Music description"), "P");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "T");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "P");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       const post = calls.find((c) => c.method === "POST" && !c.url.includes("preflight"));
@@ -651,11 +651,11 @@ describe("seed workflow", () => {
 
     await user.click(screen.getByRole("tab", { name: "Fixed" }));
     await user.type(screen.getByLabelText("Seed value"), "4242");
-    await user.type(screen.getByLabelText("Title"), "T");
-    await user.type(screen.getByLabelText("Music description"), "P");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "T");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "P");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       const post = calls.find((c) => c.method === "POST" && !c.url.includes("preflight"));
@@ -670,11 +670,11 @@ describe("seed workflow", () => {
 
     await user.click(screen.getByRole("tab", { name: "Fixed" }));
     await user.type(screen.getByLabelText("Seed value"), "abc");
-    await user.type(screen.getByLabelText("Title"), "T");
-    await user.type(screen.getByLabelText("Music description"), "P");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "T");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "P");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect(await screen.findByText("A seed must be a whole number.")).toBeInTheDocument();
     expect(calls.some((c) => c.method === "POST" && !c.url.includes("preflight"))).toBe(false);
@@ -706,7 +706,7 @@ describe("duplicate settings", () => {
     stubApi({ generations: [generation()] });
     renderApp(<SongActions generation={generation()} />);
 
-    expect(screen.getByRole("link", { name: "Duplicate settings" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "설정 복제" })).toHaveAttribute(
       "href",
       "/create?duplicate=gen-1",
     );
@@ -722,7 +722,7 @@ describe("duplicate settings", () => {
     renderApp(<CreatePage />);
 
     await waitFor(() =>
-      expect(screen.getByLabelText("Title")).toHaveValue("Midnight Window"),
+      expect(screen.getByLabelText("제목")).toHaveValue("Midnight Window"),
     );
     // Settings carried over…
     expect(screen.getByLabelText("BPM")).toHaveValue(128);
@@ -730,7 +730,7 @@ describe("duplicate settings", () => {
     // …but this is a new song, not a child of the old one.
     expect(screen.queryByText(/Based on/)).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() => {
       const post = calls.find((c) => c.method === "POST" && !c.url.includes("preflight"));
       expect(post?.body.parent_generation_id).toBeNull();
@@ -922,7 +922,7 @@ describe("empty states", () => {
   it("says an empty library is empty rather than inventing demo songs", async () => {
     stubApi({ generations: [] });
     renderApp(<LibraryPage />);
-    expect(await screen.findByText("No songs yet")).toBeInTheDocument();
+    expect(await screen.findByText("아직 만든 음악이 없습니다")).toBeInTheDocument();
   });
 
   it("explains a search with no matches differently", async () => {
@@ -931,10 +931,10 @@ describe("empty states", () => {
     renderApp(<LibraryPage />);
     await screen.findByText("Midnight Window");
 
-    await user.type(screen.getByLabelText("Search by title or description"), "zzzz");
+    await user.type(screen.getByLabelText("제목이나 설명으로 검색"), "zzzz");
 
-    expect(await screen.findByText("No matches")).toBeInTheDocument();
-    expect(screen.queryByText("No songs yet")).toBeNull();
+    expect(await screen.findByText("검색 결과가 없습니다")).toBeInTheDocument();
+    expect(screen.queryByText("아직 만든 음악이 없습니다")).toBeNull();
   });
 
   it("shows an empty project without pretending it is broken", async () => {
@@ -960,7 +960,7 @@ describe("song detail", () => {
     renderApp(<SongDetailPage />);
     await screen.findByRole("heading", { name: "Midnight Window" });
 
-    expect(screen.getByText("Finishing")).toBeInTheDocument();
+    expect(screen.getByText("마무리 중")).toBeInTheDocument();
     // The raw enum only appears under the Advanced disclosure.
     const summary = screen.getByText("Advanced details").closest("details")!;
     expect(within(summary).getByText("POST_PROCESSING")).toBeInTheDocument();

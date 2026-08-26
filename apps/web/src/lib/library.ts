@@ -15,18 +15,18 @@ export type LibraryFilter = "all" | "favorites" | "completed" | "generating" | "
 export type LibrarySort = "newest" | "oldest" | "title_asc" | "title_desc";
 
 export const LIBRARY_FILTERS: { value: LibraryFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "favorites", label: "Favorites" },
-  { value: "completed", label: "Completed" },
-  { value: "generating", label: "Generating" },
-  { value: "failed", label: "Failed" },
+  { value: "all", label: "전체" },
+  { value: "favorites", label: "즐겨찾기" },
+  { value: "completed", label: "완료" },
+  { value: "generating", label: "만드는 중" },
+  { value: "failed", label: "실패" },
 ];
 
 export const LIBRARY_SORTS: { value: LibrarySort; label: string }[] = [
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "title_asc", label: "Title A–Z" },
-  { value: "title_desc", label: "Title Z–A" },
+  { value: "newest", label: "최신순" },
+  { value: "oldest", label: "오래된순" },
+  { value: "title_asc", label: "제목 ㄱ–ㅎ" },
+  { value: "title_desc", label: "제목 ㅎ–ㄱ" },
 ];
 
 /** Statuses that mean "the engine still has this one". */

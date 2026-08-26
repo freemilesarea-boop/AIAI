@@ -230,7 +230,7 @@ describe("create modes", () => {
   it("lands in Simple mode", () => {
     stub();
     renderWithPlayer(<CreatePage />);
-    expect(screen.getByRole("tab", { name: "Simple" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "간단히" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("Simple mode hides the advanced surface entirely", () => {
@@ -239,23 +239,23 @@ describe("create modes", () => {
     // A first-time user must reach Create without meeting any of this.
     expect(screen.queryByLabelText("BPM")).toBeNull();
     expect(screen.queryByLabelText("Key / Scale")).toBeNull();
-    expect(screen.queryByLabelText("Duration")).toBeNull();
+    expect(screen.queryByLabelText("길이")).toBeNull();
     expect(screen.queryByText(/Song presets/)).toBeNull();
     // But the essentials are all there.
-    expect(screen.getByLabelText("Title")).toBeInTheDocument();
-    expect(screen.getByLabelText("Music description")).toBeInTheDocument();
-    expect(screen.getByLabelText("Lyrics")).toBeInTheDocument();
-    expect(screen.getByLabelText("Vocal")).toBeInTheDocument();
+    expect(screen.getByLabelText("제목")).toBeInTheDocument();
+    expect(screen.getByLabelText("어떤 음악을 만들까요?")).toBeInTheDocument();
+    expect(screen.getByLabelText("가사")).toBeInTheDocument();
+    expect(screen.getByLabelText("보컬")).toBeInTheDocument();
   });
 
   it("Custom mode reveals the advanced surface", async () => {
     const user = userEvent.setup();
     stub();
     renderWithPlayer(<CreatePage />);
-    await user.click(screen.getByRole("tab", { name: "Custom" }));
+    await user.click(screen.getByRole("tab", { name: "직접 설정" }));
     expect(screen.getByLabelText("BPM")).toBeInTheDocument();
-    expect(screen.getByLabelText("Duration")).toBeInTheDocument();
-    expect(screen.getByLabelText("Language")).toBeInTheDocument();
+    expect(screen.getByLabelText("길이")).toBeInTheDocument();
+    expect(screen.getByLabelText("언어")).toBeInTheDocument();
     expect(screen.getByText(/Song presets/)).toBeInTheDocument();
   });
 
@@ -263,11 +263,11 @@ describe("create modes", () => {
     const user = userEvent.setup();
     const fetchMock = stub();
     renderWithPlayer(<CreatePage />);
-    await user.type(screen.getByLabelText("Title"), "Quick Song");
-    await user.type(screen.getByLabelText("Music description"), "Warm lo-fi");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "Quick Song");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Warm lo-fi");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가사");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       const post = fetchMock.mock.calls.find(
@@ -306,7 +306,7 @@ describe("prompt chips", () => {
     renderWithPlayer(<CreatePage />);
     await user.click(screen.getByRole("button", { name: "Pop" }));
     // The chip's effect is visible in the textarea, not hidden in a payload.
-    expect(screen.getByLabelText("Music description")).toHaveValue("Pop");
+    expect(screen.getByLabelText("어떤 음악을 만들까요?")).toHaveValue("Pop");
   });
 });
 
@@ -316,7 +316,7 @@ describe("library", () => {
   it("shows an honest empty state rather than demo songs", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [], total: 0, limit: 20, offset: 0 })));
     renderWithPlayer(<LibraryPage />);
-    expect(await screen.findByText("No songs yet")).toBeInTheDocument();
+    expect(await screen.findByText("아직 만든 음악이 없습니다")).toBeInTheDocument();
   });
 
   it("lists real generations", async () => {
@@ -331,7 +331,7 @@ describe("library", () => {
       json({ items: [generation(), generation({ id: "g2", title: "Other Song" })], total: 2, limit: 20, offset: 0 })));
     renderWithPlayer(<LibraryPage />);
     await screen.findByText("Midnight Window");
-    await user.type(screen.getByLabelText("Search by title or description"), "Other");
+    await user.type(screen.getByLabelText("제목이나 설명으로 검색"), "Other");
     expect(screen.queryByText("Midnight Window")).toBeNull();
     expect(screen.getByText("Other Song")).toBeInTheDocument();
   });
@@ -341,8 +341,8 @@ describe("library", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ items: [generation()], total: 1, limit: 20, offset: 0 })));
     renderWithPlayer(<LibraryPage />);
     await screen.findByText("Midnight Window");
-    await user.type(screen.getByLabelText("Search by title or description"), "zzzz");
-    expect(await screen.findByText("No matches")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("제목이나 설명으로 검색"), "zzzz");
+    expect(await screen.findByText("검색 결과가 없습니다")).toBeInTheDocument();
   });
 
   it("classifies status for the filter tabs", () => {
@@ -356,7 +356,7 @@ describe("library", () => {
   it("surfaces a connection failure without a stack trace", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("ECONNREFUSED 127.0.0.1")));
     renderWithPlayer(<LibraryPage />);
-    expect(await screen.findByText("Could not load your library")).toBeInTheDocument();
+    expect(await screen.findByText("라이브러리를 불러오지 못했습니다")).toBeInTheDocument();
     expect(screen.queryByText(/ECONNREFUSED/)).toBeNull();
   });
 });

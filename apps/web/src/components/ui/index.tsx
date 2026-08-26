@@ -294,34 +294,34 @@ export function EmptyState({ title, description, action, icon }: EmptyStateProps
 export function StatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string; live?: boolean }> = {
     QUEUED: {
-      label: "Queued",
+      label: "대기 중",
       className: "bg-[var(--surface-overlay)] text-[var(--text-secondary)]",
       live: true,
     },
     STARTING: {
-      label: "Starting",
+      label: "준비 중",
       className: "bg-[var(--accent-muted)] text-[var(--accent)]",
       live: true,
     },
     GENERATING: {
-      label: "Generating",
+      label: "만드는 중",
       className: "bg-[var(--accent-muted)] text-[var(--accent)]",
       live: true,
     },
     POST_PROCESSING: {
-      label: "Finishing",
+      label: "마무리 중",
       className: "bg-[var(--accent-muted)] text-[var(--accent)]",
       live: true,
     },
     UPLOADING: {
-      label: "Saving",
+      label: "저장 중",
       className: "bg-[var(--accent-muted)] text-[var(--accent)]",
       live: true,
     },
-    COMPLETED: { label: "Ready", className: "bg-[var(--brand-muted)] text-[var(--brand-text)]" },
-    FAILED: { label: "Failed", className: "bg-[var(--danger-muted)] text-[var(--danger)]" },
+    COMPLETED: { label: "완료", className: "bg-[var(--brand-muted)] text-[var(--brand-text)]" },
+    FAILED: { label: "실패", className: "bg-[var(--danger-muted)] text-[var(--danger)]" },
     CANCELLED: {
-      label: "Cancelled",
+      label: "취소됨",
       className: "bg-[var(--surface-overlay)] text-[var(--text-muted)]",
     },
   };

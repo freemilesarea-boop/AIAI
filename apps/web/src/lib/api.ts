@@ -79,7 +79,6 @@ export interface AudioAsset {
   bitrate: number | null;
   channels: number;
   duration: number;
-  storage_key: string;
   sha256: string;
   file_size: number;
   created_at: string;

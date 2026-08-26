@@ -39,6 +39,29 @@ async def _completed(client) -> dict:
 # ── acceptance of a valid request ─────────────────────────────────────
 
 
+async def _master_key(app, generation_id: str) -> str:
+    """The master's storage key, read from the database.
+
+    Server-side tests that need a local path still need the key; it is no
+    longer in the API response, and it never should have been the test's
+    source for it. The database is where it lives.
+    """
+    from sqlalchemy import select
+
+    from luber_database.models.generation import AudioAsset
+
+    async with app.state.session_factory() as session:
+        result = await session.execute(
+            select(AudioAsset.storage_key).where(
+                AudioAsset.generation_id == uuid.UUID(str(generation_id)),
+                AudioAsset.asset_type == "MASTER",
+            )
+        )
+        key = result.scalars().first()
+    assert key, "the completed generation has no MASTER asset"
+    return str(key)
+
+
 async def test_a_completed_song_can_be_extended(client):
     parent = await _completed(client)
 
@@ -245,10 +268,11 @@ async def test_the_worker_routes_an_extension_to_the_edit_path(client, app):
 async def test_the_provider_receives_the_parents_real_audio(client, app):
     """The bytes handed to the engine are the parent's master, not a path."""
     parent = await _completed(client)
-    master_key = next(
-        a["storage_key"] for a in parent["audio_assets"] if a["asset_type"] == "MASTER"
-    )
-    expected = await app.state.audio_storage.open(master_key)
+    # The raw MASTER row's bytes, read from the database rather than from
+    # the API: the key is no longer serialised to clients, and the
+    # delivery endpoint may resolve to a finished master, which is not
+    # what the provider is handed.
+    expected = await app.state.audio_storage.open(await _master_key(app, parent["id"]))
 
     await client.post(f"/v1/generations/{parent['id']}/extend", json={"seconds": 15})
 
@@ -261,9 +285,7 @@ async def test_the_repaint_range_comes_from_the_measured_audio(client, app):
     from luber_audio_utils import probe_audio
 
     parent = await _completed(client)
-    master_key = next(
-        a["storage_key"] for a in parent["audio_assets"] if a["asset_type"] == "MASTER"
-    )
+    master_key = await _master_key(app, parent["id"])
     measured = probe_audio(app.state.audio_storage.local_path(master_key)).duration_seconds
 
     await client.post(f"/v1/generations/{parent['id']}/extend", json={"seconds": 15})
@@ -279,9 +301,7 @@ async def test_a_stale_stored_duration_does_not_move_the_boundary(client, app):
     from luber_audio_utils import probe_audio
 
     parent = await _completed(client)
-    master_key = next(
-        a["storage_key"] for a in parent["audio_assets"] if a["asset_type"] == "MASTER"
-    )
+    master_key = await _master_key(app, parent["id"])
     measured = probe_audio(app.state.audio_storage.local_path(master_key)).duration_seconds
 
     async with app.state.session_factory() as session:

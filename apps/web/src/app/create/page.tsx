@@ -241,8 +241,8 @@ function CreateWorkspace() {
 
           {queue.entries.length === 0 ? (
             <EmptyState
-              title="Your tracks appear here"
-              description="Fill in the form and press Create. You can keep working while a song generates, and start another at any time."
+              title="여기에 만든 음악이 표시됩니다"
+              description="내용을 채우고 만들기를 누르세요. 곡이 만들어지는 동안에도 계속 작업할 수 있고, 언제든 새로 시작할 수 있습니다."
             />
           ) : (
             <section aria-labelledby="queue-heading" className="flex flex-col gap-3">

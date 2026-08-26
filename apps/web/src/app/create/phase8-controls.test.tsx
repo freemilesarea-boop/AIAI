@@ -90,7 +90,6 @@ function generationBody(overrides: GenerationOverrides = {}) {
             bitrate: null,
             channels: 2,
             duration: 60,
-            storage_key: `audio/${GEN_ID}/master.wav`,
             sha256: "504aa20655af7f4756c604c071b5e6bdafb087d61c78b21d6b12a939ca653a31",
             file_size: 8640102,
             created_at: "2026-08-11T12:00:40Z",
@@ -169,9 +168,9 @@ function stubServer(options: { generation?: GenerationOverrides; preflight?: Pre
 const LYRICS_TEXT = "[Verse]\n오늘 밤 너를 생각해";
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Title"), "Midnight Window");
-  await user.type(screen.getByLabelText("Music description"), "Dreamy Korean indie pop");
-  await user.click(screen.getByLabelText("Lyrics"));
+  await user.type(screen.getByLabelText("제목"), "Midnight Window");
+  await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Dreamy Korean indie pop");
+  await user.click(screen.getByLabelText("가사"));
   await user.paste(LYRICS_TEXT);
 }
 
@@ -189,7 +188,7 @@ async function submittedBody(fetchMock: ReturnType<typeof vi.fn>) {
  */
 async function switchToCustom() {
   const user = userEvent.setup();
-  const tab = screen.queryByRole("tab", { name: "Custom" });
+  const tab = screen.queryByRole("tab", { name: "직접 설정" });
   if (tab && tab.getAttribute("aria-selected") !== "true") await user.click(tab);
 }
 
@@ -238,7 +237,7 @@ describe("advanced controls", () => {
     await switchToCustom();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     const body = await submittedBody(fetchMock);
     // The Phase 7 contract, unchanged.
@@ -265,7 +264,7 @@ describe("advanced controls", () => {
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "128");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect((await submittedBody(fetchMock)).bpm).toBe(128);
   });
@@ -278,7 +277,7 @@ describe("advanced controls", () => {
 
     await fillValidForm(user);
     await user.selectOptions(screen.getByLabelText("Key / Scale"), "F# minor");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect((await submittedBody(fetchMock)).key_scale).toBe("F# minor");
   });
@@ -291,7 +290,7 @@ describe("advanced controls", () => {
 
     await fillValidForm(user);
     await user.selectOptions(screen.getByLabelText("Time Signature"), "3");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect((await submittedBody(fetchMock)).time_signature).toBe("3");
   });
@@ -306,7 +305,7 @@ describe("advanced controls", () => {
     await user.type(screen.getByLabelText("BPM"), "92");
     await user.selectOptions(screen.getByLabelText("Key / Scale"), "Bb major");
     await user.selectOptions(screen.getByLabelText("Time Signature"), "6");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     const body = await submittedBody(fetchMock);
     expect(body.bpm).toBe(92);
@@ -349,7 +348,7 @@ describe("advanced controls", () => {
 
     await fillValidForm(user);
     await user.type(screen.getByLabelText("BPM"), "900");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect(await screen.findByText("BPM must be between 30 and 300.")).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(0);
@@ -380,11 +379,11 @@ describe("song structure editor", () => {
     expect(screen.getByRole("button", { name: "[Chorus]" })).toBeInTheDocument();
 
     // Plain, untagged lyrics remain perfectly valid.
-    await user.type(screen.getByLabelText("Title"), "Plain");
-    await user.type(screen.getByLabelText("Music description"), "Soft piano");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "Plain");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Soft piano");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("just a line\nand another");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect((await submittedBody(fetchMock)).lyrics).toBe("just a line\nand another");
   });
@@ -397,7 +396,7 @@ describe("song structure editor", () => {
 
     await user.click(screen.getByRole("button", { name: "[Verse 1]" }));
 
-    expect(screen.getByLabelText("Lyrics")).toHaveValue("[Verse 1]\n");
+    expect(screen.getByLabelText("가사")).toHaveValue("[Verse 1]\n");
   });
 
   it("never rewrites lyrics on its own", async () => {
@@ -418,16 +417,16 @@ describe("song structure editor", () => {
     await switchToCustom();
 
     const messy = "[Drop]\n  spaced out  \n\n\n[chorus]\nhook";
-    await user.type(screen.getByLabelText("Title"), "Messy");
-    await user.type(screen.getByLabelText("Music description"), "Bass music");
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.type(screen.getByLabelText("제목"), "Messy");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Bass music");
+    await user.click(screen.getByLabelText("가사"));
     await user.paste(messy);
 
     // Advisory shown…
     expect(await screen.findByText(/not recognised/)).toBeInTheDocument();
     // …and the text is untouched, on screen and on the wire.
-    expect(screen.getByLabelText("Lyrics")).toHaveValue(messy);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(screen.getByLabelText("가사")).toHaveValue(messy);
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     expect((await submittedBody(fetchMock)).lyrics).toBe(messy);
   });
 
@@ -461,7 +460,7 @@ describe("song structure editor", () => {
     renderCreate();
     await switchToCustom();
 
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("[Verse 1]\na\nb\n[Drop]\nc");
 
     const outline = await screen.findByRole("region", { name: "Structure" });
@@ -480,7 +479,7 @@ describe("pre-flight advisories", () => {
     renderCreate();
     await switchToCustom();
 
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste(LYRICS_TEXT);
 
     await waitFor(() => expect(preflightCalls.length).toBeGreaterThan(0));
@@ -509,7 +508,7 @@ describe("pre-flight advisories", () => {
     renderCreate();
     await switchToCustom();
 
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste("가".repeat(300));
 
     expect(await screen.findByText(/is dense/)).toBeInTheDocument();
@@ -542,7 +541,7 @@ describe("pre-flight advisories", () => {
     await fillValidForm(user);
     expect(await screen.findByText(/is dense/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(1));
   });
 
@@ -569,7 +568,7 @@ describe("pre-flight advisories", () => {
     renderCreate();
     await switchToCustom();
 
-    await user.click(screen.getByLabelText("Lyrics"));
+    await user.click(screen.getByLabelText("가사"));
     await user.paste(LYRICS_TEXT);
 
     // A failed diagnostic must not become a user-facing error.
@@ -591,7 +590,7 @@ describe("generate again", () => {
     renderCreate();
     await switchToCustom();
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
     return stub;
   }
@@ -612,11 +611,11 @@ describe("generate again", () => {
 
     await user.click(screen.getByRole("button", { name: "Generate again" }));
 
-    expect(screen.getByLabelText("Title")).toHaveValue("Midnight Window");
-    expect(screen.getByLabelText("Music description")).toHaveValue("Dreamy Korean indie pop");
-    expect(screen.getByLabelText("Lyrics")).toHaveValue("[Verse]\n오늘 밤 너를 생각해");
-    expect(screen.getByLabelText("Duration")).toHaveValue("60");
-    expect(screen.getByLabelText("Language")).toHaveValue("en");
+    expect(screen.getByLabelText("제목")).toHaveValue("Midnight Window");
+    expect(screen.getByLabelText("어떤 음악을 만들까요?")).toHaveValue("Dreamy Korean indie pop");
+    expect(screen.getByLabelText("가사")).toHaveValue("[Verse]\n오늘 밤 너를 생각해");
+    expect(screen.getByLabelText("길이")).toHaveValue("60");
+    expect(screen.getByLabelText("언어")).toHaveValue("en");
     expect(screen.getByLabelText("BPM")).toHaveValue(128);
     expect(screen.getByLabelText("Key / Scale")).toHaveValue("F# minor");
     expect(screen.getByLabelText("Time Signature")).toHaveValue("3");
@@ -636,7 +635,7 @@ describe("generate again", () => {
     const { fetchMock } = await completeAGeneration(user);
 
     await user.click(screen.getByRole("button", { name: "Generate again" }));
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(2));
     const second = fetchMock.mock.calls.filter(isCreatePost)[1];
@@ -650,9 +649,9 @@ describe("generate again", () => {
     await user.click(screen.getByRole("button", { name: "Generate again" }));
     await user.clear(screen.getByLabelText("BPM"));
     await user.type(screen.getByLabelText("BPM"), "90");
-    await user.clear(screen.getByLabelText("Title"));
-    await user.type(screen.getByLabelText("Title"), "Second Take");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.clear(screen.getByLabelText("제목"));
+    await user.type(screen.getByLabelText("제목"), "Second Take");
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(2));
     const body = jsonBodyOf(fetchMock.mock.calls.filter(isCreatePost)[1][1] as RequestInit);
@@ -669,10 +668,10 @@ describe("generate again", () => {
     await user.click(screen.getByRole("button", { name: "Start fresh" }));
 
     expect(screen.queryByText(/Based on/)).toBeNull();
-    expect(screen.getByLabelText("Title")).toHaveValue("");
+    expect(screen.getByLabelText("제목")).toHaveValue("");
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(2));
     const body = jsonBodyOf(fetchMock.mock.calls.filter(isCreatePost)[1][1] as RequestInit);
@@ -690,7 +689,7 @@ describe("completed track details", () => {
     await switchToCustom();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     // Scoped to the result card: "F# minor" is also a select option.
@@ -707,7 +706,7 @@ describe("completed track details", () => {
     await switchToCustom();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     expect(screen.getByRole("link", { name: "Download WAV" })).toHaveAttribute(

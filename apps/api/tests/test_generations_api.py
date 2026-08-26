@@ -9,6 +9,8 @@ import asyncio
 import hashlib
 import uuid
 
+from asset_fixtures import asset_storage_keys
+
 CREATE_PAYLOAD = {
     "title": "TEST SONG",
     "prompt": "Dreamy Korean indie pop",
@@ -65,15 +67,15 @@ async def test_list_generations_with_pagination(client):
     assert len(body["items"]) == 2
 
 
-async def test_delete_generation(client, tmp_path):
+async def test_delete_generation(client, tmp_path, app):
     created = (await client.post("/v1/generations", json=CREATE_PAYLOAD)).json()
     generation_id = created["generation_id"]
 
     # Completed generation has a stored master WAV on disk.
     detail = (await client.get(f"/v1/generations/{generation_id}")).json()
     assert detail["status"] == "COMPLETED"
-    storage_key = detail["audio_assets"][0]["storage_key"]
-    stored = tmp_path / "audio-store" / storage_key
+    keys = await asset_storage_keys(app, generation_id)
+    stored = tmp_path / "audio-store" / next(iter(keys.values()))
     assert stored.is_file()
 
     resp = await client.delete(f"/v1/generations/{generation_id}")
@@ -129,7 +131,7 @@ async def test_instrumental_vocal_gender_sets_flag(client):
     assert detail["instrumental"] is True
 
 
-async def test_full_generation_flow_produces_master_wav(client, tmp_path):
+async def test_full_generation_flow_produces_master_wav(client, tmp_path, app):
     """Phase 1 acceptance: POST → job → mock provider → real WAV asset → GET."""
     resp = await client.post(
         "/v1/generations",
@@ -152,6 +154,8 @@ async def test_full_generation_flow_produces_master_wav(client, tmp_path):
     assert detail["error_code"] is None
 
     # Both delivery assets exist, each with verifiable bytes on disk.
+    # Storage keys come from the database: they are not part of the API.
+    keys = await asset_storage_keys(app, generation_id)
     assets = {a["asset_type"]: a for a in detail["audio_assets"]}
     assert {"MASTER", "PREVIEW"} <= set(assets)
     assert set(assets) <= {"MASTER", "FINISHED_MASTER", "PREVIEW"}
@@ -164,16 +168,16 @@ async def test_full_generation_flow_produces_master_wav(client, tmp_path):
     # Post-processing normalizes to the 24-bit production master format.
     assert master["bit_depth"] == 24
     assert master["duration"] > 0
-    assert master["storage_key"] == f"audio/{generation_id}/master.wav"
+    assert keys["MASTER"] == f"audio/{generation_id}/master.wav"
 
     preview = assets["PREVIEW"]
     assert preview["format"] == "mp3"
     assert preview["mime_type"] == "audio/mpeg"
     assert preview["bitrate"] == 320000
-    assert preview["storage_key"] == f"audio/{generation_id}/preview.mp3"
+    assert keys["PREVIEW"] == f"audio/{generation_id}/preview.mp3"
 
-    for asset in (master, preview):
-        stored = tmp_path / "audio-store" / asset["storage_key"]
+    for asset, kind in ((master, "MASTER"), (preview, "PREVIEW")):
+        stored = tmp_path / "audio-store" / keys[kind]
         assert stored.is_file()
         assert stored.stat().st_size == asset["file_size"] > 0
         # Stored SHA256 matches the actual stored bytes.

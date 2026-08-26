@@ -114,11 +114,11 @@ function generationBody(calls: { url: string; init?: RequestInit }[]) {
 }
 
 async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Title"), "Reference Song");
-  await user.type(screen.getByLabelText("Music description"), "warm indie pop");
+  await user.type(screen.getByLabelText("제목"), "Reference Song");
+  await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "warm indie pop");
   // A vocal track needs lyrics; pasted because the tag palette makes
   // per-character typing slow and irrelevant to what is under test.
-  await user.click(screen.getByLabelText("Lyrics"));
+  await user.click(screen.getByLabelText("가사"));
   await user.paste("[Verse]\nquiet morning light");
 }
 
@@ -279,7 +279,7 @@ describe("Reference Track — generation submission", () => {
     await attachReference(user);
     await waitFor(() => expect(screen.getByText(/attached/i)).toBeTruthy());
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() => expect(generationBody(calls)).not.toBeNull());
     expect(generationBody(calls)?.reference_audio_id).toBe(REFERENCE.reference_id);
   });
@@ -289,7 +289,7 @@ describe("Reference Track — generation submission", () => {
     const user = userEvent.setup();
     renderCreate();
     await fillRequiredFields(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => expect(generationBody(calls)).not.toBeNull());
     expect(generationBody(calls)).not.toHaveProperty("reference_audio_id");
@@ -304,8 +304,8 @@ describe("Reference Track — generation submission", () => {
     await attachReference(user);
     await screen.findByText(/Uploading/i);
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
-    expect(await screen.findByText(/Wait for the reference track/i)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
+    expect(await screen.findByText(/참고 트랙 업로드가 끝날 때까지/)).toBeTruthy();
     expect(generationBody(calls)).toBeNull();
 
     await act(async () => {
@@ -322,7 +322,7 @@ describe("Reference Track — generation submission", () => {
     await attachReference(user);
     await waitFor(() => expect(screen.getByText("Rejected.")).toBeTruthy());
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() => expect(generationBody(calls)).not.toBeNull());
     expect(generationBody(calls)).not.toHaveProperty("reference_audio_id");
   });
@@ -341,7 +341,7 @@ describe("Reference Track — remove and replace", () => {
     await user.click(screen.getByRole("button", { name: /Remove reference track/i }));
     expect(screen.getByText(/No reference track attached/i)).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() => expect(generationBody(calls)).not.toBeNull());
     expect(generationBody(calls)).not.toHaveProperty("reference_audio_id");
   });
@@ -382,7 +382,7 @@ describe("Reference Track — remove and replace", () => {
     await attachReference(user, audioFile("second.wav"));
     await waitFor(() => expect(uploads).toBe(2));
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() => expect(generationBody(calls)).not.toBeNull());
     expect(generationBody(calls)?.reference_audio_id).toBe(second.reference_id);
     expect(generationBody(calls)?.reference_audio_id).not.toBe(REFERENCE.reference_id);
@@ -400,7 +400,7 @@ describe("Reference Track — modes and accessibility", () => {
     stub();
     const user = userEvent.setup();
     renderCreate();
-    await user.click(screen.getByRole("tab", { name: "Custom" }));
+    await user.click(screen.getByRole("tab", { name: "직접 설정" }));
     expect(screen.getByRole("region", { name: /Reference Track/i })).toBeTruthy();
   });
 
@@ -411,7 +411,7 @@ describe("Reference Track — modes and accessibility", () => {
     await waitFor(() => expect(screen.getByText(/40 MB/)).toBeTruthy());
     await attachReference(user);
     await waitFor(() => expect(screen.getByText(/attached/i)).toBeTruthy());
-    await user.click(screen.getByRole("tab", { name: "Custom" }));
+    await user.click(screen.getByRole("tab", { name: "직접 설정" }));
     expect(screen.getByText(/attached/i)).toBeTruthy();
   });
 

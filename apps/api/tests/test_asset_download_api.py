@@ -3,6 +3,7 @@
 import hashlib
 
 import pytest
+from asset_fixtures import asset_storage_keys
 
 CREATE_PAYLOAD = {
     "title": "Midnight Window",
@@ -104,7 +105,7 @@ async def test_delivered_bytes_match_recorded_sha256(client, asset):
     assert len(resp.content) == record["file_size"]
 
 
-async def test_master_download_serves_the_finished_master_when_one_exists(client):
+async def test_master_download_serves_the_finished_master_when_one_exists(client, app):
     """Phase 14B: `?asset=master` means "the master you should have".
 
     The raw master stays available as its own asset, but it is not what
@@ -117,7 +118,8 @@ async def test_master_download_serves_the_finished_master_when_one_exists(client
 
     finished = next(a for a in generation["audio_assets"] if a["asset_type"] == "FINISHED_MASTER")
     raw = next(a for a in generation["audio_assets"] if a["asset_type"] == "MASTER")
-    assert finished["storage_key"] != raw["storage_key"]
+    keys = await asset_storage_keys(app, generation["id"])
+    assert keys["FINISHED_MASTER"] != keys["MASTER"]
 
     resp = await client.get(f"/v1/generations/{generation['id']}/audio", params={"asset": "master"})
     assert hashlib.sha256(resp.content).hexdigest() == finished["sha256"]

@@ -90,7 +90,6 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
             bitrate: null,
             channels: 2,
             duration: 30,
-            storage_key: `audio/${GEN_ID}/master.wav`,
             sha256: "504aa20655af7f4756c604c071b5e6bdafb087d61c78b21d6b12a939ca653a31",
             file_size: 8640102,
             created_at: "2026-08-11T12:00:40Z",
@@ -106,7 +105,6 @@ function generationBody({ status, error_code = null, withMaster = false }: StubG
             bitrate: 320000,
             channels: 2,
             duration: 30,
-            storage_key: `audio/${GEN_ID}/preview.mp3`,
             sha256: "2856229138ab61096e6cd1c6b6befcd67fbb020a83702373b2bbc0517789ebae",
             file_size: 1200480,
             created_at: "2026-08-11T12:00:41Z",
@@ -184,11 +182,11 @@ function stubServer(statuses: StubGeneration[]) {
 const LYRICS_TEXT = "[Verse]\n오늘 밤 너를 생각해";
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Title"), "Midnight Window");
-  await user.type(screen.getByLabelText("Music description"), "Dreamy Korean indie pop");
+  await user.type(screen.getByLabelText("제목"), "Midnight Window");
+  await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "Dreamy Korean indie pop");
   // Pasted rather than typed: userEvent reads "[" as key-descriptor
   // syntax, and pasting is how lyrics realistically arrive anyway.
-  await user.click(screen.getByLabelText("Lyrics"));
+  await user.click(screen.getByLabelText("가사"));
   await user.paste(LYRICS_TEXT);
 }
 
@@ -208,10 +206,10 @@ describe("form validation", () => {
     const { fetchMock } = stubServer([{ status: "QUEUED" }]);
     renderCreate();
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
-    expect(await screen.findByText("Add a title for your track.")).toBeInTheDocument();
-    expect(screen.getByText("Describe the music you want.")).toBeInTheDocument();
+    expect(await screen.findByText("곡 제목을 입력해 주세요.")).toBeInTheDocument();
+    expect(screen.getByText("원하는 음악을 설명해 주세요.")).toBeInTheDocument();
     // Nothing was sent to the backend.
     expect(fetchMock.mock.calls.filter(isCreatePost)).toHaveLength(0);
   });
@@ -221,12 +219,12 @@ describe("form validation", () => {
     stubServer([{ status: "QUEUED" }]);
     renderCreate();
 
-    await user.type(screen.getByLabelText("Title"), "T");
-    await user.type(screen.getByLabelText("Music description"), "P");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.type(screen.getByLabelText("제목"), "T");
+    await user.type(screen.getByLabelText("어떤 음악을 만들까요?"), "P");
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect(
-      await screen.findByText("Add lyrics, or switch the vocal to Instrumental."),
+      await screen.findByText("가사를 넣거나 보컬을 연주곡으로 바꿔 주세요."),
     ).toBeInTheDocument();
   });
 
@@ -235,9 +233,9 @@ describe("form validation", () => {
     stubServer([{ status: "QUEUED" }]);
     renderCreate();
 
-    await user.selectOptions(screen.getByLabelText("Vocal"), "instrumental");
+    await user.selectOptions(screen.getByLabelText("보컬"), "instrumental");
 
-    expect(screen.getByLabelText("Lyrics")).toBeDisabled();
+    expect(screen.getByLabelText("가사")).toBeDisabled();
     expect(screen.getByText("Instrumental selected — lyrics are not used.")).toBeInTheDocument();
   });
 
@@ -246,9 +244,9 @@ describe("form validation", () => {
     stubServer([{ status: "QUEUED" }]);
     renderCreate();
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
-    expect(await screen.findByLabelText("Title")).toHaveAttribute("aria-invalid", "true");
+    expect(await screen.findByLabelText("제목")).toHaveAttribute("aria-invalid", "true");
   });
 });
 
@@ -259,7 +257,7 @@ describe("submission", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(isCreatePost)).toBe(true);
@@ -283,12 +281,12 @@ describe("submission", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     // The form stays live after a submission, so a second generation is
     // just a second press — no "start over" step in between.
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() => {
       const posts = fetchMock.mock.calls.filter(isCreatePost);
@@ -315,7 +313,7 @@ describe("submission", () => {
     renderCreate();
 
     await fillValidForm(user);
-    const button = screen.getByRole("button", { name: "Create" });
+    const button = screen.getByRole("button", { name: "음악 만들기" });
     await user.dblClick(button);
 
     await act(async () => {
@@ -332,15 +330,15 @@ describe("submission", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await waitFor(() =>
       expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Creating your music"),
     );
 
     // Still editable, still submittable, mid-inference.
-    const create = screen.getByRole("button", { name: "Create" });
+    const create = screen.getByRole("button", { name: "음악 만들기" });
     expect(create).toBeEnabled();
-    expect(screen.getByLabelText("Title")).toBeEnabled();
+    expect(screen.getByLabelText("제목")).toBeEnabled();
 
     await user.click(create);
     await waitFor(() => expect(fetchMock.mock.calls.filter(isCreatePost).length).toBe(2));
@@ -354,7 +352,7 @@ describe("status rendering", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect(await screen.findByRole("status", { name: "" })).toHaveTextContent("Preparing generation");
   });
@@ -365,7 +363,7 @@ describe("status rendering", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     await waitFor(() =>
       expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Creating your music"),
@@ -382,7 +380,7 @@ describe("completed result", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     expect(await screen.findByRole("heading", { name: "Midnight Window" })).toBeInTheDocument();
 
@@ -412,7 +410,7 @@ describe("completed result", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     expect(screen.getByText(/Master WAV · 48 kHz · 24-bit/)).toBeInTheDocument();
@@ -425,7 +423,7 @@ describe("completed result", () => {
     const { container } = renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     const html = container.innerHTML;
@@ -445,7 +443,7 @@ describe("completed result", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     const afterTerminal = getCalls.length;
@@ -466,10 +464,10 @@ describe("failure UX", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     const panel = await screen.findByRole("alert");
-    expect(panel).toHaveTextContent("The music model is not available right now.");
+    expect(panel).toHaveTextContent("음악 모델을 지금 이용할 수 없습니다.");
     expect(panel.textContent).not.toMatch(/Traceback|\/Users\/|acestep|redis/i);
     expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
@@ -480,7 +478,7 @@ describe("failure UX", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("button", { name: "Retry" });
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
@@ -502,10 +500,10 @@ describe("failure UX", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Could not reach the BOORDA service.");
+    expect(alert).toHaveTextContent("BOORDA 서버에 연결하지 못했습니다.");
     expect(alert.textContent).not.toContain("ECONNREFUSED");
   });
 
@@ -515,7 +513,7 @@ describe("failure UX", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("alert");
 
     const before = getCalls.filter((u) => u.endsWith(GEN_ID)).length;
@@ -554,7 +552,7 @@ describe("refresh recovery", () => {
 
     renderCreate();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
+    expect(await screen.findByRole("alert")).toHaveTextContent("문제가 생겼습니다");
   });
 
   it("ignores a corrupt stored id instead of calling the API with it", async () => {
@@ -564,7 +562,7 @@ describe("refresh recovery", () => {
     renderCreate();
 
     await waitFor(() => {
-      expect(screen.getByText("Your tracks appear here")).toBeInTheDocument();
+      expect(screen.getByText("여기에 만든 음악이 표시됩니다")).toBeInTheDocument();
     });
     expect(getCalls.some((u) => u.includes("etc/passwd"))).toBe(false);
   });
@@ -575,7 +573,7 @@ describe("refresh recovery", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
 
     // Stored as a list: one CREATE can start two songs, and a user can
     // start a third while those run.
@@ -592,7 +590,7 @@ describe("refresh recovery", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     await waitFor(() => {
@@ -608,7 +606,7 @@ describe("session history", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     const session = await screen.findByRole("region", { name: /this session/i });
@@ -626,7 +624,7 @@ describe("session history", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await screen.findByRole("heading", { name: "Midnight Window" });
 
     await user.click(screen.getByRole("button", { name: /Dismiss/ }));
@@ -665,7 +663,7 @@ describe("polling discipline", () => {
     renderCreate();
 
     await fillValidForm(user);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "음악 만들기" }));
     await act(async () => {
       await new Promise((r) => setTimeout(r, 300));
     });
