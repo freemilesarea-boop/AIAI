@@ -22,6 +22,8 @@ import { usePlayer, trackFromGeneration } from "@/components/player/PlayerProvid
 import { Card, StatusPill, cx } from "@/components/ui";
 import { getAudioAssetUrl, type Generation } from "@/lib/api";
 import { downloadFilename } from "@/lib/download";
+import { useEntitlement } from "@/components/EntitlementProvider";
+import { canDownload } from "@/lib/plans";
 
 /** Stable hue pair from the id — same track, same colours, always. */
 function artwork(id: string): { from: string; to: string } {
@@ -72,6 +74,11 @@ export function SongCard({
   const track = trackFromGeneration(generation);
   const isCurrent = player.track?.id === generation.id;
   const ready = generation.status === "COMPLETED" && track !== null;
+  // Optimistic while the entitlement is still loading: a link that
+  // briefly appears and then locks is better than a lock that briefly
+  // appears on a plan that has downloads.
+  const { entitlement, loading } = useEntitlement();
+  const downloadable = loading || entitlement === null || canDownload(entitlement);
   const duration = generation.duration_actual ?? generation.duration_requested;
   const selectable = onSelectedChange !== undefined;
 
@@ -179,15 +186,35 @@ export function SongCard({
           <span>{formatWhen(generation.created_at)}</span>
           {generation.parent_generation_id && <span>· from an earlier take</span>}
           <span className="ml-auto flex items-center gap-1">
-            {ready && (
-              <a
-                href={getAudioAssetUrl(generation.id, "master", true)}
-                download={downloadFilename(generation.title, generation.id, "wav")}
-                className="inline-flex h-8 items-center rounded-[var(--radius-sm)] px-2 transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-              >
-                WAV
-              </a>
-            )}
+            {/*
+              Downloads are a plan entitlement, and the server refuses one
+              the plan does not cover. Showing the link anyway would mean
+              a Free user presses WAV and meets a 402 with no explanation;
+              routing them to /plans explains it before they get there.
+
+              This is presentation, not enforcement: the check that
+              matters happens on the request, and a user who edits this
+              away still gets refused.
+            */}
+            {ready &&
+              (downloadable ? (
+                <a
+                  href={getAudioAssetUrl(generation.id, "master", true)}
+                  download={downloadFilename(generation.title, generation.id, "wav")}
+                  className="inline-flex h-8 items-center rounded-[var(--radius-sm)] px-2 transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                >
+                  WAV
+                </a>
+              ) : (
+                <Link
+                  href="/plans"
+                  title="다운로드는 유료 플랜에 포함됩니다"
+                  className="inline-flex h-8 items-center gap-1 rounded-[var(--radius-sm)] px-2 transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                >
+                  <span aria-hidden="true">🔒</span>
+                  WAV
+                </Link>
+              ))}
             {onGenerateAgain && generation.status === "COMPLETED" && (
               <button
                 type="button"

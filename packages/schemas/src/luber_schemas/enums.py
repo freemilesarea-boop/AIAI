@@ -137,6 +137,15 @@ class ErrorCode(StrEnum):
     Raw exception strings are never sent to clients.
     """
 
+    #: The account has used every song in its allowance period. Not a
+    #: failure of the engine and not the user's input: the plan ran out.
+    #: Separate from every other code because the recourse is different —
+    #: wait for the period to roll, or change plan.
+    GENERATION_LIMIT_REACHED = "GENERATION_LIMIT_REACHED"
+    #: The account's plan does not include downloads. Raised only after
+    #: ownership has already been established, so it never reveals
+    #: anything about a resource the caller does not own.
+    DOWNLOAD_NOT_IN_PLAN = "DOWNLOAD_NOT_IN_PLAN"
     GENERATION_TIMEOUT = "GENERATION_TIMEOUT"
     MODEL_LOAD_FAILED = "MODEL_LOAD_FAILED"
     OUT_OF_MEMORY = "OUT_OF_MEMORY"

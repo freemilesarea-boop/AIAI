@@ -22,13 +22,16 @@ import { useState } from "react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button, ButtonLink, Card, Skeleton } from "@/components/ui";
+import { useEntitlement } from "@/components/EntitlementProvider";
+import { UsageNotice } from "@/components/UsageMeter";
+import { formatPeriod, formatPriceKrw, formatSongs } from "@/lib/plans";
 
 //: The sections, in the order they appear. Used for the jump list so
 //: the page stays navigable once every section has content.
 const SECTIONS = [
   { id: "account", label: "계정" },
   { id: "subscription", label: "구독" },
-  { id: "credits", label: "크레딧" },
+  { id: "usage", label: "사용량" },
   { id: "payments", label: "결제" },
   { id: "data", label: "데이터" },
   { id: "security", label: "보안" },
@@ -96,6 +99,7 @@ function formatJoined(iso: string): string {
 
 export default function SettingsPage() {
   const { status, user, signOut } = useAuth();
+  const { entitlement } = useEntitlement();
   const [leaving, setLeaving] = useState(false);
 
   return (
@@ -150,12 +154,24 @@ export default function SettingsPage() {
         <NotYet>표시 이름과 프로필 수정은 아직 제공하지 않습니다.</NotYet>
       </Section>
 
-      <Section id="subscription" title="구독" description="현재 요금제와 갱신 정보입니다.">
+      <Section id="subscription" title="구독" description="현재 요금제와 이용 범위입니다.">
         <Card className="p-0">
           <dl className="flex flex-col">
-            <Row label="현재 플랜" value={<Unknown />} />
-            <Row label="구독 상태" value={<Unknown />} />
-            <Row label="다음 갱신일" value={<Unknown />} />
+            <Row label="현재 플랜" value={entitlement ? entitlement.plan.display_name : <Unknown />} />
+            <Row
+              label="월 요금"
+              value={entitlement ? formatPriceKrw(entitlement.plan.monthly_price_krw) : <Unknown />}
+            />
+            <Row
+              label="다운로드"
+              value={
+                entitlement ? (entitlement.download_mp3 ? "MP3 · WAV" : "미포함") : <Unknown />
+              }
+            />
+            <Row
+              label="상업적 이용"
+              value={entitlement ? (entitlement.commercial_use ? "가능" : "불가") : <Unknown />}
+            />
           </dl>
         </Card>
         <div>
@@ -163,18 +179,44 @@ export default function SettingsPage() {
             플랜 비교하기
           </ButtonLink>
         </div>
-        {/* No change-plan, no cancel: there is no subscription to change. */}
+        {/*
+          The plan and its entitlements are real — they come from the
+          server and the server enforces them. Changing plans is not:
+          there is no payment provider, so there is nothing to charge and
+          no subscription to cancel.
+        */}
         <NotYet>플랜 변경과 구독 해지는 아직 제공하지 않습니다.</NotYet>
       </Section>
 
-      <Section id="credits" title="크레딧" description="음악 생성에 사용하는 크레딧입니다.">
+      <Section
+        id="usage"
+        title="사용량"
+        description="이번 기간에 만든 곡 수입니다. 실패한 생성은 차감되지 않습니다."
+      >
         <Card className="p-0">
           <dl className="flex flex-col">
-            <Row label="남은 크레딧" value={<Unknown />} />
-            <Row label="월 지급 크레딧" value={<Unknown />} />
+            <Row
+              label="이번 기간"
+              value={entitlement ? formatPeriod(entitlement) : <Unknown />}
+            />
+            <Row
+              label="생성한 곡"
+              value={
+                entitlement
+                  ? `${formatSongs(entitlement.generation_used)} / ${formatSongs(entitlement.generation_limit)}`
+                  : <Unknown />
+              }
+            />
+            <Row
+              label="남은 생성"
+              value={entitlement ? formatSongs(entitlement.generation_remaining) : <Unknown />}
+            />
           </dl>
         </Card>
-        <NotYet>크레딧 잔액과 사용 내역은 아직 제공하지 않습니다.</NotYet>
+        {entitlement ? <UsageNotice entitlement={entitlement} /> : null}
+        {/* No ledger yet: the reservations exist, but nothing renders
+            a per-song history and inventing one would be a claim. */}
+        <NotYet>곡별 사용 내역은 아직 제공하지 않습니다.</NotYet>
       </Section>
 
       <Section id="payments" title="결제" description="결제 수단과 결제 내역입니다.">

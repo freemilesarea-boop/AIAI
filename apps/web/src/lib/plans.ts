@@ -1,142 +1,136 @@
 /**
- * Plan shapes, with no prices and no policy in them yet.
+ * Plans and allowance, read from the server.
  *
- * BOORDA has three tiers by name and nothing else decided: pricing,
- * credit allowance and per-tier limits are all open questions. So this
- * file describes the *shape* a plan will have and leaves every number
- * `null`, and the UI renders "미정" wherever a null appears rather than
- * inventing a figure that would later have to be walked back.
+ * This file used to hold three tier names with every number `null`,
+ * because there was no policy to describe. There is one now, and it
+ * lives in `packages/schemas/src/luber_schemas/plans.py` — the same
+ * definition the API enforces.
  *
- * When pricing is settled this becomes configuration — the same three
- * objects with values filled in, or a fetch from the billing service —
- * and no component below has to change.
+ * So nothing here states a price, a limit or an entitlement. Every
+ * figure is fetched. A number hardcoded in this file would be a number
+ * that disagrees with the server the first time it changes, and the
+ * disagreement would be in the customer's favour or ours, never neither.
  *
- * Nothing here talks to a payment provider, because there isn't one.
+ * There is still no payment provider. `checkoutAvailable` comes from the
+ * server and is false, and the page renders an honest unavailable state
+ * rather than a subscribe button that cannot subscribe.
  */
 
-export type PlanId = "free" | "basic" | "pro";
+import { API_BASE_URL, ApiError } from "@/lib/api";
 
-export interface PlanFeature {
-  /** Short label shown in the tier's feature list. */
-  label: string;
-  /**
-   * Whether this tier includes it. `null` means undecided, which is a
-   * different statement from "no" and is rendered differently.
-   */
-  included: boolean | null;
-}
+export type PlanId = "free" | "basic" | "pro" | "creator";
 
+/** One tier, exactly as `/v1/plans` serves it. */
 export interface Plan {
-  id: PlanId;
-  name: string;
-  /** One line under the name. Describes who the tier is for. */
-  tagline: string;
-  /**
-   * Monthly price in KRW. `null` until pricing is decided — it is not
-   * `0`, because `0` is a price and this is the absence of one.
-   */
-  monthlyPriceKrw: number | null;
-  /** Monthly generation credits. `null` until the policy exists. */
-  monthlyCredits: number | null;
-  /** Longest single track, in seconds. `null` until decided. */
-  maxDurationSeconds: number | null;
-  features: PlanFeature[];
-  /** Marks the tier the page highlights. Presentation only. */
-  highlighted?: boolean;
+  plan_id: PlanId;
+  display_name: string;
+  monthly_price_krw: number;
+  monthly_generation_limit: number;
+  download_mp3: boolean;
+  download_wav: boolean;
+  commercial_use: boolean;
+  priority_level: number;
+  lab_access: boolean;
+  /** Highlights a column. Presentation only — it grants nothing. */
+  recommended: boolean;
+}
+
+export interface PlanCatalogue {
+  plans: Plan[];
+  /** False while no payment provider is connected. */
+  checkout_available: boolean;
 }
 
 /**
- * The three tiers, by name only.
+ * What the signed-in account may do right now.
  *
- * Every numeric field is deliberately `null`. Reviewers should read a
- * null here as "not decided", never as "free" or "unlimited".
+ * The server's own words. The UI never computes remaining from a limit
+ * and a count it kept itself — a client-side tally drifts, and the one
+ * that matters is the one the server will enforce at generate time.
  */
-export const PLANS: readonly Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    tagline: "부르다를 처음 써보는 분께",
-    monthlyPriceKrw: null,
-    monthlyCredits: null,
-    maxDurationSeconds: null,
-    features: [
-      { label: "음악 생성", included: true },
-      { label: "라이브러리 보관", included: true },
-      { label: "MP3 다운로드", included: null },
-      { label: "상업적 이용", included: null },
-    ],
-  },
-  {
-    id: "basic",
-    name: "Basic",
-    tagline: "꾸준히 만드는 분께",
-    monthlyPriceKrw: null,
-    monthlyCredits: null,
-    maxDurationSeconds: null,
-    highlighted: true,
-    features: [
-      { label: "음악 생성", included: true },
-      { label: "라이브러리 보관", included: true },
-      { label: "MP3 다운로드", included: null },
-      { label: "상업적 이용", included: null },
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    tagline: "작업량이 많은 분께",
-    monthlyPriceKrw: null,
-    monthlyCredits: null,
-    maxDurationSeconds: null,
-    features: [
-      { label: "음악 생성", included: true },
-      { label: "라이브러리 보관", included: true },
-      { label: "MP3 다운로드", included: null },
-      { label: "상업적 이용", included: null },
-    ],
-  },
-];
-
-/**
- * The plan a signed-in user is on.
- *
- * There is no subscription backend, so this cannot be answered yet and
- * the type says so. Components render an "미정" state for `null` rather
- * than defaulting to Free, because defaulting would be a claim about
- * the user's account that nothing has verified.
- */
-export type CurrentPlan = Plan | null;
-
-/**
- * Credits remaining.
- *
- * `null` until the credit ledger exists. Same reasoning as above: zero
- * is a balance, and we do not have one to report.
- */
-export type CreditBalance = number | null;
-
-export function formatPriceKrw(price: number | null): string {
-  if (price === null) return "미정";
-  if (price === 0) return "무료";
-  return `₩${price.toLocaleString("ko-KR")}`;
+export interface Entitlement {
+  plan: Plan;
+  period_start: string;
+  period_end: string;
+  generation_limit: number;
+  generation_used: number;
+  generation_remaining: number;
+  download_mp3: boolean;
+  download_wav: boolean;
+  commercial_use: boolean;
 }
 
-export function formatCredits(credits: number | null): string {
-  return credits === null ? "미정" : credits.toLocaleString("ko-KR");
+async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    cache: "no-store",
+    credentials: "include",
+    signal,
+  });
+  if (!res.ok) {
+    throw new ApiError(`${path} failed: ${res.status}`, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+export async function fetchPlans(signal?: AbortSignal): Promise<PlanCatalogue> {
+  return readJson<PlanCatalogue>("/v1/plans", signal);
+}
+
+export async function fetchEntitlement(signal?: AbortSignal): Promise<Entitlement> {
+  return readJson<Entitlement>("/v1/account/entitlement", signal);
+}
+
+// ── formatting ───────────────────────────────────────────────────────
+
+export function formatPriceKrw(price: number): string {
+  return price === 0 ? "무료" : `₩${price.toLocaleString("ko-KR")}`;
+}
+
+/** "20곡" — the unit users think in. Never "credits". */
+export function formatSongs(count: number): string {
+  return `${count.toLocaleString("ko-KR")}곡`;
+}
+
+/** The allowance period as a Korean date range. */
+export function formatPeriod(entitlement: Entitlement): string {
+  const format = (iso: string) => {
+    const at = new Date(iso);
+    return Number.isNaN(at.getTime())
+      ? iso
+      : `${at.getFullYear()}. ${at.getMonth() + 1}. ${at.getDate()}.`;
+  };
+  return `${format(entitlement.period_start)} – ${format(entitlement.period_end)}`;
 }
 
 /**
- * The plan the signed-in user is on, and the credits they have left.
+ * How much of the allowance is gone, 0–1.
  *
- * Both return `null`: there is no subscription record and no credit
- * ledger to read. They exist as functions rather than as inline `null`
- * so that there is exactly one place to wire the billing service in,
- * and so every caller is already written against the eventual type.
+ * Guards a zero limit rather than dividing by it: a plan configured with
+ * no allowance should render an empty bar, not `NaN%`.
  */
-export function currentPlan(): CurrentPlan {
-  return null;
+export function usageRatio(entitlement: Entitlement): number {
+  if (entitlement.generation_limit <= 0) return 0;
+  return Math.min(1, entitlement.generation_used / entitlement.generation_limit);
 }
 
-export function creditBalance(): CreditBalance {
-  return null;
+/** The threshold at which the UI starts warning. */
+export const USAGE_WARNING_RATIO = 0.9;
+
+export function isNearlyExhausted(entitlement: Entitlement): boolean {
+  return !isExhausted(entitlement) && usageRatio(entitlement) >= USAGE_WARNING_RATIO;
+}
+
+export function isExhausted(entitlement: Entitlement): boolean {
+  return entitlement.generation_remaining <= 0;
+}
+
+/**
+ * Whether this account can download at all.
+ *
+ * Advisory only. The server refuses a download the plan does not cover
+ * whatever this returns — this exists so the UI can explain the refusal
+ * before the user meets it, not so it can be the thing that enforces it.
+ */
+export function canDownload(entitlement: Entitlement | null): boolean {
+  return entitlement !== null && (entitlement.download_mp3 || entitlement.download_wav);
 }

@@ -32,6 +32,9 @@ import {
 import { GenerationJobCard } from "@/components/GenerationJobCard";
 import { SongCard } from "@/components/SongCard";
 import { Button, EmptyState } from "@/components/ui";
+import { useEntitlement } from "@/components/EntitlementProvider";
+import { UsageBar, UsageNotice } from "@/components/UsageMeter";
+import { isExhausted } from "@/lib/plans";
 import { useGenerationQueue } from "@/hooks/useGenerationQueue";
 import {
   getGeneration,
@@ -89,16 +92,23 @@ function draftFrom(generation: Generation, mode: "again" | "duplicate"): Draft {
 
 function CreateWorkspace() {
   const queue = useGenerationQueue();
+  const { entitlement, refresh: refreshEntitlement } = useEntitlement();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [recent, setRecent] = useState<Generation[]>([]);
 
+  const spent = entitlement !== null && isExhausted(entitlement);
+
   const handleSubmit = useCallback(
     (input: CreateGenerationInput) => {
-      void queue.submit(input);
+      // The count moves the moment the server reserves a slot, so the
+      // sidebar and the meter are refreshed as soon as the request has
+      // been answered — not on a timer, and not optimistically before
+      // the server has agreed to it.
+      void queue.submit(input).finally(refreshEntitlement);
     },
-    [queue],
+    [queue, refreshEntitlement],
   );
 
   const startDraft = useCallback(
@@ -221,9 +231,19 @@ function CreateWorkspace() {
           {/* Remounting on a new draft is what applies the prefill: the
               form owns its field state, so a fresh instance is the
               cleanest way to seed it without fighting the user's edits. */}
+          {/* The meter sits above the form, where the decision is made:
+              seeing "3곡 남음" after pressing 만들기 is too late to be
+              useful. */}
+          {entitlement ? (
+            <div className="mb-4 flex flex-col gap-3">
+              <UsageBar entitlement={entitlement} />
+              <UsageNotice entitlement={entitlement} />
+            </div>
+          ) : null}
           <GenerationForm
             key={draft?.key ?? "blank"}
             onSubmit={handleSubmit}
+            disabled={spent}
             busy={queue.submitting}
             initialValues={draft?.values}
             parent={draft?.parent ?? null}

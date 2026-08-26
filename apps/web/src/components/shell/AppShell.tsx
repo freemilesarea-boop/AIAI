@@ -22,6 +22,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { usePlayer } from "@/components/player/PlayerProvider";
 import { cx } from "@/components/ui";
+import { useEntitlement } from "@/components/EntitlementProvider";
+import { formatSongs, isExhausted } from "@/lib/plans";
 
 interface NavItem {
   href: string;
@@ -139,6 +141,45 @@ const PUBLIC_ROUTES = new Set(["/login", "/signup"]);
 //: session. Rendered bare here so `/ops` brings its own shell.
 const OPERATOR_PREFIX = "/ops";
 
+
+/**
+ * Plan and songs left, above the account menu.
+ *
+ * The one number that changes as the user works, kept where they can see
+ * it without opening a page. Renders nothing at all when the entitlement
+ * has not loaded or failed to: a sidebar slot that says "—" every time
+ * the network hiccups trains people to ignore it.
+ */
+function PlanSummary() {
+  const { entitlement } = useEntitlement();
+  if (!entitlement) return null;
+
+  const spent = isExhausted(entitlement);
+  return (
+    <Link
+      href="/plans"
+      className="mx-1 mb-2 flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] px-3 py-2.5 hover:bg-[var(--surface-raised)]"
+    >
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-[var(--text-primary)]">
+          {entitlement.plan.display_name}
+        </span>
+        <span className="text-[11px] text-[var(--brand-text)]">플랜</span>
+      </span>
+      <span
+        className={cx(
+          "text-[11px]",
+          spent ? "text-[var(--danger)]" : "text-[var(--text-muted)]",
+        )}
+      >
+        {spent
+          ? "이번 달 한도 소진"
+          : `이번 달 ${formatSongs(entitlement.generation_remaining)} 남음`}
+      </span>
+    </Link>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "/";
@@ -179,6 +220,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks />
         </div>
         <div className="mt-auto">
+          <PlanSummary />
           <AccountMenu />
           <p className="px-3 pt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
             Generated music. Quality varies by prompt.
@@ -216,6 +258,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <NavLinks onNavigate={() => setMenuOpen(false)} />
             </div>
             <div className="mt-6">
+              <PlanSummary />
               <AccountMenu />
             </div>
           </div>

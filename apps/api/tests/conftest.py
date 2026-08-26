@@ -15,12 +15,14 @@ import pytest
 from fakeredis.aioredis import FakeRedis
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from plan_fixtures import FIXTURE_PLAN, set_plan
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from luber_api.jobs import InlineGenerationRunner
 from luber_api.main import create_app
 from luber_audio_utils import LocalAudioStorage
 from luber_database import Base, create_session_factory
+from luber_database.models.billing import AllowanceReservation, Subscription
 from luber_database.models.generation import (
     AudioAsset,
     Generation,
@@ -47,6 +49,11 @@ GENERATION_TABLES = [
     GenerationQA.__table__,
     LyricLineQA.__table__,
     Project.__table__,
+    # Plans and the allowance ledger: every create reserves a slot and
+    # every completion settles one, so these are part of the ordinary
+    # request path rather than a billing-only concern.
+    Subscription.__table__,
+    AllowanceReservation.__table__,
 ]
 
 
@@ -118,6 +125,7 @@ async def client(app: FastAPI):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
         c.user_id = await _sign_up(c, "user-a@example.com")  # type: ignore[attr-defined]
+        await set_plan(app, c.user_id, FIXTURE_PLAN)  # type: ignore[attr-defined]
         yield c
 
 
@@ -127,6 +135,7 @@ async def client_b(app: FastAPI):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
         c.user_id = await _sign_up(c, "user-b@example.com")  # type: ignore[attr-defined]
+        await set_plan(app, c.user_id, FIXTURE_PLAN)  # type: ignore[attr-defined]
         yield c
 
 

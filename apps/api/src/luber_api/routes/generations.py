@@ -20,7 +20,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, 
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.exc import IntegrityError
 
-from luber_api.dependencies import get_audio_storage, get_enqueuer, get_repository
+from luber_api.dependencies import (
+    get_allowance,
+    get_audio_storage,
+    get_enqueuer,
+    get_repository,
+)
 from luber_api.jobs import GenerationEnqueuer
 from luber_api.schemas import (
     COVER_STRENGTH_TO_ADHERENCE,
@@ -54,6 +59,7 @@ from luber_api.schemas import (
 from luber_api.session import enforce_trusted_origin, require_current_user
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationHasDescendantsError, GenerationRepository
+from luber_database.allowance_repository import AllowanceExhaustedError, AllowanceRepository
 from luber_database.models.generation import AudioAsset, Generation, GenerationQA, LyricLineQA
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
@@ -246,6 +252,7 @@ async def create_generation(
     payload: GenerationCreateRequest,
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     enqueuer: Annotated[GenerationEnqueuer, Depends(get_enqueuer)],
+    allowance: Annotated[AllowanceRepository, Depends(get_allowance)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> GenerationCreateResponse:
     if idempotency_key is not None and len(idempotency_key) > IDEMPOTENCY_KEY_MAX_LENGTH:
@@ -297,6 +304,18 @@ async def create_generation(
                 detail="That reference track does not exist. Upload it again.",
             )
 
+    # Checked before a row exists, so an account with nothing left gets a
+    # refusal rather than a Library full of generations that failed.
+    # The count is re-checked per result below, because this read and the
+    # reservations are not one atomic act and a sibling request may take
+    # the last slot in between.
+    entitlement = await allowance.entitlement()
+    if entitlement.exhausted:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=ErrorCode.GENERATION_LIMIT_REACHED.value,
+        )
+
     for index in range(payload.result_count):
         try:
             generation = await repository.create_generation(
@@ -337,6 +356,31 @@ async def create_generation(
             if existing is None:
                 raise
             return await _replay_response(repository, existing)
+
+        try:
+            # The slot is taken before the job is queued, never after: a
+            # generation the worker has already started is one the user
+            # will receive, and billing it afterwards would mean the
+            # limit could be exceeded by exactly the number of requests
+            # racing at that moment. A failure later releases it.
+            await allowance.reserve(generation.id)
+        except AllowanceExhaustedError:
+            # A sibling in this same request, or another tab, took the
+            # last slot. This result is refused; the ones already
+            # reserved go ahead. Asking for four songs with two left
+            # yields two songs, not an error page.
+            await repository.mark_failed(
+                generation.id,
+                status=GenerationStatus.FAILED.value,
+                error_code=ErrorCode.GENERATION_LIMIT_REACHED.value,
+                error_message="monthly generation limit reached",
+            )
+            if not created:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=ErrorCode.GENERATION_LIMIT_REACHED.value,
+                ) from None
+            break
 
         await repository.create_job(
             generation.id,
@@ -480,6 +524,7 @@ async def get_generation_audio(
     generation_id: uuid.UUID,
     repository: Annotated[GenerationRepository, Depends(get_repository)],
     storage: Annotated[AudioStorage, Depends(get_audio_storage)],
+    allowance: Annotated[AllowanceRepository, Depends(get_allowance)],
     asset: Annotated[AudioAssetKind, Query()] = AudioAssetKind.MASTER,
     download: Annotated[bool, Query()] = False,
 ) -> Response:
@@ -499,6 +544,22 @@ async def get_generation_audio(
         # Same response for "absent" and "not yours": ownership is not
         # an existence oracle.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="generation not found")
+
+    # Downloads are a plan entitlement; listening is not. Checked here,
+    # after ownership, and never before it: a Free account asking for
+    # someone else's file must be told the file does not exist, not that
+    # its plan is too small — the second answer confirms the file exists.
+    #
+    # `download=true` is what the browser sends for a save; the player
+    # streams without it. Free accounts can play everything they made and
+    # download none of it, which is the line the pricing page draws.
+    if download:
+        plan = await allowance.effective_plan()
+        if not plan.can_download:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=ErrorCode.DOWNLOAD_NOT_IN_PLAN.value,
+            )
 
     record = resolve_requested_asset(list(generation.audio_assets), asset)
     if record is None:

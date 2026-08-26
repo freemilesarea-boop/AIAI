@@ -50,4 +50,9 @@ def test_error_codes_are_stable_strings():
     # judged unusable, versus every attempt the budget allowed was.
     assert ErrorCode.QUALITY_CHECK_FAILED.value == "QUALITY_CHECK_FAILED"
     assert ErrorCode.QUALITY_RETRY_EXHAUSTED.value == "QUALITY_RETRY_EXHAUSTED"
-    assert len(ErrorCode) == 14
+    # Phase 6 added the two plan refusals. Both are separate from every
+    # other code because the recourse is different: nothing is wrong with
+    # the request or the engine — the account's plan does not cover it.
+    assert ErrorCode.GENERATION_LIMIT_REACHED.value == "GENERATION_LIMIT_REACHED"
+    assert ErrorCode.DOWNLOAD_NOT_IN_PLAN.value == "DOWNLOAD_NOT_IN_PLAN"
+    assert len(ErrorCode) == 16

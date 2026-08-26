@@ -23,7 +23,13 @@ import HomePage from "@/app/page";
 import PlansPage from "@/app/plans/page";
 import LabPage from "@/app/lab/page";
 import SettingsPage from "@/app/settings/page";
-import { PLANS, creditBalance, currentPlan, formatCredits, formatPriceKrw } from "@/lib/plans";
+import { EntitlementProvider } from "@/components/EntitlementProvider";
+import { formatPriceKrw, formatSongs } from "@/lib/plans";
+import {
+  entitlementFixture,
+  planCatalogueFixture,
+  planFixture,
+} from "@/test/entitlement-factories";
 import { PREVIEW_ENTRIES, isUsable, labCatalog } from "@/lib/lab";
 
 let pathname = "/";
@@ -49,13 +55,22 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Answers `/me` with a signed-in user and every list with nothing. */
+/**
+ * Answers `/me` with a signed-in user, plans and entitlement with real
+ * figures, and every list with nothing.
+ *
+ * The entitlement is Basic rather than Free because most of this file
+ * tests navigation and layout; the Free-specific behaviour lives in
+ * `boorda-plans.test.tsx`, where it is the subject.
+ */
 function stubApi(generations: unknown[] = []) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/auth/me")) return json(USER);
+      if (url.includes("/account/entitlement")) return json(entitlementFixture("basic", 12));
+      if (url.includes("/v1/plans")) return json(planCatalogueFixture());
       if (url.includes("/generations")) return json({ items: generations });
       return json({ items: [] });
     }),
@@ -65,9 +80,11 @@ function stubApi(generations: unknown[] = []) {
 function renderPage(node: React.ReactNode) {
   return render(
     <AuthProvider>
-      <PlayerProvider>
-        <ToastProvider>{node}</ToastProvider>
-      </PlayerProvider>
+      <EntitlementProvider>
+        <PlayerProvider>
+          <ToastProvider>{node}</ToastProvider>
+        </PlayerProvider>
+      </EntitlementProvider>
     </AuthProvider>,
   );
 }
@@ -93,12 +110,19 @@ describe("home", () => {
     expect(cta[0]).toHaveAttribute("href", "/create");
   });
 
-  it("shows plan and credits as undecided rather than inventing figures", async () => {
+  it("shows the real plan and the real remaining allowance", async () => {
     stubApi();
     renderPage(<HomePage />);
     const account = await screen.findByRole("region", { name: "내 계정" });
-    // Two stats, both undecided. A number here would be fabricated.
-    expect(within(account).getAllByText("미정")).toHaveLength(2);
+    // Both figures are the server's, and both are enforced — this is no
+    // longer a placeholder, so a fabricated number would be a bug of a
+    // different kind: a wrong one rather than an invented one.
+    expect(await within(account).findByText("Basic")).toBeInTheDocument();
+    expect(within(account).getByText("12곡 / 200곡")).toBeInTheDocument();
+    expect(within(account).getByRole("link", { name: "플랜 살펴보기" })).toHaveAttribute(
+      "href",
+      "/plans",
+    );
   });
 
   it("offers a way into the library", async () => {
@@ -221,24 +245,31 @@ describe("lab catalogue configuration", () => {
 });
 
 describe("plans", () => {
-  it("names the three tiers", () => {
+  it("names all four tiers", async () => {
+    stubApi();
     renderPage(<PlansPage />);
-    for (const name of ["Free", "Basic", "Pro"]) {
-      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+    for (const name of ["Free", "Basic", "Pro", "Creator"]) {
+      expect(await screen.findByRole("heading", { name })).toBeInTheDocument();
     }
   });
 
-  it("quotes no price, because none has been decided", () => {
+  it("quotes the prices the server publishes", async () => {
+    stubApi();
     renderPage(<PlansPage />);
-    // Every tier's price reads "미정"; a ₩ figure would be invented.
-    expect(screen.getAllByText("미정").length).toBeGreaterThanOrEqual(PLANS.length);
-    expect(screen.queryByText(/₩/)).not.toBeInTheDocument();
+    expect(await screen.findByText("무료")).toBeInTheDocument();
+    expect(screen.getByText("₩19,900")).toBeInTheDocument();
+    expect(screen.getByText("₩29,900")).toBeInTheDocument();
+    expect(screen.getByText("₩49,900")).toBeInTheDocument();
   });
 
-  it("offers no subscribe control while there is nothing to subscribe to", () => {
+  it("offers no subscribe control while there is nothing to subscribe to", async () => {
+    stubApi();
     renderPage(<PlansPage />);
+    await screen.findByRole("heading", { name: "Free" });
     expect(screen.queryByRole("button", { name: /구독|결제|시작하기/ })).not.toBeInTheDocument();
-    expect(screen.getAllByText("결제는 아직 준비 중입니다.")).toHaveLength(PLANS.length);
+    // Three tiers say "준비 중"; the one the account is on says so instead.
+    expect(screen.getAllByText("결제는 아직 준비 중입니다.")).toHaveLength(3);
+    expect(screen.getByText("현재 사용 중인 플랜입니다.")).toBeInTheDocument();
   });
 });
 
@@ -253,7 +284,7 @@ describe("settings", () => {
   it("has all six account-management sections", async () => {
     stubApi();
     renderPage(<SettingsPage />);
-    for (const name of ["계정", "구독", "크레딧", "결제", "데이터", "보안"]) {
+    for (const name of ["계정", "구독", "사용량", "결제", "데이터", "보안"]) {
       expect(await screen.findByRole("heading", { name })).toBeInTheDocument();
     }
   });
@@ -266,11 +297,15 @@ describe("settings", () => {
     expect(await screen.findAllByText("준비 중")).toHaveLength(6);
   });
 
-  it("reports subscription, credits and payments as undecided rather than zero", async () => {
+  it("reports the real subscription and usage, and payments as undecided", async () => {
     stubApi();
     renderPage(<SettingsPage />);
-    // plan, status, renewal, balance, monthly grant, method, last payment
-    expect(await screen.findAllByText("미정")).toHaveLength(7);
+    expect(await screen.findByText("Basic")).toBeInTheDocument();
+    expect(screen.getByText("₩19,900")).toBeInTheDocument();
+    expect(screen.getByText("12곡 / 200곡")).toBeInTheDocument();
+    // Payment method and last payment remain undecided: there is no
+    // provider, so there is nothing truthful to put there.
+    expect(screen.getAllByText("미정")).toHaveLength(2);
   });
 
   it("offers no cancel, upgrade, or delete control while none of them works", async () => {
@@ -299,26 +334,21 @@ describe("settings", () => {
   });
 });
 
-describe("plan configuration", () => {
-  it("leaves every price and limit undecided", () => {
-    for (const plan of PLANS) {
-      expect(plan.monthlyPriceKrw).toBeNull();
-      expect(plan.monthlyCredits).toBeNull();
-      expect(plan.maxDurationSeconds).toBeNull();
-    }
-  });
-
-  it("reports no current plan and no balance until a backend exists", () => {
-    expect(currentPlan()).toBeNull();
-    expect(creditBalance()).toBeNull();
-  });
-
-  it("renders an undecided figure as undecided, not as zero or free", () => {
-    expect(formatPriceKrw(null)).toBe("미정");
-    expect(formatCredits(null)).toBe("미정");
-    // And once decided, it formats properly rather than staying vague.
+describe("plan formatting", () => {
+  it("says free rather than zero won", () => {
     expect(formatPriceKrw(0)).toBe("무료");
     expect(formatPriceKrw(9900)).toBe("₩9,900");
-    expect(formatCredits(120)).toBe("120");
+  });
+
+  it("counts in songs, which is what the user asked for", () => {
+    // Never "credits": a user should not have to convert between a
+    // currency we invented and the thing they wanted.
+    expect(formatSongs(20)).toBe("20곡");
+    expect(formatSongs(1000)).toBe("1,000곡");
+  });
+
+  it("highlights exactly one tier, and it grants nothing", () => {
+    expect(planFixture("pro").recommended).toBe(true);
+    expect(planFixture("basic").recommended).toBe(false);
   });
 });

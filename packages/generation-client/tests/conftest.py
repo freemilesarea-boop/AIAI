@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from luber_database import Base, GenerationRepository, create_session_factory
+from luber_database.models.billing import AllowanceReservation
 from luber_database.models.generation import (
     AudioAsset,
     Generation,
@@ -35,6 +36,10 @@ GENERATION_TABLES = [
     # request rather than in whatever test forgot them.
     ProviderCircuitRow.__table__,
     ProviderCircuitTransitionRow.__table__,
+    # Phase 6, and here for the same reason as the circuit tables above:
+    # finishing a generation settles its allowance slot, so the ledger is
+    # part of the ordinary lifecycle rather than a billing-only concern.
+    AllowanceReservation.__table__,
 ]
 
 

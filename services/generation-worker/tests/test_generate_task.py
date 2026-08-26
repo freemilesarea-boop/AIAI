@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from luber_database import Base, GenerationRepository, create_session_factory
+from luber_database.models.billing import AllowanceReservation
 from luber_database.models.generation import AudioAsset, Generation, GenerationJob
 from luber_generation_worker.worker import (
     GENERATION_QUEUE_NAME,
@@ -28,7 +29,15 @@ OWNER_FOR_TESTS = uuid.UUID("11111111-1111-4111-8111-111111111111")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_WAV = REPO_ROOT / "tests" / "fixtures" / "mock_generation.wav"
 
-GENERATION_TABLES = [Generation.__table__, GenerationJob.__table__, AudioAsset.__table__]
+GENERATION_TABLES = [
+    Generation.__table__,
+    GenerationJob.__table__,
+    AudioAsset.__table__,
+    # The worker finishes generations, and finishing one settles its
+    # allowance slot — so the ledger is part of this path, not a
+    # billing-only table the worker never touches.
+    AllowanceReservation.__table__,
+]
 
 
 @pytest.fixture

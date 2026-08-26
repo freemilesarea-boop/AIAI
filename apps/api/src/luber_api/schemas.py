@@ -195,7 +195,10 @@ class GenerationCreateResponse(BaseModel):
     #: Shared by every result of this CREATE. Present even for a single
     #: result, so the client has one way to re-read a submission.
     generation_group_id: uuid.UUID | None = None
-    #: Every accepted generation, in order. Length equals ``result_count``.
+    #: Every accepted generation, in order. Normally ``result_count``
+    #: long, but shorter when the account's remaining allowance could
+    #: not pay for every result — asking for two songs with one left
+    #: yields one song rather than a refusal.
     generations: list[CreatedGeneration] = Field(default_factory=list)
 
 

@@ -24,6 +24,7 @@ from luber_api.routes.health import router as health_router
 from luber_api.routes.ops import router as ops_training_router
 from luber_api.routes.ops_inference import router as ops_inference_router
 from luber_api.routes.ops_resilience import router as ops_resilience_router
+from luber_api.routes.plans import router as plans_router
 from luber_api.routes.projects import assign_router as project_assign_router
 from luber_api.routes.projects import router as projects_router
 from luber_api.routes.reference_audio import router as reference_audio_router
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(generations_router)
     app.include_router(reference_audio_router)
+    app.include_router(plans_router)
     app.include_router(projects_router)
     app.include_router(project_assign_router)
 

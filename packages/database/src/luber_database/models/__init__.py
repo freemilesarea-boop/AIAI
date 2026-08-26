@@ -1,6 +1,11 @@
-"""ORM models: users (Phase 0), the generation domain (Phase 1), and
-the Phase 30 observability projection."""
+"""ORM models: users (Phase 0), the generation domain (Phase 1), the
+Phase 30 observability projection, and the Phase 6 plan/allowance
+tables."""
 
+from luber_database.models.billing import (
+    AllowanceReservation,
+    Subscription,
+)
 from luber_database.models.generation import (
     AudioAsset,
     Generation,
@@ -18,6 +23,7 @@ from luber_database.models.resilience import (
 from luber_database.models.user import User
 
 __all__ = [
+    "AllowanceReservation",
     "AudioAsset",
     "Generation",
     "GenerationJob",
@@ -26,5 +32,6 @@ __all__ = [
     "ProviderCircuitRow",
     "ProviderCircuitTransitionRow",
     "ReferenceAudio",
+    "Subscription",
     "User",
 ]

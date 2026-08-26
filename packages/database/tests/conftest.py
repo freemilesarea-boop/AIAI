@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from luber_database import Base, GenerationRepository, create_session_factory
+from luber_database.models.billing import AllowanceReservation
 from luber_database.models.generation import (
     AudioAsset,
     Generation,
@@ -32,6 +33,9 @@ GENERATION_TABLES = [
     GenerationQA.__table__,
     LyricLineQA.__table__,
     Project.__table__,
+    # Completing or failing a generation settles its allowance slot, so
+    # the ledger has to exist for the ordinary lifecycle tests too.
+    AllowanceReservation.__table__,
 ]
 
 

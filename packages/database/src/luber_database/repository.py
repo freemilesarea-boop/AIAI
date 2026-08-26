@@ -58,6 +58,16 @@ class GenerationRepository:
     def owner(self) -> UUID | None:
         return self._owner
 
+    @property
+    def session(self) -> AsyncSession:
+        """The request's session, so a sibling repository can share it.
+
+        Exposed for the allowance repository only: a reservation and the
+        generation it pays for must be written through one session, or a
+        rollback would leave a slot held for a row that never existed.
+        """
+        return self._session
+
     def _owned(self, statement: Any, column: Any) -> Any:
         """Add the ownership predicate, when this repository has one."""
         if self._owner is None:
@@ -269,6 +279,24 @@ class GenerationRepository:
         generation.inference_qc_trace = trace
         await self._session.commit()
 
+    async def _settle_allowance(self, generation: Generation, *, consumed: bool) -> None:
+        """Move the generation's allowance slot out of RESERVED.
+
+        Settled here rather than at each call site so every path that
+        finishes a generation — worker, service, retry — accounts for it,
+        and none of them has to remember. A completed song keeps its
+        slot; a failed one gives it back, because charging for the
+        product not working is the one behaviour this system must never
+        have.
+        """
+        from luber_database.allowance_repository import AllowanceRepository
+
+        allowance = AllowanceRepository(self._session, generation.user_id)
+        if consumed:
+            await allowance.consume(generation.id)
+        else:
+            await allowance.release(generation.id)
+
     async def mark_completed(
         self,
         generation_id: UUID,
@@ -292,6 +320,7 @@ class GenerationRepository:
             generation.seed = seed
         generation.completed_at = _utcnow()
         await self._session.commit()
+        await self._settle_allowance(generation, consumed=True)
 
     async def mark_failed(
         self,
@@ -309,6 +338,7 @@ class GenerationRepository:
         generation.error_message = error_message
         generation.completed_at = _utcnow()
         await self._session.commit()
+        await self._settle_allowance(generation, consumed=False)
 
     async def get_ancestry(self, generation_id: UUID, *, max_depth: int = 64) -> list[Generation]:
         """Ancestors from the immediate parent up to the root.

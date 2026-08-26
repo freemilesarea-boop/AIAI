@@ -20,7 +20,7 @@ import { SongCard } from "@/components/SongCard";
 import { Button, ButtonLink, Card, EmptyState, SkeletonCard } from "@/components/ui";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { listGenerations, type Generation } from "@/lib/api";
-import { creditBalance, currentPlan, formatCredits } from "@/lib/plans";
+import { UsageCard } from "@/components/UsageMeter";
 
 //: How many recent tracks the dashboard shows. Enough to recognise
 //: what you were last working on, few enough that the CTA stays above
@@ -32,45 +32,11 @@ function greeting(name: string | null, email: string): string {
   return `${who}님, 환영합니다`;
 }
 
-/**
- * A figure the product cannot produce yet.
- *
- * Kept as its own component so that when the billing service lands
- * there is exactly one place that changes, and so the "미정" state is
- * impossible to confuse with a loaded value.
- */
-function PendingStat({
-  label,
-  value,
-  hint,
-  action,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <Card className="flex flex-col gap-1 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
-        {label}
-      </p>
-      <p className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{value}</p>
-      <p className="text-xs text-[var(--text-muted)]">{hint}</p>
-      {action ? <div className="mt-2">{action}</div> : null}
-    </Card>
-  );
-}
 
 export default function HomePage() {
   const { user } = useAuth();
   const [recent, setRecent] = useState<Generation[] | null>(null);
   const [failed, setFailed] = useState(false);
-
-  //: Neither has a backend yet; both are typed as the real thing so
-  //: the components are already correct when one arrives.
-  const plan = currentPlan();
-  const credits = creditBalance();
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -140,25 +106,28 @@ export default function HomePage() {
         <h2 id="account-heading" className="text-sm font-semibold text-[var(--text-primary)]">
           내 계정
         </h2>
+        {/*
+          Real figures now, from the server's entitlement — the plan and
+          the songs left are both enforced values, not placeholders.
+          `UsageCard` renders nothing if the read failed, which is why
+          the plan link sits outside it rather than inside.
+        */}
         <div className="grid gap-3 sm:grid-cols-2">
-          <PendingStat
-            label="현재 플랜"
-            value={plan?.name ?? "미정"}
-            hint="요금제가 아직 정해지지 않았습니다."
-            action={
-              <Link
-                href="/plans"
-                className="text-xs font-medium text-[var(--brand)] hover:underline"
-              >
-                플랜 살펴보기
-              </Link>
-            }
-          />
-          <PendingStat
-            label="남은 크레딧"
-            value={formatCredits(credits)}
-            hint="크레딧 정책이 아직 정해지지 않았습니다."
-          />
+          <UsageCard />
+          <Card className="flex flex-col justify-between gap-3 p-5">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">플랜</p>
+              <p className="text-sm text-[var(--text-secondary)]">
+                생성 한도, 다운로드, 상업적 이용 범위를 비교해 보세요.
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="w-fit text-xs font-medium text-[var(--brand)] hover:underline"
+            >
+              플랜 살펴보기
+            </Link>
+          </Card>
         </div>
       </section>
 

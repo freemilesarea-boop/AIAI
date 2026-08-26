@@ -17,6 +17,7 @@ from luber_api.jobs import GenerationEnqueuer
 from luber_api.session import require_current_user
 from luber_audio_utils import AudioStorage
 from luber_database import GenerationRepository
+from luber_database.allowance_repository import AllowanceRepository
 from luber_database.models.user import User
 
 
@@ -59,3 +60,18 @@ def get_enqueuer(request: Request) -> GenerationEnqueuer:
 def get_audio_storage(request: Request) -> AudioStorage:
     storage: AudioStorage = request.app.state.audio_storage
     return storage
+
+
+async def get_allowance(
+    repository: Annotated[GenerationRepository, Depends(get_repository)],
+) -> AllowanceRepository:
+    """The caller's plan and allowance, on the request's own session.
+
+    Built from the generation repository rather than from the user, so
+    the two share a session and the owner is provably the same one — the
+    identity still comes from the session cookie and never from the
+    request body.
+    """
+    owner = repository.owner
+    assert owner is not None, "request-scoped repository is always owned"
+    return AllowanceRepository(repository.session, owner)
