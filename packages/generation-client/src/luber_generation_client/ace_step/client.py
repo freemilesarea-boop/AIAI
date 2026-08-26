@@ -106,9 +106,76 @@ class AceStepClient:
         )
 
     async def list_models(self) -> AceStepModelList:
-        data = self._unwrap(await self._client.get("/v1/models"))
-        models = [str(m.get("name")) for m in data.get("models", []) if m.get("name")]
-        return AceStepModelList(models=models, default_model=data.get("default_model"))
+        """The models the engine will answer for.
+
+        Two response shapes are in the wild and both are accepted.
+
+        The documented envelope — ``{code, data: {models: [{name}],
+        default_model}}`` — is what the pinned upstream docs describe.
+        The installed 1.5 server instead answers ``/v1/models`` in the
+        OpenAI listing style: ``{object: "list", data: [{id, name}]}``,
+        with no ``code`` field at all. Measured against a live server:
+        the envelope validator rejected that outright, so this raised
+        rather than returning anything, and any future caller would have
+        seen an error from a healthy engine.
+
+        Ids are preferred over display names because an id is what the
+        generation protocol uses; ``name`` on the installed server is a
+        human label ("ACE-Step acestep-v15-turbo"). No name is
+        synthesised — an entry carrying neither is skipped, and a body
+        that is not a recognised shape raises rather than reporting an
+        empty engine.
+        """
+        response = await self._client.get("/v1/models")
+        if response.status_code != 200:
+            raise AceStepApiError(
+                f"ACE-Step API returned HTTP {response.status_code}",
+                status_code=response.status_code,
+            )
+        try:
+            body = response.json()
+        except json.JSONDecodeError as exc:
+            raise AceStepApiError(f"ACE-Step API returned non-JSON body: {exc}") from exc
+        if not isinstance(body, dict):
+            raise AceStepApiError(f"ACE-Step model list is not an object: {type(body).__name__}")
+
+        payload = body.get("data")
+
+        # Documented envelope: data is an object holding `models`.
+        if isinstance(payload, dict):
+            if body.get("code") not in (200, None) or body.get("error"):
+                raise AceStepApiError(
+                    f"ACE-Step API error (code={body.get('code')}): {body.get('error')}",
+                    status_code=body.get("code") if isinstance(body.get("code"), int) else None,
+                )
+            entries = payload.get("models")
+            default = payload.get("default_model")
+        # Installed 1.5: data is the list itself.
+        elif isinstance(payload, list):
+            entries = payload
+            default = body.get("default_model")
+        else:
+            raise AceStepApiError(
+                "ACE-Step model list has no recognised 'data' payload "
+                f"(got {type(payload).__name__})"
+            )
+
+        if not isinstance(entries, list):
+            raise AceStepApiError(
+                f"ACE-Step model list entries are not a list (got {type(entries).__name__})"
+            )
+
+        models: list[str] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            identifier = entry.get("id") or entry.get("name")
+            if identifier:
+                models.append(str(identifier))
+        return AceStepModelList(
+            models=models,
+            default_model=str(default) if default else None,
+        )
 
     async def submit_generation(self, payload: dict[str, Any]) -> AceStepTaskHandle:
         """POST /release_task with a payload of documented fields only."""

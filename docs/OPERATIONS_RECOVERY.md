@@ -35,8 +35,34 @@ cd apps/web && pnpm dev
 ACE-Step runs from its own checkout and virtualenv:
 
 ```bash
-~/ace-step-1.5/.venv/bin/acestep-api --host 127.0.0.1 --port 8001
+ACESTEP_NO_INIT=false ~/ace-step-1.5/.venv/bin/acestep-api --host 127.0.0.1 --port 8001
 ```
+
+**`ACESTEP_NO_INIT=false` is not optional.** Without it the server starts
+in lazy-load mode: it binds the port, answers `/health` with 200, and
+loads no model until the first generation arrives. LUBER checks readiness
+before it submits, sees `models_initialized: false`, and fails the
+generation with `MODEL_LOAD_FAILED` — so every song fails against an
+engine that looks alive. Measured: the engine received only health and
+model-list probes and never a generation request.
+
+Eager start costs about a minute of loading and roughly 9 GB of weights
+resident. That is the trade: a slow start, or a fast start that cannot
+generate.
+
+Ready means `models_initialized` is true and `loaded_model` names the
+configured model:
+
+```bash
+curl -s localhost:8001/health | python3 -m json.tool
+# data.status            = "ok"
+# data.models_initialized = true
+# data.loaded_model       = "acestep-v15-turbo"   ← must match ACE_STEP_MODEL
+```
+
+`loaded_lm_model` may be `null`; the lyric LM loads separately and text
+to music does not wait on it. Check the health fields rather than the
+HTTP status — a 200 alone does not mean the engine can generate.
 
 ---
 
@@ -192,7 +218,7 @@ records `GENERATION_TIMEOUT`. If you see one anyway:
 ```bash
 .venv/bin/python scripts/development/luber_health.py     # flags >15min
 pgrep -fl 'arq .*luber_generation_worker'
-curl -s localhost:8001/docs -o /dev/null -w '%{http_code}\n'   # engine alive?
+curl -s localhost:8001/health | grep -o '"models_initialized":[a-z]*'  # engine READY?
 ```
 
 A run legitimately in progress holds a worker at high CPU. If the worker
@@ -207,7 +233,7 @@ running first.
 ## Provider (ACE-Step) outage
 
 ```bash
-curl -s localhost:8001/docs -o /dev/null -w '%{http_code}\n'   # 200 = alive
+curl -s localhost:8001/health | grep -o '"models_initialized":[a-z]*'  # true = ready
 ```
 
 Generations submitted during an outage fail with a stable code rather
