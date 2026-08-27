@@ -50,5 +50,6 @@ RUN uv sync --frozen --no-dev --package ${WORKER_PACKAGE}
 
 # The worker has no inbound port, deliberately — it reaches out to Redis,
 # PostgreSQL, storage and the engine, and nothing reaches it.
-ENTRYPOINT ["uv", "run", "--no-sync"]
-CMD ["arq", "luber_generation_worker.worker.WorkerSettings"]
+# Same reason as api.Dockerfile: the venv's own binaries, not `uv run`.
+ENTRYPOINT []
+CMD ["/app/.venv/bin/arq", "luber_generation_worker.worker.WorkerSettings"]

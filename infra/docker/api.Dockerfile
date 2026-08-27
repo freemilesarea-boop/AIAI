@@ -59,4 +59,9 @@ RUN uv sync --frozen --no-dev --package luber-api
 ENV PORT=8000
 EXPOSE 8000
 
-CMD uv run --no-sync uvicorn luber_api.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# The venv binary directly, not `uv run`. In this image `uv run` failed
+# to spawn an installed console script — the pre-deploy migration died
+# on "Failed to spawn: alembic" with alembic present in .venv/bin — so
+# the runtime path does not go through uv at all. Shell form keeps
+# ${PORT} expanding for runtimes that assign it.
+CMD /app/.venv/bin/uvicorn luber_api.main:app --host 0.0.0.0 --port ${PORT:-8000}
