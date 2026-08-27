@@ -36,14 +36,17 @@ COPY packages/schemas/pyproject.toml packages/schemas/pyproject.toml
 COPY packages/shared/pyproject.toml packages/shared/pyproject.toml
 COPY packages/training/pyproject.toml packages/training/pyproject.toml
 
-RUN uv sync --frozen --no-dev --no-install-workspace
+RUN uv sync --frozen --no-dev --no-install-workspace --package ${WORKER_PACKAGE}
 
 COPY apps/api apps/api
 COPY services services
 COPY packages packages
 COPY scripts scripts
 
-RUN uv sync --frozen --no-dev
+# See api.Dockerfile: a bare `uv sync` installs nothing, because the
+# workspace root has no dependencies of its own. WORKER_PACKAGE selects
+# which member this image is for.
+RUN uv sync --frozen --no-dev --package ${WORKER_PACKAGE}
 
 # The worker has no inbound port, deliberately — it reaches out to Redis,
 # PostgreSQL, storage and the engine, and nothing reaches it.

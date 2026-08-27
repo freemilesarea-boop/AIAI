@@ -39,14 +39,19 @@ COPY packages/schemas/pyproject.toml packages/schemas/pyproject.toml
 COPY packages/shared/pyproject.toml packages/shared/pyproject.toml
 COPY packages/training/pyproject.toml packages/training/pyproject.toml
 
-RUN uv sync --frozen --no-dev --no-install-workspace
+RUN uv sync --frozen --no-dev --no-install-workspace --package luber-api
 
 # ── source ───────────────────────────────────────────────────────────
 COPY apps/api apps/api
 COPY services services
 COPY packages packages
 
-RUN uv sync --frozen --no-dev
+# `--package` is not optional here. The workspace root declares
+# `dependencies = []` and `package = false`, so a bare `uv sync` syncs
+# the root project — which is nothing — and leaves an empty environment.
+# The container then dies on "Failed to spawn: uvicorn". Naming the
+# member is what installs it and its dependency closure.
+RUN uv sync --frozen --no-dev --package luber-api
 
 # Railway (and most managed runtimes) assign the port at run time and
 # expect the process to bind it. Shell form so ${PORT} expands; the
