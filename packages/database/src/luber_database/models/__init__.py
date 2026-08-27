@@ -16,6 +16,12 @@ from luber_database.models.observability import (
     InferenceIncidentRow,
     InferenceObservationRow,
 )
+from luber_database.models.payments import (
+    BillingAnomaly,
+    BillingCheckout,
+    BillingEvent,
+    BillingPayment,
+)
 from luber_database.models.resilience import (
     ProviderCircuitRow,
     ProviderCircuitTransitionRow,
@@ -25,6 +31,10 @@ from luber_database.models.user import User
 __all__ = [
     "AllowanceReservation",
     "AudioAsset",
+    "BillingAnomaly",
+    "BillingCheckout",
+    "BillingEvent",
+    "BillingPayment",
     "Generation",
     "GenerationJob",
     "InferenceIncidentRow",

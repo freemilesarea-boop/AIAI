@@ -30,6 +30,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -64,10 +65,41 @@ class Subscription(Base):
     )
     #: A `PlanId` value. Stored as its stable string, never a display name.
     plan_id: Mapped[str] = mapped_column(String(32), nullable=False)
-    #: Free-form lifecycle marker: ACTIVE today. A payment provider will
-    #: bring its own vocabulary (past_due, canceled); this is not that,
-    #: and is deliberately not an enum until one exists to model.
+    #: A `SubscriptionState` value. Phase 6 wrote only ACTIVE; Phase 7
+    #: turned this into the real state machine, because a payment
+    #: provider makes the difference between "registered", "paid",
+    #: "renewal failed" and "cancelled but still paid up" the whole
+    #: question. See `luber_billing.states`.
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
+
+    # ── provider linkage (Phase 7) ─────────────────────────────────
+    #
+    #: Which payment provider holds the recurring contract. Null for a
+    #: subscription assigned by an operator script, which is how every
+    #: pre-payment account came to have one.
+    provider: Mapped[str | None] = mapped_column(String(32))
+    #: PayApp's `rebill_no`. Unique: one recurring contract maps to one
+    #: local subscription, so a notification can be resolved to exactly
+    #: one account and no account can end up sharing a contract.
+    #:
+    #: Never accepted from a client. The browser asks to cancel *its*
+    #: subscription; the server looks this up.
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    #: Whether PayApp will charge again. Turned off by cancellation
+    #: without ending the period already paid for.
+    auto_renew: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: When the user asked to stop. Distinct from the period ending:
+    #: cancelling on the 3rd of a period paid to the 28th means access
+    #: until the 28th, and both dates matter afterwards.
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: The last confirmed payment, denormalised so "is this account paid
+    #: up" is one row rather than a join under load.
+    last_payment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: When PayApp is next expected to charge. What the reconciliation
+    #: job compares against to notice a renewal that never arrived —
+    #: the failure mode webhooks cannot detect, because an undelivered
+    #: notification leaves no trace anywhere.
+    next_renewal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     #: The allowance window. Calendar months for Free today, but stored
     #: as explicit bounds so a billing provider can later define periods

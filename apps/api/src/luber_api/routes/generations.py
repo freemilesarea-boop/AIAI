@@ -57,6 +57,7 @@ from luber_api.schemas import (
     SectionSummary,
 )
 from luber_api.session import enforce_trusted_origin, require_current_user
+from luber_api.settings import get_settings
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationHasDescendantsError, GenerationRepository
 from luber_database.allowance_repository import AllowanceExhaustedError, AllowanceRepository
@@ -255,6 +256,16 @@ async def create_generation(
     allowance: Annotated[AllowanceRepository, Depends(get_allowance)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> GenerationCreateResponse:
+    # First, before anything is read, reserved or written. A deployment
+    # without a GPU and without durable storage cannot finish a
+    # generation, and letting the request past this point would spend a
+    # slot of the user's monthly allowance on a job that can never run.
+    if not get_settings().generation_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=ErrorCode.GENERATION_UNAVAILABLE.value,
+        )
+
     if idempotency_key is not None and len(idempotency_key) > IDEMPOTENCY_KEY_MAX_LENGTH:
         raise HTTPException(
             status_code=422,

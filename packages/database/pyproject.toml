@@ -4,10 +4,19 @@ version = "0.1.0"
 description = "SQLAlchemy models, async engine factory, and Alembic migrations"
 requires-python = ">=3.11"
 dependencies = [
+    # Phase 7: the subscription state machine and PayApp notification
+    # vocabulary. This package stores billing rows; `luber-billing`
+    # decides what they mean. The seam runs one way — `luber-billing`
+    # never imports SQLAlchemy.
+    "luber-billing",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
     "alembic>=1.14",
 ]
+
+[tool.uv.sources]
+luber-billing = { workspace = true }
+luber-schemas = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

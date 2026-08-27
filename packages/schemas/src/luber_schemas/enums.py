@@ -137,6 +137,11 @@ class ErrorCode(StrEnum):
     Raw exception strings are never sent to clients.
     """
 
+    #: Generation is switched off for this deployment. Distinct from
+    #: every other code because nothing is wrong with the request, the
+    #: account or the engine — the capability is not being served, and
+    #: the only recourse is to wait until it is.
+    GENERATION_UNAVAILABLE = "GENERATION_UNAVAILABLE"
     #: The account has used every song in its allowance period. Not a
     #: failure of the engine and not the user's input: the plan ran out.
     #: Separate from every other code because the recourse is different —

@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
+from luber_billing.states import SubscriptionState, entitles
 from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,7 @@ from luber_database.models.billing import (
 )
 from luber_schemas.plans import (
     DEFAULT_PLAN,
+    PLANS,
     STANDARD_GENERATION_COST,
     Plan,
     PlanId,
@@ -136,10 +138,52 @@ class AllowanceRepository:
         )
         return result.scalar_one_or_none()
 
-    async def effective_plan(self) -> Plan:
-        """The plan in force. Free when there is no row."""
+    async def effective_plan(self, *, now: datetime | None = None) -> Plan:
+        """The plan actually in force right now. Free unless paid up.
+
+        Three conditions, all required, and the order matters less than
+        the fact that every one of them fails closed:
+
+        1. A subscription row exists.
+        2. Its state is one that entitles — ACTIVE, or CANCEL_PENDING,
+           which is someone who cancelled the renewal but still owns the
+           period they paid for.
+        3. The paid period contains this moment.
+
+        The third is what makes a missed renewal safe. A subscription
+        whose period ended and whose renewal never arrived stays ACTIVE
+        in the table — that is exactly the anomaly reconciliation looks
+        for — but it grants nothing in the meantime. The alternative,
+        trusting the status alone, would hand out free months to every
+        account whose renewal notification went missing.
+
+        PAST_DUE grants nothing for the same reason: a failed charge is
+        the absence of a payment, not a payment.
+        """
         row = await self._subscription()
-        return plan_for(row.plan_id if row else None)
+        if row is None:
+            return PLANS[DEFAULT_PLAN]
+
+        try:
+            state = SubscriptionState(row.status)
+        except ValueError:
+            # An unrecognised status is not a licence. Phase 6 wrote only
+            # ACTIVE, so this is a status from the future or a corrupted
+            # row, and Free is the safe reading of both.
+            return PLANS[DEFAULT_PLAN]
+
+        if not entitles(state):
+            return PLANS[DEFAULT_PLAN]
+
+        at = (now or datetime.now(UTC)).astimezone(UTC)
+        end = row.period_end if row.period_end.tzinfo else row.period_end.replace(tzinfo=UTC)
+        start = (
+            row.period_start if row.period_start.tzinfo else row.period_start.replace(tzinfo=UTC)
+        )
+        if not (start <= at < end):
+            return PLANS[DEFAULT_PLAN]
+
+        return plan_for(row.plan_id)
 
     async def set_plan(self, plan_id: PlanId, *, now: datetime | None = None) -> Subscription:
         """Assign a plan. Development and administration only.
@@ -223,7 +267,7 @@ class AllowanceRepository:
         return int(result.scalar_one() or 0)
 
     async def entitlement(self, *, now: datetime | None = None) -> Entitlement:
-        plan = await self.effective_plan()
+        plan = await self.effective_plan(now=now)
         start, end = await self.current_period(now=now)
         return Entitlement(
             plan=plan, period_start=start, period_end=end, used=await self._used(start)
@@ -248,7 +292,7 @@ class AllowanceRepository:
         one. Ten simultaneous requests against one remaining slot produce
         one winner and nine refusals, on PostgreSQL and on SQLite alike.
         """
-        plan = await self.effective_plan()
+        plan = await self.effective_plan(now=now)
         start, end = await self.current_period(now=now)
         limit = plan.monthly_generation_limit
 

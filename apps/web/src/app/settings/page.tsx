@@ -23,6 +23,7 @@ import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button, ButtonLink, Card, Skeleton } from "@/components/ui";
 import { useEntitlement } from "@/components/EntitlementProvider";
+import { PaymentHistory, SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { UsageNotice } from "@/components/UsageMeter";
 import { formatPeriod, formatPriceKrw, formatSongs } from "@/lib/plans";
 
@@ -154,10 +155,16 @@ export default function SettingsPage() {
         <NotYet>표시 이름과 프로필 수정은 아직 제공하지 않습니다.</NotYet>
       </Section>
 
-      <Section id="subscription" title="구독" description="현재 요금제와 이용 범위입니다.">
+      <Section id="subscription" title="구독" description="현재 요금제와 결제 정보입니다.">
+        {/*
+          Plan, status, period, next billing date and last payment all
+          come from /v1/billing/status. Nothing on this page works any of
+          them out for itself — a UI that computed "you are subscribed"
+          would eventually disagree with the server about who had paid.
+        */}
+        <SubscriptionPanel />
         <Card className="p-0">
           <dl className="flex flex-col">
-            <Row label="현재 플랜" value={entitlement ? entitlement.plan.display_name : <Unknown />} />
             <Row
               label="월 요금"
               value={entitlement ? formatPriceKrw(entitlement.plan.monthly_price_krw) : <Unknown />}
@@ -180,12 +187,12 @@ export default function SettingsPage() {
           </ButtonLink>
         </div>
         {/*
-          The plan and its entitlements are real — they come from the
-          server and the server enforces them. Changing plans is not:
-          there is no payment provider, so there is nothing to charge and
-          no subscription to cancel.
+          Plan *changes* remain unavailable, deliberately. Doing one
+          safely means either proration or two live recurring contracts,
+          and the second is how people get billed twice.
+          Cancel-then-resubscribe is the honest V1 answer.
         */}
-        <NotYet>플랜 변경과 구독 해지는 아직 제공하지 않습니다.</NotYet>
+        <NotYet>플랜 변경은 아직 제공하지 않습니다. 해지 후 새 플랜을 선택해 주세요.</NotYet>
       </Section>
 
       <Section
@@ -219,14 +226,17 @@ export default function SettingsPage() {
         <NotYet>곡별 사용 내역은 아직 제공하지 않습니다.</NotYet>
       </Section>
 
-      <Section id="payments" title="결제" description="결제 수단과 결제 내역입니다.">
-        <Card className="p-0">
-          <dl className="flex flex-col">
-            <Row label="결제 수단" value={<Unknown />} />
-            <Row label="최근 결제" value={<Unknown />} />
-          </dl>
-        </Card>
-        <NotYet>결제 수단 등록, 결제 내역, 영수증, 환불은 아직 제공하지 않습니다.</NotYet>
+      <Section id="payments" title="결제" description="이 계정의 결제 내역입니다.">
+        <PaymentHistory />
+        {/*
+          Card details are PayApp's to hold. BOORDA stores no card number
+          and no CVV, so there is nothing here to manage — and saying so
+          is more useful than an empty "결제 수단" row.
+        */}
+        <p className="text-xs text-[var(--text-muted)]">
+          카드 정보는 결제사(PayApp)가 보관하며 부르다에는 저장되지 않습니다.
+        </p>
+        <NotYet>영수증 발급과 환불 요청은 아직 제공하지 않습니다.</NotYet>
       </Section>
 
       <Section id="data" title="데이터" description="내 음악과 계정 데이터입니다.">

@@ -26,6 +26,7 @@ members = [
     "packages/inference-observability",
     "packages/provider-resilience",
     "packages/hardware",
+    "packages/billing",
 ]
 
 [dependency-groups]

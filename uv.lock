@@ -14,6 +14,7 @@ members = [
     "luber-audio-finishing",
     "luber-audio-utils",
     "luber-audio-worker",
+    "luber-billing",
     "luber-database",
     "luber-dataset",
     "luber-evaluation",
@@ -855,6 +856,7 @@ dependencies = [
     { name = "email-validator" },
     { name = "fastapi" },
     { name = "luber-audio-utils" },
+    { name = "luber-billing" },
     { name = "luber-database" },
     { name = "luber-evaluation" },
     { name = "luber-generation-client" },
@@ -874,6 +876,7 @@ requires-dist = [
     { name = "email-validator", specifier = ">=2.2" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "luber-audio-utils", editable = "packages/audio-utils" },
+    { name = "luber-billing", editable = "packages/billing" },
     { name = "luber-database", editable = "packages/database" },
     { name = "luber-evaluation", editable = "packages/evaluation" },
     { name = "luber-generation-client", editable = "packages/generation-client" },
@@ -935,12 +938,30 @@ requires-dist = [
 ]
 
 [[package]]
+name = "luber-billing"
+version = "0.1.0"
+source = { editable = "packages/billing" }
+dependencies = [
+    { name = "httpx" },
+    { name = "luber-schemas" },
+    { name = "luber-shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "luber-schemas", editable = "packages/schemas" },
+    { name = "luber-shared", editable = "packages/shared" },
+]
+
+[[package]]
 name = "luber-database"
 version = "0.1.0"
 source = { editable = "packages/database" }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "luber-billing" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
@@ -948,6 +969,7 @@ dependencies = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "luber-billing", editable = "packages/billing" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
 ]
 

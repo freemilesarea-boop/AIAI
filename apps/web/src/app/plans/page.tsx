@@ -15,11 +15,15 @@
  * rather than unfinished.
  */
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useAuth } from "@/components/auth/AuthProvider";
+import { CheckoutDialog } from "@/components/CheckoutDialog";
 import { useEntitlement } from "@/components/EntitlementProvider";
-import { Card } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { UsageBar } from "@/components/UsageMeter";
+import { fetchBillingStatus, hasPaidAccess, type BillingStatus } from "@/lib/billing";
 import { fetchPlans, formatPriceKrw, formatSongs, type Plan } from "@/lib/plans";
 
 function Mark({ included }: { included: boolean }) {
@@ -34,6 +38,42 @@ function Mark({ included }: { included: boolean }) {
   );
 }
 
+function planAction({
+  plan,
+  current,
+  checkoutAvailable,
+  subscribed,
+  onSubscribe,
+}: {
+  plan: Plan;
+  current: boolean;
+  checkoutAvailable: boolean;
+  subscribed: boolean;
+  onSubscribe: (plan: Plan) => void;
+}) {
+  const note = (text: string) => (
+    <p className="rounded-[var(--radius-md)] bg-[var(--surface-sunken)] px-3 py-2 text-xs text-[var(--text-muted)]">
+      {text}
+    </p>
+  );
+
+  if (plan.monthly_price_krw === 0) return note("가입하면 바로 사용할 수 있습니다.");
+  if (current) return note("현재 사용 중인 플랜입니다.");
+  if (!checkoutAvailable) return note("결제는 아직 준비 중입니다.");
+  if (subscribed) return note("플랜을 바꾸려면 현재 구독을 먼저 해지해 주세요.");
+
+  return (
+    <Button
+      type="button"
+      variant={plan.recommended ? "primary" : "secondary"}
+      className="w-full"
+      onClick={() => onSubscribe(plan)}
+    >
+      {plan.display_name} 시작하기
+    </Button>
+  );
+}
+
 const TAGLINES: Record<string, string> = {
   free: "부르다를 처음 써보는 분께",
   basic: "꾸준히 만드는 분께",
@@ -45,10 +85,15 @@ function PlanCard({
   plan,
   current,
   checkoutAvailable,
+  subscribed,
+  onSubscribe,
 }: {
   plan: Plan;
   current: boolean;
   checkoutAvailable: boolean;
+  /** True when this account already pays for something. */
+  subscribed: boolean;
+  onSubscribe: (plan: Plan) => void;
 }) {
   return (
     <Card
@@ -109,18 +154,17 @@ function PlanCard({
       </ul>
 
       {/*
-        No subscribe button while `checkout_available` is false. The flag
-        comes from the server, so the day a provider is connected this
-        page starts offering checkout without being edited — and until
-        then it cannot accidentally offer one.
+        The CTA appears only when the *server* says checkout is available.
+        The flag comes from `/v1/plans`, so a deployment without PayApp
+        credentials renders an honest unavailable state rather than a
+        button that opens nothing.
+
+        Changing plan is not offered. Doing it safely means either
+        proration or two live recurring contracts, and the second is how
+        people get billed twice — so V1 asks the user to cancel first and
+        says exactly that. Payment correctness over convenience.
       */}
-      <p className="mt-auto rounded-[var(--radius-md)] bg-[var(--surface-sunken)] px-3 py-2 text-xs text-[var(--text-muted)]">
-        {checkoutAvailable
-          ? "결제 페이지로 이동합니다."
-          : current
-            ? "현재 사용 중인 플랜입니다."
-            : "결제는 아직 준비 중입니다."}
-      </p>
+      <div className="mt-auto">{planAction({ plan, current, checkoutAvailable, subscribed, onSubscribe })}</div>
     </Card>
   );
 }
@@ -130,7 +174,11 @@ export default function PlansPage() {
   const [checkoutAvailable, setCheckoutAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
   const { entitlement } = useEntitlement();
+  const { status: authStatus } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,6 +200,34 @@ export default function PlansPage() {
     })();
     return () => controller.abort();
   }, []);
+
+  // Read separately from the catalogue: pricing is public and this is
+  // not. A signed-out visitor sees the tiers and no subscription state.
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        setBilling(await fetchBillingStatus(controller.signal));
+      } catch {
+        // Leaves `billing` null, which renders as "not subscribed" —
+        // the CTA then leads to a checkout the server will refuse if it
+        // is wrong. Failing towards the server's judgement, not ours.
+      }
+    })();
+    return () => controller.abort();
+  }, [authStatus]);
+
+  function startCheckout(plan: Plan) {
+    if (authStatus !== "authenticated") {
+      // Preserve the intent through login. `next` is a path on this
+      // origin only — `redirect.ts` refuses anything else — so it cannot
+      // become an open redirect.
+      router.push(`/login?next=${encodeURIComponent(`/plans?plan=${plan.plan_id}`)}`);
+      return;
+    }
+    setCheckoutPlan(plan);
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -193,10 +269,16 @@ export default function PlansPage() {
               plan={plan}
               current={entitlement?.plan.plan_id === plan.plan_id}
               checkoutAvailable={checkoutAvailable}
+              subscribed={hasPaidAccess(billing)}
+              onSubscribe={startCheckout}
             />
           ))}
         </div>
       )}
+
+      {checkoutPlan ? (
+        <CheckoutDialog plan={checkoutPlan} onClose={() => setCheckoutPlan(null)} />
+      ) : null}
 
       <Card className="p-5">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">알아두실 점</h2>
@@ -204,7 +286,9 @@ export default function PlansPage() {
           <li>생성 한도는 완성된 곡 기준입니다. 실패한 생성은 차감되지 않습니다.</li>
           <li>플랜을 바꿔도 이번 기간의 사용량은 초기화되지 않습니다.</li>
           <li>Free 플랜은 만든 곡을 들을 수 있지만 내려받을 수는 없습니다.</li>
-          <li>결제 수단은 아직 연결되지 않았습니다.</li>
+          <li>구독은 매달 자동으로 갱신되며, 언제든지 설정에서 해지할 수 있습니다.</li>
+          <li>해지해도 이미 결제한 기간이 끝날 때까지는 그대로 이용할 수 있습니다.</li>
+          <li>결제는 PayApp에서 처리되며, 카드 정보는 부르다에 저장되지 않습니다.</li>
         </ul>
       </Card>
     </div>

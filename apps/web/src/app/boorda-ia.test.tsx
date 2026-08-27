@@ -266,10 +266,15 @@ describe("plans", () => {
     stubApi();
     renderPage(<PlansPage />);
     await screen.findByRole("heading", { name: "Free" });
-    expect(screen.queryByRole("button", { name: /구독|결제|시작하기/ })).not.toBeInTheDocument();
-    // Three tiers say "준비 중"; the one the account is on says so instead.
-    expect(screen.getAllByText("결제는 아직 준비 중입니다.")).toHaveLength(3);
+    // `checkout_available` is false in the fixture, so no tier offers a
+    // CTA. The flag comes from the server, which is what stops a
+    // deployment without PayApp credentials from showing a dead button.
+    expect(screen.queryByRole("button", { name: /시작하기/ })).not.toBeInTheDocument();
+    // Pro and Creator say "준비 중"; Basic is the account's own plan and
+    // Free needs no checkout at all.
+    expect(screen.getAllByText("결제는 아직 준비 중입니다.")).toHaveLength(2);
     expect(screen.getByText("현재 사용 중인 플랜입니다.")).toBeInTheDocument();
+    expect(screen.getByText("가입하면 바로 사용할 수 있습니다.")).toBeInTheDocument();
   });
 });
 
@@ -297,15 +302,24 @@ describe("settings", () => {
     expect(await screen.findAllByText("준비 중")).toHaveLength(6);
   });
 
-  it("reports the real subscription and usage, and payments as undecided", async () => {
+  it("reports the real subscription and usage", async () => {
     stubApi();
     renderPage(<SettingsPage />);
-    expect(await screen.findByText("Basic")).toBeInTheDocument();
-    expect(screen.getByText("₩19,900")).toBeInTheDocument();
-    expect(screen.getByText("12곡 / 200곡")).toBeInTheDocument();
-    // Payment method and last payment remain undecided: there is no
-    // provider, so there is nothing truthful to put there.
-    expect(screen.getAllByText("미정")).toHaveLength(2);
+    expect(await screen.findByText("12곡 / 200곡")).toBeInTheDocument();
+    // Nothing is "미정" any more: Phase 7 connected a real provider, and
+    // every field on this page is now either the server's answer or an
+    // honest statement that the capability does not exist.
+    expect(screen.queryByText("미정")).toBeNull();
+  });
+
+  it("says where card details actually live", async () => {
+    stubApi();
+    renderPage(<SettingsPage />);
+    // More useful than an empty 결제 수단 row: BOORDA stores no card
+    // number and no CVV, so there is nothing here to manage.
+    expect(
+      await screen.findByText(/카드 정보는 결제사\(PayApp\)가 보관하며/),
+    ).toBeInTheDocument();
   });
 
   it("offers no cancel, upgrade, or delete control while none of them works", async () => {

@@ -55,4 +55,8 @@ def test_error_codes_are_stable_strings():
     # the request or the engine — the account's plan does not cover it.
     assert ErrorCode.GENERATION_LIMIT_REACHED.value == "GENERATION_LIMIT_REACHED"
     assert ErrorCode.DOWNLOAD_NOT_IN_PLAN.value == "DOWNLOAD_NOT_IN_PLAN"
-    assert len(ErrorCode) == 16
+    # Phase 8B added the deployment kill switch. Separate from the plan
+    # refusals: nothing is wrong with the request or the account, the
+    # capability is simply not being served yet.
+    assert ErrorCode.GENERATION_UNAVAILABLE.value == "GENERATION_UNAVAILABLE"
+    assert len(ErrorCode) == 17

@@ -32,6 +32,12 @@ from luber_database.models.generation import (
     Project,
     ReferenceAudio,
 )
+from luber_database.models.payments import (
+    BillingAnomaly,
+    BillingCheckout,
+    BillingEvent,
+    BillingPayment,
+)
 from luber_database.models.user import Session, User
 from luber_generation_client import MockGenerationProvider
 
@@ -54,6 +60,13 @@ GENERATION_TABLES = [
     # request path rather than a billing-only concern.
     Subscription.__table__,
     AllowanceReservation.__table__,
+    # Phase 7 billing. Present in the shared list because the generation
+    # path now resolves entitlement through a subscription that a payment
+    # may have set, not because every test bills anything.
+    BillingCheckout.__table__,
+    BillingPayment.__table__,
+    BillingEvent.__table__,
+    BillingAnomaly.__table__,
 ]
 
 
@@ -153,6 +166,14 @@ async def degraded_client(app: FastAPI):
 # convention this repository already uses: the helpers live in a module
 # with a distinct name so a whole-repository run cannot resolve one
 # package's `conftest` import to another's.
+# Phase 7 billing doubles. Same reason as the modules above: pytest
+# discovers them by directory, and the helpers live under a distinct
+# name so a whole-repository run cannot resolve one package's `conftest`
+# import to another's.
+from billing_fixtures import (  # noqa: E402, F401
+    payapp,
+    payapp_settings,
+)
 from inference_fixtures import (  # noqa: E402, F401
     empty_app,
     empty_client,

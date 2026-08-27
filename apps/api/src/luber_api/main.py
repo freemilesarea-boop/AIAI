@@ -19,6 +19,7 @@ from luber_api.jobs import ArqGenerationEnqueuer, InlineGenerationRunner
 from luber_api.middleware import RequestIdMiddleware
 from luber_api.ops.security import console_available
 from luber_api.routes.auth import router as auth_router
+from luber_api.routes.billing import router as billing_router
 from luber_api.routes.generations import router as generations_router
 from luber_api.routes.health import router as health_router
 from luber_api.routes.ops import router as ops_training_router
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(generations_router)
     app.include_router(reference_audio_router)
     app.include_router(plans_router)
+    app.include_router(billing_router)
     app.include_router(projects_router)
     app.include_router(project_assign_router)
 

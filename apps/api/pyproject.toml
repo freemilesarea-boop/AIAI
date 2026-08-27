@@ -28,12 +28,14 @@ dependencies = [
     # registries in-process. Both are pure Python with no GPU, ML or
     # provider dependencies — that is a deliberate property of those
     # packages, and it is what makes them safe to import into the API.
+    "luber-billing",
     "luber-training",
     "luber-evaluation",
 ]
 
 [tool.uv.sources]
 luber-shared = { workspace = true }
+luber-billing = { workspace = true }
 luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-generation-client = { workspace = true }
