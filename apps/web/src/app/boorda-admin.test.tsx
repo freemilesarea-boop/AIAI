@@ -27,6 +27,7 @@ import AdminEmailPage from "@/app/admin/email/page";
 import AdminSupportPage from "@/app/admin/support/page";
 import AdminUsersPage from "@/app/admin/users/page";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { BarChart, RevenueChart } from "@/components/admin/Charts";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { isAdmin, isSuperAdmin } from "@/lib/admin";
@@ -493,6 +494,89 @@ describe("audit", () => {
     renderPage(<AdminAuditPage />);
 
     expect(await screen.findByText("기록이 없습니다")).toBeInTheDocument();
+  });
+});
+
+// ── chart geometry ───────────────────────────────────────────────────
+
+describe("chart bars", () => {
+  /**
+   * jsdom does no layout, so none of these can assert a rendered pixel
+   * height — which is exactly how the original bug shipped: the charts
+   * held correct numbers and drew nothing, and every test passed because
+   * they all read the screen-reader table.
+   *
+   * What is checkable, and what actually broke, is the CSS contract. A
+   * percentage height resolves against the parent's height. So the
+   * element carrying `height: N%` must be a direct child of the element
+   * with the definite height; a wrapper sized by its content resolves
+   * every bar to zero.
+   */
+  const SERIES = [
+    { day: "2026-08-27", value: 1_000, secondary: 1 },
+    { day: "2026-08-28", value: 19_900, secondary: 1 },
+  ];
+
+  function bars(container: HTMLElement): HTMLElement[] {
+    return [...container.querySelectorAll<HTMLElement>("[style*='height']")];
+  }
+
+  it("anchors every bar's percentage height to an element with a definite height", () => {
+    const { container } = render(<BarChart title="일별 매출" data={SERIES} />);
+
+    const drawn = bars(container);
+    expect(drawn).toHaveLength(SERIES.length);
+
+    for (const bar of drawn) {
+      expect(bar.style.height).toMatch(/^[\d.]+%$/);
+      // The parent must be the track that carries the height, not a
+      // content-sized wrapper.
+      expect(bar.parentElement?.className).toMatch(/\bh-32\b/);
+    }
+  });
+
+  it("scales bars against the peak so the tallest fills the track", () => {
+    const { container } = render(<BarChart title="일별 매출" data={SERIES} />);
+
+    const heights = bars(container).map((b) => parseFloat(b.style.height));
+
+    expect(Math.max(...heights)).toBe(100);
+    // 1_000 of 19_900 is ~5%, comfortably above the 2% floor that keeps
+    // a tiny non-zero value visible at all.
+    expect(Math.min(...heights)).toBeGreaterThan(2);
+    expect(Math.min(...heights)).toBeLessThan(10);
+  });
+
+  it("gives a lone bar the full track rather than nothing", () => {
+    /** Production's real case: one payment, one day. */
+    const { container } = render(
+      <RevenueChart data={[{ day: "2026-08-28", value: 19_900, secondary: 1 }]} />,
+    );
+
+    expect(bars(container).map((b) => b.style.height)).toEqual(["100%"]);
+  });
+
+  it("keeps a zero-valued day visible instead of collapsing it", () => {
+    const { container } = render(
+      <BarChart
+        title="일별 생성"
+        data={[
+          { day: "2026-08-27", value: 0, secondary: 0 },
+          { day: "2026-08-28", value: 5, secondary: 0 },
+        ]}
+      />,
+    );
+
+    // A floor, not zero: a day with nothing still occupies its slot, so
+    // the axis reads as a continuous run of days.
+    expect(bars(container).map((b) => b.style.height)).toEqual(["2%", "100%"]);
+  });
+
+  it("draws no bars at all when there is no data", () => {
+    const { container } = render(<BarChart title="일별 생성" data={[]} />);
+
+    expect(bars(container)).toHaveLength(0);
+    expect(screen.getByText(/이 기간에는 데이터가 없습니다/)).toBeInTheDocument();
   });
 });
 

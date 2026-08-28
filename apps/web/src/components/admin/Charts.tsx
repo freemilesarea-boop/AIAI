@@ -105,15 +105,20 @@ export function BarChart({
         <NoData label={emptyLabel} />
       ) : (
         <>
+          {/* Each bar is a *direct* child of the track, and the track is
+              the element with the definite height. A percentage height
+              resolves against the parent's height, so a wrapper sized by
+              its content (the default under `items-end`) would resolve
+              every bar to zero and draw an empty chart holding correct
+              numbers — which is worse than an obviously broken one. */}
           <div className="flex h-32 items-end gap-1" aria-hidden="true">
             {data.map((point) => (
-              <div key={point.day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                <div
-                  className="w-full rounded-t-[3px] bg-[var(--accent)]"
-                  style={{ height: `${Math.max(2, (point.value / peak) * 100)}%` }}
-                  title={`${formatDay(point.day)} · ${format(point.value)}`}
-                />
-              </div>
+              <div
+                key={point.day}
+                className="min-w-0 flex-1 rounded-t-[3px] bg-[var(--accent)]"
+                style={{ height: `${Math.max(2, (point.value / peak) * 100)}%` }}
+                title={`${formatDay(point.day)} · ${format(point.value)}`}
+              />
             ))}
           </div>
           <div className="flex justify-between text-[11px] text-[var(--text-muted)]" aria-hidden="true">
