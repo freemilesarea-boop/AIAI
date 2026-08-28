@@ -29,6 +29,7 @@ from luber_api.routes.plans import router as plans_router
 from luber_api.routes.projects import assign_router as project_assign_router
 from luber_api.routes.projects import router as projects_router
 from luber_api.routes.reference_audio import router as reference_audio_router
+from luber_api.routes.support import router as support_router
 from luber_api.settings import get_settings
 from luber_audio_utils import storage_from_settings
 from luber_database import create_async_engine_from_url, create_session_factory
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     app.include_router(billing_router)
     app.include_router(projects_router)
     app.include_router(project_assign_router)
+    app.include_router(support_router)
 
     # The operator training console. Mounted only where it is switched
     # on and the environment is not production — the second condition is

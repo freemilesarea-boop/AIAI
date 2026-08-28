@@ -38,6 +38,7 @@ from luber_database.models.payments import (
     BillingEvent,
     BillingPayment,
 )
+from luber_database.models.support import SupportReply, SupportTicket
 from luber_database.models.user import Session, User
 from luber_generation_client import MockGenerationProvider
 
@@ -67,6 +68,10 @@ GENERATION_TABLES = [
     BillingPayment.__table__,
     BillingEvent.__table__,
     BillingAnomaly.__table__,
+    # Support tickets reference users with RESTRICT, so account-closure
+    # tests need the table present to prove closure still succeeds.
+    SupportTicket.__table__,
+    SupportReply.__table__,
 ]
 
 

@@ -242,3 +242,34 @@ QA_SECTIONS: tuple[str, ...] = (
     "final_chorus",
     "outro",
 )
+
+
+class SupportCategory(StrEnum):
+    """What a support inquiry is about.
+
+    Stable internal identities, never display labels — the Korean text a
+    user sees lives in the frontend, so renaming a category in the UI is
+    not a migration.
+    """
+
+    BILLING = "BILLING"
+    GENERATION = "GENERATION"
+    DOWNLOAD = "DOWNLOAD"
+    ACCOUNT = "ACCOUNT"
+    BUG = "BUG"
+    FEATURE = "FEATURE"
+    OTHER = "OTHER"
+
+
+class SupportStatus(StrEnum):
+    """Where an inquiry is in its handling.
+
+    Operator-owned. Nothing a customer can send changes this — there is
+    no field on any request that carries it, which is why the API has no
+    check for one.
+    """
+
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"

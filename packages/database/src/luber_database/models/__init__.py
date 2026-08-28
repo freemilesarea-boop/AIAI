@@ -26,6 +26,7 @@ from luber_database.models.resilience import (
     ProviderCircuitRow,
     ProviderCircuitTransitionRow,
 )
+from luber_database.models.support import SupportReply, SupportTicket
 from luber_database.models.user import User
 
 __all__ = [
@@ -43,5 +44,7 @@ __all__ = [
     "ProviderCircuitTransitionRow",
     "ReferenceAudio",
     "Subscription",
+    "SupportReply",
+    "SupportTicket",
     "User",
 ]

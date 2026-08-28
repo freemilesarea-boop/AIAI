@@ -37,6 +37,7 @@ const SECTIONS = [
   { id: "payments", label: "결제" },
   { id: "data", label: "데이터" },
   { id: "security", label: "보안" },
+  { id: "support", label: "고객지원" },
 ] as const;
 
 function Section({
@@ -302,6 +303,26 @@ export default function SettingsPage() {
           <h3 className="mb-3 text-sm font-semibold text-[var(--danger)]">Danger Zone</h3>
           <DangerZone />
         </div>
+      </Section>
+
+      <Section id="support" title="고객지원" description="문의 접수와 진행 상태를 확인합니다.">
+        <Card className="px-5 py-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            이용 중 문제가 있거나 궁금한 점이 있으면 문의해 주세요. 접수하시면 문의번호가
+            발급되고 진행 상태를 확인할 수 있습니다.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ButtonLink href="/support" variant="secondary" size="sm">
+              고객지원
+            </ButtonLink>
+            <ButtonLink href="/support/contact" variant="secondary" size="sm">
+              문의하기
+            </ButtonLink>
+            <ButtonLink href="/support/inquiries" variant="secondary" size="sm">
+              내 문의내역
+            </ButtonLink>
+          </div>
+        </Card>
       </Section>
     </div>
   );
