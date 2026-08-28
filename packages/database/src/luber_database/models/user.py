@@ -30,6 +30,15 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), default=_utcnow
     )
+    #: What this account may do in the operator console. A `UserRole`
+    #: value; defaults to USER, so nobody is an administrator until
+    #: somebody deliberately makes them one.
+    #:
+    #: A column rather than an email comparison: `if email == "..."` is a
+    #: permission that cannot be revoked, leaves no audit trail, and
+    #: transfers with the mailbox.
+    role: Mapped[str] = mapped_column(String(24), nullable=False, default="USER", index=True)
+
     #: When the account was closed. NULL means live.
     #:
     #: Closing is anonymisation rather than deletion: three tables

@@ -800,6 +800,15 @@ export interface AuthUser {
   email: string;
   display_name: string | null;
   created_at: string;
+  /**
+   * `USER`, `ADMIN` or `SUPER_ADMIN`.
+   *
+   * Used to decide whether to render a link to the operator console —
+   * presentation, not permission. Every `/v1/admin/*` request is checked
+   * server-side against the session's own row, so a browser that lies
+   * about this gets a nav item and a 403 behind everything it opens.
+   */
+  role: string;
 }
 
 /**

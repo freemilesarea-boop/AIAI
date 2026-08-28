@@ -93,6 +93,14 @@ class UserResponse(BaseModel):
     email: str
     display_name: str | None
     created_at: datetime
+    #: Whether this account holds an operator role, so the web app knows
+    #: whether to show a link to the console.
+    #:
+    #: Presentation only. Nothing is authorised by this field: every
+    #: `/v1/admin/*` request is checked server-side against the session's
+    #: own row, so a browser that lies about it gets a nav item and 403s
+    #: behind every one of them.
+    role: str
 
 
 def public_user(user: User) -> UserResponse:
@@ -101,6 +109,7 @@ def public_user(user: User) -> UserResponse:
         email=user.email,
         display_name=user.display_name,
         created_at=user.created_at,
+        role=user.role,
     )
 
 

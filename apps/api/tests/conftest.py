@@ -22,6 +22,7 @@ from luber_api.jobs import InlineGenerationRunner
 from luber_api.main import create_app
 from luber_audio_utils import LocalAudioStorage
 from luber_database import Base, create_session_factory
+from luber_database.models.admin import AdminAuditLog, AdminEmailCampaign, DownloadEvent
 from luber_database.models.billing import AllowanceReservation, Subscription
 from luber_database.models.generation import (
     AudioAsset,
@@ -72,6 +73,13 @@ GENERATION_TABLES = [
     # tests need the table present to prove closure still succeeds.
     SupportTicket.__table__,
     SupportReply.__table__,
+    # Admin console. `download_events` is on the ordinary download path —
+    # a save writes a row — so it belongs in the shared list rather than
+    # in an admin-only fixture, or every download test fails on a missing
+    # table.
+    DownloadEvent.__table__,
+    AdminAuditLog.__table__,
+    AdminEmailCampaign.__table__,
 ]
 
 
@@ -175,6 +183,12 @@ async def degraded_client(app: FastAPI):
 # discovers them by directory, and the helpers live under a distinct
 # name so a whole-repository run cannot resolve one package's `conftest`
 # import to another's.
+from admin_fixtures import (  # noqa: E402, F401
+    admin_client,
+    plain_client,
+    second_super_admin_client,
+    super_admin_client,
+)
 from billing_fixtures import (  # noqa: E402, F401
     payapp,
     payapp_settings,

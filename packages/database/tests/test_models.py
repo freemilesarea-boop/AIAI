@@ -14,6 +14,13 @@ def test_user_columns():
     # server-side state and must not reach a client — verified by
     # `public_user`, which builds `UserResponse` field by field rather
     # than from the row, so a new column cannot leak by default.
+    #
+    # `role` added by migration 0022 for the operator console. Unlike
+    # `deleted_at` this one *is* returned by `/v1/auth/me`, deliberately:
+    # the web app needs it to decide whether to draw a link to `/admin`.
+    # It carries no authority — every `/v1/admin/*` request is checked
+    # server-side against this same column on the session's own row, so a
+    # browser that lies about it gets a nav item and 403s behind it.
     cols = {c.name for c in User.__table__.columns}
     assert cols == {
         "id",
@@ -22,6 +29,7 @@ def test_user_columns():
         "display_name",
         "created_at",
         "deleted_at",
+        "role",
     }
 
 

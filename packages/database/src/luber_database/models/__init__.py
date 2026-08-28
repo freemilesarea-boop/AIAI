@@ -2,6 +2,7 @@
 Phase 30 observability projection, and the Phase 6 plan/allowance
 tables."""
 
+from luber_database.models.admin import AdminAuditLog, AdminEmailCampaign, DownloadEvent
 from luber_database.models.billing import (
     AllowanceReservation,
     Subscription,
@@ -30,12 +31,15 @@ from luber_database.models.support import SupportReply, SupportTicket
 from luber_database.models.user import User
 
 __all__ = [
+    "AdminAuditLog",
+    "AdminEmailCampaign",
     "AllowanceReservation",
     "AudioAsset",
     "BillingAnomaly",
     "BillingCheckout",
     "BillingEvent",
     "BillingPayment",
+    "DownloadEvent",
     "Generation",
     "GenerationJob",
     "InferenceIncidentRow",

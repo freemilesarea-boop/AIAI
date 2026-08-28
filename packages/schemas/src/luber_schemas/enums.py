@@ -273,3 +273,22 @@ class SupportStatus(StrEnum):
     IN_PROGRESS = "IN_PROGRESS"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
+
+
+class UserRole(StrEnum):
+    """What an account may do in the operator console.
+
+    Stored on `users.role` and checked server-side on every admin
+    request. Deliberately not derived from an email address: an
+    `if email == "..."` check is a permission model that cannot be
+    revoked, cannot be audited, and grants whoever registers that
+    address if it ever changes hands.
+    """
+
+    USER = "USER"
+    ADMIN = "ADMIN"
+    SUPER_ADMIN = "SUPER_ADMIN"
+
+
+#: Roles that may reach the console at all.
+ADMIN_ROLES: frozenset[UserRole] = frozenset({UserRole.ADMIN, UserRole.SUPER_ADMIN})

@@ -61,6 +61,7 @@ from luber_api.settings import get_settings
 from luber_audio_utils import ASSET_FORMAT_CONTRACT, AudioStorage, AudioStorageError
 from luber_database import GenerationHasDescendantsError, GenerationRepository
 from luber_database.allowance_repository import AllowanceExhaustedError, AllowanceRepository
+from luber_database.models.admin import DownloadEvent
 from luber_database.models.generation import AudioAsset, Generation, GenerationQA, LyricLineQA
 from luber_generation_client import GENERATION_QUEUE_NAME
 from luber_schemas import (
@@ -79,6 +80,7 @@ from luber_schemas import (
     select_delivery_master,
     select_raw_master,
 )
+from luber_schemas.plans import Plan
 
 logger = logging.getLogger(__name__)
 
@@ -530,6 +532,52 @@ async def get_generation(
     return serialize_generation(generation)
 
 
+async def record_download(
+    repository: GenerationRepository,
+    generation_id: uuid.UUID,
+    *,
+    asset: AudioAssetKind,
+    plan: Plan | None,
+    owner: uuid.UUID | None,
+) -> None:
+    """Note that a file was actually handed over.
+
+    Called only for `download=true`, and only once every check has
+    passed and the bytes (or the signed URL) are about to be delivered.
+    Streaming for the in-page player is not a download and is not
+    counted — otherwise the number would measure how the audio element
+    fetches ranges rather than how many songs people took away.
+
+    The plan is stored alongside, denormalised on purpose: "was this
+    download permitted" stays answerable months later, after the account
+    has changed tier.
+
+    Nothing here may cost a customer their file. A metrics table that is
+    full, locked or missing must not turn a paid download into a 500, so
+    a failure is logged and swallowed — an undercounted statistic is a
+    smaller problem than a download that did not happen.
+    """
+    if plan is None or owner is None:
+        return
+    try:
+        repository.session.add(
+            DownloadEvent(
+                user_id=owner,
+                generation_id=generation_id,
+                asset_kind=asset.value,
+                plan_id=plan.plan_id.value,
+            )
+        )
+        await repository.session.commit()
+    except Exception:
+        logger.warning(
+            "could not record download event",
+            extra={"generation_id": str(generation_id)},
+            exc_info=True,
+        )
+        await repository.session.rollback()
+
+
 @router.get("/{generation_id}/audio")
 async def get_generation_audio(
     generation_id: uuid.UUID,
@@ -564,9 +612,10 @@ async def get_generation_audio(
     # `download=true` is what the browser sends for a save; the player
     # streams without it. Free accounts can play everything they made and
     # download none of it, which is the line the pricing page draws.
+    download_plan: Plan | None = None
     if download:
-        plan = await allowance.effective_plan()
-        if not plan.can_download:
+        download_plan = await allowance.effective_plan()
+        if not download_plan.can_download:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=ErrorCode.DOWNLOAD_NOT_IN_PLAN.value,
@@ -604,6 +653,9 @@ async def get_generation_audio(
         )
         if target.is_signed_url and target.url is not None:
             # Bytes never transit this process in production.
+            await record_download(
+                repository, generation_id, asset=asset, plan=download_plan, owner=repository.owner
+            )
             return RedirectResponse(url=target.url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
         path = storage.local_path(record.storage_key)
     except AudioStorageError:
@@ -628,6 +680,9 @@ async def get_generation_audio(
             detail=f"{asset.value} audio not available for this generation",
         )
 
+    await record_download(
+        repository, generation_id, asset=asset, plan=download_plan, owner=repository.owner
+    )
     # FileResponse streams from disk and sets Content-Length itself; the
     # file is never read into memory in full.
     return FileResponse(

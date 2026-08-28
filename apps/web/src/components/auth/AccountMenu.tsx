@@ -9,9 +9,11 @@
  * thing the product is for.
  */
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
+import { isAdmin } from "@/lib/admin";
 
 export function AccountMenu() {
   const { status, user, signOut } = useAuth();
@@ -31,6 +33,17 @@ export function AccountMenu() {
       <p className="truncate text-xs font-medium text-[var(--text-secondary)]" title={user.email}>
         {label}
       </p>
+      {/* Shown to operators only, and shown is all it is: the console's
+          endpoints check the session's own row, so a browser that draws
+          this link without the role reaches nothing behind it. */}
+      {isAdmin(user.role) ? (
+        <Link
+          href="/admin"
+          className="mt-2 block rounded-[var(--radius-sm)] px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]"
+        >
+          운영 관리
+        </Link>
+      ) : null}
       <button
         type="button"
         onClick={() => {
