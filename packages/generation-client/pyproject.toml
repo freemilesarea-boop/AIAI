@@ -4,6 +4,10 @@ version = "0.1.0"
 description = "Provider-agnostic music generation boundary (MusicGenerationProvider)"
 requires-python = ">=3.11"
 dependencies = [
+    # Imported at module level — the resilience factory builds circuits.
+    "luber-provider-resilience",
+    # Imported at module level — the service runs candidate QC inline.
+    "luber-inference-qc",
     "pydantic>=2.10",
     "httpx>=0.28",
     "luber-schemas",
@@ -14,6 +18,8 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+luber-provider-resilience = { workspace = true }
+luber-inference-qc = { workspace = true }
 luber-schemas = { workspace = true }
 luber-database = { workspace = true }
 luber-audio-utils = { workspace = true }
