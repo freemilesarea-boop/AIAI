@@ -10,8 +10,19 @@ def test_user_columns():
     # password_hash added by Phase 20A. The set is asserted exactly so a
     # column cannot appear here unnoticed — anything on this table is a
     # candidate for leaking through an API response.
+    # `deleted_at` added by migration 0020 for account closure. It is
+    # server-side state and must not reach a client — verified by
+    # `public_user`, which builds `UserResponse` field by field rather
+    # than from the row, so a new column cannot leak by default.
     cols = {c.name for c in User.__table__.columns}
-    assert cols == {"id", "email", "password_hash", "display_name", "created_at"}
+    assert cols == {
+        "id",
+        "email",
+        "password_hash",
+        "display_name",
+        "created_at",
+        "deleted_at",
+    }
 
 
 def test_password_hash_is_nullable():

@@ -23,6 +23,7 @@ import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button, ButtonLink, Card, Skeleton } from "@/components/ui";
 import { useEntitlement } from "@/components/EntitlementProvider";
+import { DangerZone, DisplayNameForm, PasswordForm } from "@/components/AccountPanel";
 import { PaymentHistory, SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { UsageNotice } from "@/components/UsageMeter";
 import { formatPeriod, formatPriceKrw, formatSongs } from "@/lib/plans";
@@ -149,10 +150,16 @@ export default function SettingsPage() {
           )}
         </Card>
         {/*
-          Read-only. The auth API has signup, login, logout and /me —
-          there is no profile update endpoint, so there is no save.
+          The display name is the only profile field the schema has, so
+          it is the only one offered. Email is deliberately absent:
+          changing a login address needs a verification round-trip to
+          the new mailbox, and a field without one turns a typo into a
+          lockout.
         */}
-        <NotYet>표시 이름과 프로필 수정은 아직 제공하지 않습니다.</NotYet>
+        <Card className="p-5">
+          <DisplayNameForm />
+        </Card>
+        <NotYet>이메일 변경은 아직 제공하지 않습니다.</NotYet>
       </Section>
 
       <Section id="subscription" title="구독" description="현재 요금제와 결제 정보입니다.">
@@ -258,6 +265,9 @@ export default function SettingsPage() {
       </Section>
 
       <Section id="security" title="보안" description="로그인과 계정 보호 설정입니다.">
+        <Card className="p-5">
+          <PasswordForm />
+        </Card>
         <Card className="px-5 py-4">
           <p className="text-sm text-[var(--text-secondary)]">
             이 브라우저의 세션에서 로그아웃합니다.
@@ -277,13 +287,21 @@ export default function SettingsPage() {
           </div>
         </Card>
         {/*
-          Password change, session listing and social linking each need a
-          backend that does not exist. Listed together so the section
-          reads as one honest gap rather than three empty cards.
+          Session listing and social linking still have no backend. The
+          password change above does, so it is a real form rather than a
+          placeholder.
         */}
-        <NotYet>
-          비밀번호 변경, 로그인된 기기 관리, 구글·카카오 계정 연결은 아직 제공하지 않습니다.
-        </NotYet>
+        <NotYet>로그인된 기기 관리와 구글·카카오 계정 연결은 아직 제공하지 않습니다.</NotYet>
+
+        {/*
+          Last on the page and visually separated. A destructive control
+          should be somewhere you arrive deliberately, not somewhere you
+          pass on the way to something else.
+        */}
+        <div className="mt-4 border-t border-[var(--border-subtle)] pt-6">
+          <h3 className="mb-3 text-sm font-semibold text-[var(--danger)]">Danger Zone</h3>
+          <DangerZone />
+        </div>
       </Section>
     </div>
   );

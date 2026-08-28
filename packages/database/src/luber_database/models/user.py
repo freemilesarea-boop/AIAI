@@ -30,6 +30,15 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), default=_utcnow
     )
+    #: When the account was closed. NULL means live.
+    #:
+    #: Closing is anonymisation rather than deletion: three tables
+    #: reference this row with NO ACTION, so a hard delete fails for any
+    #: account that has made a song, and `billing_payments` cascades, so
+    #: a hard delete would erase the record of money that moved. The row
+    #: stays, emptied of personal data; this column is what stops it
+    #: authenticating. See migration 0020.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class Session(Base):

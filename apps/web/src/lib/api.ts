@@ -884,3 +884,76 @@ async function readAuthMessage(res: Response): Promise<string> {
     ? "Something went wrong on our side. Please try again."
     : "That did not work. Please check your details and try again.";
 }
+
+/**
+ * Change the signed-in account's own password.
+ *
+ * No user id: the server takes the account from the session, so there
+ * is no field here through which another one could be named.
+ *
+ * Every other session is ended server-side, and this browser is given a
+ * fresh one — so the tab that made the change stays signed in while
+ * anything else holding the old credential does not.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  newPasswordConfirm: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/auth/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirm: newPasswordConfirm,
+    }),
+  });
+  if (!res.ok) {
+    throw new ApiError(await readAuthMessage(res), res.status);
+  }
+}
+
+/** Set or clear the display name — the only profile field the schema has. */
+export async function updateDisplayName(displayName: string | null): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE_URL}/v1/auth/profile`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+  if (!res.ok) {
+    throw new ApiError(await readAuthMessage(res), res.status);
+  }
+  return (await res.json()) as AuthUser;
+}
+
+/**
+ * Close the signed-in account.
+ *
+ * Takes only the password, as re-authentication. The account is the
+ * session's, so this cannot be aimed at anyone else.
+ *
+ * Refused with 409 while a PayApp subscription is live: an account
+ * closed out from under a recurring contract would keep being charged
+ * for something nobody can reach.
+ */
+export async function deleteAccount(currentPassword: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/auth/account/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ current_password: currentPassword }),
+  });
+  if (!res.ok) {
+    let code: string | undefined;
+    try {
+      const body = (await res.clone().json()) as { detail?: unknown };
+      if (typeof body.detail === "string") code = body.detail;
+    } catch {
+      code = undefined;
+    }
+    throw new ApiError(await readAuthMessage(res), res.status, code);
+  }
+}

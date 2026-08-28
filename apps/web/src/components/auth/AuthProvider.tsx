@@ -47,6 +47,12 @@ export interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<AuthUser>;
   register: (email: string, password: string) => Promise<AuthUser>;
   signOut: () => Promise<void>;
+  /**
+   * Replace the cached user after the server returns an updated one —
+   * a profile edit, for instance. Avoids a second `/me` round-trip and
+   * keeps every consumer of `user` in step.
+   */
+  adopt: (user: AuthUser) => void;
   /** Called when a product request 401s: the session ended mid-session. */
   sessionExpired: () => void;
 }
@@ -167,8 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   sessionExpiredRef.current = sessionExpired;
 
   const value = useMemo(
-    () => ({ status, user, signIn, register, signOut, sessionExpired }),
-    [status, user, signIn, register, signOut, sessionExpired],
+    () => ({ status, user, signIn, register, signOut, adopt, sessionExpired }),
+    [status, user, signIn, register, signOut, adopt, sessionExpired],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

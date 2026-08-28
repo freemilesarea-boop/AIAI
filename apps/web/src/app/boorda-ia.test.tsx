@@ -322,13 +322,32 @@ describe("settings", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers no cancel, upgrade, or delete control while none of them works", async () => {
+  it("offers only the controls that have a backend", async () => {
     stubApi();
     renderPage(<SettingsPage />);
     await screen.findByRole("heading", { name: "계정" });
-    for (const label of [/해지/, /업그레이드/, /삭제/, /저장/, /변경하기/]) {
+
+    // Real, and each backed by an endpoint.
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "비밀번호 변경" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회원 탈퇴" })).toBeInTheDocument();
+
+    // Still absent: a plan change would need proration or a second live
+    // recurring contract, and neither exists.
+    for (const label of [/업그레이드/, /변경하기/]) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
+  });
+
+  it("puts account closure behind a Danger Zone", async () => {
+    stubApi();
+    renderPage(<SettingsPage />);
+    await screen.findByRole("heading", { name: "계정" });
+
+    // Last on the page and visually separated — somewhere you arrive
+    // deliberately, not somewhere you pass on the way to something else.
+    expect(screen.getByRole("heading", { name: "Danger Zone" })).toBeInTheDocument();
   });
 
   it("sends plan comparison to /plans instead of duplicating it", async () => {

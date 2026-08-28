@@ -12,7 +12,7 @@ across query code.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
@@ -34,7 +34,12 @@ class AuthRepository:
         The caller normalises. Doing it here as well would hide a
         mismatch between what is stored and what is searched for.
         """
-        result = await self._session.execute(select(User).where(User.email == email))
+        result = await self._session.execute(
+            # Closed accounts are excluded here, not filtered by the
+            # caller: an anonymised row keeps a placeholder address, and
+            # a login path that could find one would be a way back in.
+            select(User).where(User.email == email, User.deleted_at.is_(None))
+        )
         return result.scalar_one_or_none()
 
     async def get_user(self, user_id: UUID) -> User | None:
@@ -66,6 +71,60 @@ class AuthRepository:
 
     # ---- sessions ----------------------------------------------------
 
+    async def update_display_name(self, user_id: UUID, name: str | None) -> User | None:
+        """Set or clear the only profile field the schema has."""
+        user = await self._session.get(User, user_id)
+        if user is None or user.deleted_at is not None:
+            return None
+        user.display_name = name
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
+    async def close_account(self, user_id: UUID, *, now: datetime | None = None) -> User | None:
+        """Close an account by emptying it, and end every session.
+
+        Not a delete. `generations`, `projects` and `reference_audio`
+        reference this row with NO ACTION, so removing it fails for any
+        account that has made a song; and `billing_payments` cascades, so
+        removing it would destroy the record of money that moved. Both
+        reasons point the same way: keep the row, take the person out of
+        it.
+
+        What is cleared is everything that identifies a human — the
+        address, the display name, the credential. What survives is a
+        row that still satisfies the foreign keys and still carries the
+        billing history someone may have to answer for later.
+
+        The address becomes a placeholder under `.invalid`, which is
+        reserved by RFC 2606 and can never be delivered to. It is derived
+        from the user id so it is unique without a second lookup, and
+        replacing the original frees it for signing up again.
+
+        Idempotent: closing an already-closed account changes nothing and
+        returns the row, so a retried request is safe.
+        """
+        at = now or datetime.now(UTC)
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return None
+        if user.deleted_at is not None:
+            return user
+
+        user.deleted_at = at
+        user.email = f"deleted-{user.id}@deleted.invalid"
+        user.display_name = None
+        # None, not a hash of something unguessable: the column is
+        # nullable precisely so an account can be left with no usable
+        # password rather than a hard-to-guess one.
+        user.password_hash = None
+        # Every session, not just the caller's — closing an account on
+        # one device must not leave it open on another.
+        await self._session.execute(delete(Session).where(Session.user_id == user_id))
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
     async def create_session(
         self, *, token_hash: str, user_id: UUID, expires_at: datetime
     ) -> Session:
@@ -90,7 +149,13 @@ class AuthRepository:
         result = await self._session.execute(
             select(User)
             .join(Session, Session.user_id == User.id)
-            .where(Session.token_hash == token_hash, Session.expires_at > now)
+            .where(
+                Session.token_hash == token_hash,
+                Session.expires_at > now,
+                # A closed account authenticates nothing, even with a
+                # cookie that was valid a moment ago.
+                User.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
