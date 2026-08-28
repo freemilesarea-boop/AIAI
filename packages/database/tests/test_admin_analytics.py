@@ -18,7 +18,7 @@ have to land on the Korean date.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -26,13 +26,20 @@ from sqlalchemy.pool import StaticPool
 
 from luber_database import Base, create_session_factory
 from luber_database.admin_analytics import (
+    DAILY_MAX_DAYS,
+    WEEKLY_MAX_DAYS,
+    bucketing_for,
+    download_series,
+    generation_series,
     kst_day_bounds,
     kst_today,
     period_bounds,
+    previous_window,
     revenue_series,
     revenue_split,
     revenue_total,
     support_counts,
+    user_series,
     user_totals,
 )
 from luber_database.models.admin import AdminAuditLog, AdminEmailCampaign, DownloadEvent
@@ -318,3 +325,147 @@ async def test_support_counts_report_every_status_including_zero(session) -> Non
 
     assert set(counts) == {"OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"}
     assert all(value == 0 for value in counts.values())
+
+
+# ── bucketing ────────────────────────────────────────────────────────
+
+
+def test_the_bucket_size_follows_the_range_length() -> None:
+    """Deterministic and total: every range gets exactly one answer.
+
+    A chart reads at roughly 10-60 marks. A quarter of daily bars is 90
+    and reads as noise; a year of them is 365 and reads as a smear.
+    """
+    assert bucketing_for(1) == "day"
+    assert bucketing_for(7) == "day"
+    assert bucketing_for(DAILY_MAX_DAYS) == "day"
+    assert bucketing_for(DAILY_MAX_DAYS + 1) == "week"
+    assert bucketing_for(WEEKLY_MAX_DAYS) == "week"
+    assert bucketing_for(WEEKLY_MAX_DAYS + 1) == "month"
+    assert bucketing_for(365) == "month"
+
+
+async def test_weekly_buckets_collapse_a_week_onto_its_monday(session) -> None:
+    """2026-08-24 is a Monday; the 24th through the 30th are one week."""
+    user_id = await _user(session)
+    for day, amount in ((24, 1_000), (26, 2_000), (30, 4_000)):
+        # 12:00 KST each day, safely inside the Korean day.
+        await _payment(
+            session, user_id, amount=amount, paid_at=datetime(2026, 8, day, 3, tzinfo=UTC)
+        )
+
+    start, _ = kst_day_bounds(date(2026, 8, 24))
+    _, end = kst_day_bounds(date(2026, 8, 30))
+    buckets = await revenue_series(session, start=start, end=end, bucketing="week")
+
+    assert [(b.day, b.value, b.secondary) for b in buckets] == [("2026-08-24", 7_000, 3)]
+
+
+async def test_a_sunday_belongs_to_the_week_that_started_that_monday(session) -> None:
+    """The case a naive "previous Monday" gets wrong.
+
+    2026-08-30 is a Sunday. Its week began Monday the 24th, not the
+    31st, and not the 17th.
+    """
+    user_id = await _user(session)
+    await _payment(session, user_id, amount=5_000, paid_at=datetime(2026, 8, 30, 3, tzinfo=UTC))
+
+    start, _ = kst_day_bounds(date(2026, 8, 1))
+    _, end = kst_day_bounds(date(2026, 9, 30))
+    buckets = await revenue_series(session, start=start, end=end, bucketing="week")
+
+    assert [b.day for b in buckets] == ["2026-08-24"]
+
+
+async def test_two_weeks_stay_two_buckets(session) -> None:
+    user_id = await _user(session)
+    await _payment(session, user_id, amount=1_000, paid_at=datetime(2026, 8, 24, 3, tzinfo=UTC))
+    await _payment(session, user_id, amount=2_000, paid_at=datetime(2026, 8, 31, 3, tzinfo=UTC))
+
+    start, _ = kst_day_bounds(date(2026, 8, 24))
+    _, end = kst_day_bounds(date(2026, 9, 6))
+    buckets = await revenue_series(session, start=start, end=end, bucketing="week")
+
+    assert [(b.day, b.value) for b in buckets] == [("2026-08-24", 1_000), ("2026-08-31", 2_000)]
+
+
+async def test_monthly_buckets_collapse_a_month_onto_the_first(session) -> None:
+    user_id = await _user(session)
+    for month, day, amount in ((7, 3, 1_000), (7, 28, 2_000), (8, 15, 4_000)):
+        await _payment(
+            session, user_id, amount=amount, paid_at=datetime(2026, month, day, 3, tzinfo=UTC)
+        )
+
+    start, _ = kst_day_bounds(date(2026, 7, 1))
+    _, end = kst_day_bounds(date(2026, 8, 31))
+    buckets = await revenue_series(session, start=start, end=end, bucketing="month")
+
+    assert [(b.day, b.value) for b in buckets] == [("2026-07-01", 3_000), ("2026-08-01", 4_000)]
+
+
+async def test_bucketing_a_korean_morning_keeps_it_in_the_korean_month(session) -> None:
+    """23:00 UTC on 31 July is 08:00 KST on 1 August.
+
+    The month boundary has the same trap as the day boundary, one level
+    up: bucketing on the raw UTC month files a Korean August morning
+    under July.
+    """
+    user_id = await _user(session)
+    await _payment(session, user_id, amount=9_000, paid_at=datetime(2026, 7, 31, 23, tzinfo=UTC))
+
+    start, _ = kst_day_bounds(date(2026, 7, 1))
+    _, end = kst_day_bounds(date(2026, 8, 31))
+    buckets = await revenue_series(session, start=start, end=end, bucketing="month")
+
+    assert [b.day for b in buckets] == ["2026-08-01"]
+
+
+async def test_generation_and_user_series_bucket_the_same_way(session) -> None:
+    """One bucketing implementation, so the charts cannot disagree."""
+    user_id = await _user(session)
+    await _payment(session, user_id, amount=1_000, paid_at=datetime(2026, 8, 26, 3, tzinfo=UTC))
+
+    start, _ = kst_day_bounds(date(2026, 8, 24))
+    _, end = kst_day_bounds(date(2026, 8, 30))
+
+    # Empty, but the query must compile and group identically for each.
+    assert await generation_series(session, start=start, end=end, bucketing="week") == []
+    assert await download_series(session, start=start, end=end, bucketing="month") == []
+    users = await user_series(session, start=start, end=end, bucketing="week")
+    assert all(b.day == "2026-08-24" for b in users)
+
+
+# ── the previous period ──────────────────────────────────────────────
+
+
+def test_the_previous_period_is_the_range_immediately_before() -> None:
+    """The spec's own example: Aug 15-28 compares against Aug 1-14."""
+    assert previous_window(date(2026, 8, 15), date(2026, 8, 28)) == (
+        date(2026, 8, 1),
+        date(2026, 8, 14),
+    )
+
+
+def test_a_single_day_compares_against_the_day_before() -> None:
+    assert previous_window(date(2026, 8, 28), date(2026, 8, 28)) == (
+        date(2026, 8, 27),
+        date(2026, 8, 27),
+    )
+
+
+def test_the_previous_period_has_the_same_length_and_no_overlap() -> None:
+    """Both properties matter: a shorter window understates the
+    comparison, and an overlapping one counts days twice."""
+    for span in (1, 7, 30, 31, 90, 365):
+        first, last = date(2026, 8, 1), date(2026, 8, 1) + timedelta(days=span - 1)
+        prev_first, prev_last = previous_window(first, last)
+
+        assert (prev_last - prev_first).days == (last - first).days
+        assert prev_last < first
+
+
+def test_the_previous_period_crosses_a_year_boundary_cleanly() -> None:
+    assert previous_window(date(2026, 1, 1), date(2026, 1, 7)) == (
+        date(2025, 12, 25),
+        date(2025, 12, 31),
+    )

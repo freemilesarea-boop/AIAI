@@ -30,7 +30,7 @@ send would be worse than one that says it did not.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -94,6 +94,25 @@ class _Range(BaseModel):
     end: datetime
     start_day: str
     end_day: str
+    #: Inclusive length in Korean days. One for a single day, not zero.
+    days: int
+    #: How a series over this window should be bucketed.
+    bucketing: analytics.Bucketing
+
+
+def _window(first: date, last: date, bucket: analytics.Bucketing | None) -> _Range:
+    """Assemble a window from two Korean calendar days."""
+    begin, _ = analytics.kst_day_bounds(first)
+    _, finish = analytics.kst_day_bounds(last)
+    span = (last - first).days + 1
+    return _Range(
+        start=begin,
+        end=finish,
+        start_day=first.isoformat(),
+        end_day=last.isoformat(),
+        days=span,
+        bucketing=bucket or analytics.bucketing_for(span),
+    )
 
 
 def resolve_range(
@@ -101,18 +120,22 @@ def resolve_range(
     start: str | None = None,
     end: str | None = None,
     now: datetime | None = None,
+    bucket: analytics.Bucketing | None = None,
 ) -> _Range:
     """Turn what the browser asked for into UTC bounds.
 
     Explicit dates win; otherwise the named period. Both are Korean days
     converted to UTC instants here, so every downstream query filters on
     a raw timestamp column and the index does the work.
+
+    A future range is allowed and simply finds nothing — an operator
+    checking next month should get an empty chart, not an error.
     """
     at = now or datetime.now(UTC)
     if start or end:
         try:
-            first = datetime.fromisoformat(start).date() if start else analytics.kst_today(at)
-            last = datetime.fromisoformat(end).date() if end else analytics.kst_today(at)
+            first = date.fromisoformat(start) if start else analytics.kst_today(at)
+            last = date.fromisoformat(end) if end else analytics.kst_today(at)
         except ValueError as exc:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "Dates must be ISO (YYYY-MM-DD)."
@@ -124,24 +147,43 @@ def resolve_range(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 f"Range cannot exceed {MAX_RANGE_DAYS} days.",
             )
-        begin, _ = analytics.kst_day_bounds(first)
-        _, finish = analytics.kst_day_bounds(last)
-        return _Range(
-            start=begin, end=finish, start_day=first.isoformat(), end_day=last.isoformat()
-        )
+        return _window(first, last, bucket)
 
-    begin, finish = analytics.period_bounds(granularity or "month", at)
-    return _Range(
-        start=begin,
-        end=finish,
-        start_day=(begin + analytics.KST_OFFSET).date().isoformat(),
-        end_day=analytics.kst_today(at).isoformat(),
-    )
+    begin, _finish = analytics.period_bounds(granularity or "month", at)
+    return _window((begin + analytics.KST_OFFSET).date(), analytics.kst_today(at), bucket)
+
+
+def _range_dict(window: _Range) -> dict[str, Any]:
+    """The window as the untyped analytics endpoints report it."""
+    return {
+        "start": window.start_day,
+        "end": window.end_day,
+        "days": window.days,
+        "bucketing": window.bucketing,
+    }
+
+
+def _delta(current: int, previous: int) -> float | None:
+    """Percentage change against the previous period.
+
+    `None` when the previous period was zero. There is no honest
+    percentage from a zero base — the change is undefined, not infinite
+    and not 100% — and the console renders that as "신규" rather than a
+    number the operator might act on.
+    """
+    if previous == 0:
+        return None
+    return round((current - previous) / previous * 100, 1)
 
 
 RangeQuery = Annotated[
     analytics.Granularity | None,
     Query(description="day | week | month | year. Ignored when start/end are given."),
+]
+
+BucketQuery = Annotated[
+    analytics.Bucketing | None,
+    Query(description="day | week | month. Chosen from the range length when omitted."),
 ]
 
 
@@ -157,12 +199,36 @@ class BucketResponse(BaseModel):
 class RangeResponse(BaseModel):
     start: str
     end: str
+    #: Inclusive length in Korean days, and how the series is bucketed.
+    #: The console labels its axis from these rather than guessing.
+    days: int = 1
+    bucketing: str = "day"
+
+
+class ComparisonResponse(BaseModel):
+    """The same window, immediately before this one.
+
+    `delta_pct` is null when the previous period was zero — see
+    `_delta`. Callers must render that as "new", never as a percentage.
+    """
+
+    start: str
+    end: str
+    revenue_krw: int
+    payment_count: int
+    new_users: int
+    generations: int
+    revenue_delta_pct: float | None = None
+    payment_delta_pct: float | None = None
+    user_delta_pct: float | None = None
+    generation_delta_pct: float | None = None
 
 
 class RevenueResponse(BaseModel):
     range: RangeResponse
     total_krw: int
     payment_count: int
+    comparison: ComparisonResponse | None = None
     #: First payment for a subscription versus every later one. Split in
     #: SQL from the payment history, because nothing in the billing path
     #: records which a payment was.
@@ -207,6 +273,8 @@ class DashboardResponse(BaseModel):
     plans: list[dict[str, Any]]
     revenue_series: list[BucketResponse]
     generation_series: list[BucketResponse]
+    #: How this window compares with the one immediately before it.
+    comparison: ComparisonResponse
 
 
 class AdminUserResponse(BaseModel):
@@ -399,6 +467,38 @@ def _user_response(row: UserRow) -> AdminUserResponse:
     return AdminUserResponse(**row.__dict__)
 
 
+async def _comparison(session: Any, window: _Range, current: dict[str, int]) -> ComparisonResponse:
+    """Aggregate the equal-length window immediately before this one.
+
+    Reuses the same aggregate functions as the live window rather than
+    a second set of queries written for comparison — two implementations
+    of "revenue in a range" would eventually disagree, and the one shown
+    as a percentage is the one nobody checks.
+    """
+    first, last = analytics.previous_window(
+        date.fromisoformat(window.start_day), date.fromisoformat(window.end_day)
+    )
+    begin, _ = analytics.kst_day_bounds(first)
+    _, finish = analytics.kst_day_bounds(last)
+
+    revenue, payments = await analytics.revenue_total(session, start=begin, end=finish)
+    users = await analytics.new_users(session, start=begin, end=finish)
+    generations = await analytics.generation_totals(session, start=begin, end=finish)
+
+    return ComparisonResponse(
+        start=first.isoformat(),
+        end=last.isoformat(),
+        revenue_krw=revenue,
+        payment_count=payments,
+        new_users=users,
+        generations=generations.requested,
+        revenue_delta_pct=_delta(current["revenue"], revenue),
+        payment_delta_pct=_delta(current["payments"], payments),
+        user_delta_pct=_delta(current["users"], users),
+        generation_delta_pct=_delta(current["generations"], generations.requested),
+    )
+
+
 # ── dashboard ────────────────────────────────────────────────────────
 
 
@@ -408,11 +508,12 @@ async def dashboard(
     granularity: RangeQuery = None,
     start: str | None = None,
     end: str | None = None,
+    bucket: BucketQuery = None,
 ) -> DashboardResponse:
     """The whole overview in one query set."""
     session = repository.session
     now = datetime.now(UTC)
-    window = resolve_range(granularity, start, end, now)
+    window = resolve_range(granularity, start, end, now, bucket)
 
     revenue, payments = await analytics.revenue_total(session, start=window.start, end=window.end)
     today_start, today_end = analytics.period_bounds("day", now)
@@ -421,28 +522,46 @@ async def dashboard(
     users = await analytics.user_totals(session, now=now)
     generations = await analytics.generation_totals(session, start=window.start, end=window.end)
 
+    new_in_range = await analytics.new_users(session, start=window.start, end=window.end)
+
     return DashboardResponse(
-        range=RangeResponse(start=window.start_day, end=window.end_day),
+        range=RangeResponse(
+            start=window.start_day,
+            end=window.end_day,
+            days=window.days,
+            bucketing=window.bucketing,
+        ),
         generated_at=now.isoformat(),
         revenue_krw=revenue,
         revenue_today_krw=revenue_today,
         payment_count=payments,
-        users=UsersSummary(
-            **users,
-            new_in_range=await analytics.new_users(session, start=window.start, end=window.end),
-        ),
+        users=UsersSummary(**users, new_in_range=new_in_range),
         generations=GenerationSummary(**vars(generations)),
         downloads=await analytics.download_total(session, start=window.start, end=window.end),
         support=await analytics.support_counts(session),
         plans=await analytics.plan_distribution(session, now=now),
         revenue_series=[
             BucketResponse(**b.__dict__)
-            for b in await analytics.revenue_series(session, start=window.start, end=window.end)
+            for b in await analytics.revenue_series(
+                session, start=window.start, end=window.end, bucketing=window.bucketing
+            )
         ],
         generation_series=[
             BucketResponse(**b.__dict__)
-            for b in await analytics.generation_series(session, start=window.start, end=window.end)
+            for b in await analytics.generation_series(
+                session, start=window.start, end=window.end, bucketing=window.bucketing
+            )
         ],
+        comparison=await _comparison(
+            session,
+            window,
+            {
+                "revenue": revenue,
+                "payments": payments,
+                "users": new_in_range,
+                "generations": generations.requested,
+            },
+        ),
     )
 
 
@@ -455,19 +574,32 @@ async def revenue_analytics(
     granularity: RangeQuery = None,
     start: str | None = None,
     end: str | None = None,
+    bucket: BucketQuery = None,
 ) -> RevenueResponse:
     session = repository.session
-    window = resolve_range(granularity, start, end)
+    window = resolve_range(granularity, start, end, None, bucket)
     total, count = await analytics.revenue_total(session, start=window.start, end=window.end)
     split = await analytics.revenue_split(session, start=window.start, end=window.end)
     return RevenueResponse(
-        range=RangeResponse(start=window.start_day, end=window.end_day),
+        range=RangeResponse(
+            start=window.start_day,
+            end=window.end_day,
+            days=window.days,
+            bucketing=window.bucketing,
+        ),
         total_krw=total,
         payment_count=count,
+        comparison=await _comparison(
+            session,
+            window,
+            {"revenue": total, "payments": count, "users": 0, "generations": 0},
+        ),
         **split,
         series=[
             BucketResponse(**b.__dict__)
-            for b in await analytics.revenue_series(session, start=window.start, end=window.end)
+            for b in await analytics.revenue_series(
+                session, start=window.start, end=window.end, bucketing=window.bucketing
+            )
         ],
     )
 
@@ -478,6 +610,7 @@ async def generation_analytics(
     granularity: RangeQuery = None,
     start: str | None = None,
     end: str | None = None,
+    bucket: BucketQuery = None,
 ) -> dict[str, Any]:
     """Generation volume.
 
@@ -485,15 +618,17 @@ async def generation_analytics(
     answer and not an error — the console renders an empty chart.
     """
     session = repository.session
-    window = resolve_range(granularity, start, end)
+    window = resolve_range(granularity, start, end, None, bucket)
     return {
-        "range": {"start": window.start_day, "end": window.end_day},
+        "range": _range_dict(window),
         "totals": vars(
             await analytics.generation_totals(session, start=window.start, end=window.end)
         ),
         "series": [
             b.__dict__
-            for b in await analytics.generation_series(session, start=window.start, end=window.end)
+            for b in await analytics.generation_series(
+                session, start=window.start, end=window.end, bucketing=window.bucketing
+            )
         ],
     }
 
@@ -504,15 +639,18 @@ async def download_analytics(
     granularity: RangeQuery = None,
     start: str | None = None,
     end: str | None = None,
+    bucket: BucketQuery = None,
 ) -> dict[str, Any]:
     session = repository.session
-    window = resolve_range(granularity, start, end)
+    window = resolve_range(granularity, start, end, None, bucket)
     return {
-        "range": {"start": window.start_day, "end": window.end_day},
+        "range": _range_dict(window),
         "total": await analytics.download_total(session, start=window.start, end=window.end),
         "series": [
             b.__dict__
-            for b in await analytics.download_series(session, start=window.start, end=window.end)
+            for b in await analytics.download_series(
+                session, start=window.start, end=window.end, bucketing=window.bucketing
+            )
         ],
     }
 
@@ -535,16 +673,19 @@ async def user_analytics(
     granularity: RangeQuery = None,
     start: str | None = None,
     end: str | None = None,
+    bucket: BucketQuery = None,
 ) -> dict[str, Any]:
     session = repository.session
-    window = resolve_range(granularity, start, end)
+    window = resolve_range(granularity, start, end, None, bucket)
     return {
-        "range": {"start": window.start_day, "end": window.end_day},
+        "range": _range_dict(window),
         "totals": await analytics.user_totals(session),
         "new_in_range": await analytics.new_users(session, start=window.start, end=window.end),
         "series": [
             b.__dict__
-            for b in await analytics.user_series(session, start=window.start, end=window.end)
+            for b in await analytics.user_series(
+                session, start=window.start, end=window.end, bucketing=window.bucketing
+            )
         ],
     }
 

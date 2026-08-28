@@ -16,9 +16,28 @@
  * has generation switched off in production today.
  */
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
-import { Bucket, formatCount, formatDay, formatWon } from "@/lib/admin";
+import { cx } from "@/components/ui";
+import {
+  type Bucket,
+  type Bucketing,
+  deltaTone,
+  formatBucket,
+  formatCount,
+  formatDelta,
+  formatWon,
+} from "@/lib/admin";
+
+/**
+ * How wide a single bar may get.
+ *
+ * Without a cap, one data point stretches to the full plot width and
+ * reads as a filled rectangle rather than a measurement — which is
+ * exactly what production looked like with one day of revenue. Bars
+ * still shrink below this when there are many.
+ */
+const MAX_BAR_WIDTH = "3.5rem";
 
 function Frame({
   title,
@@ -58,25 +77,35 @@ function DataTable({
   caption,
   rows,
   format,
+  bucketing,
+  secondaryLabel,
+  formatSecondary,
 }: {
   caption: string;
   rows: Bucket[];
   format: (value: number) => string;
+  bucketing: Bucketing;
+  secondaryLabel?: string;
+  formatSecondary?: (value: number) => string;
 }) {
   return (
     <table className="sr-only">
       <caption>{caption}</caption>
       <thead>
         <tr>
-          <th scope="col">날짜</th>
+          <th scope="col">기간</th>
           <th scope="col">값</th>
+          {secondaryLabel ? <th scope="col">{secondaryLabel}</th> : null}
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => (
           <tr key={row.day}>
-            <th scope="row">{formatDay(row.day)}</th>
+            <th scope="row">{formatBucket(row.day, bucketing)}</th>
             <td>{format(row.value)}</td>
+            {secondaryLabel ? (
+              <td>{(formatSecondary ?? formatCount)(row.secondary)}</td>
+            ) : null}
           </tr>
         ))}
       </tbody>
@@ -90,14 +119,25 @@ export function BarChart({
   data,
   format = formatCount,
   emptyLabel = "이 기간에는 데이터가 없습니다",
+  bucketing = "day",
+  secondaryLabel,
+  formatSecondary,
 }: {
   title: string;
   caption?: string;
   data: Bucket[];
   format?: (value: number) => string;
   emptyLabel?: string;
+  bucketing?: Bucketing;
+  /** Name of the second figure, shown in the tooltip and the table. */
+  secondaryLabel?: string;
+  formatSecondary?: (value: number) => string;
 }) {
   const peak = Math.max(1, ...data.map((d) => d.value));
+  // Which bar the pointer or keyboard is on. One index, so hover and
+  // focus cannot both claim the tooltip at once.
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const active = activeIndex === null ? null : (data[activeIndex] ?? null);
 
   return (
     <Frame title={title} caption={caption}>
@@ -105,41 +145,126 @@ export function BarChart({
         <NoData label={emptyLabel} />
       ) : (
         <>
-          {/* Each bar is a *direct* child of the track, and the track is
-              the element with the definite height. A percentage height
-              resolves against the parent's height, so a wrapper sized by
-              its content (the default under `items-end`) would resolve
-              every bar to zero and draw an empty chart holding correct
-              numbers — which is worse than an obviously broken one. */}
-          <div className="flex h-32 items-end gap-1" aria-hidden="true">
-            {data.map((point) => (
+          <div className="relative">
+            {/* The tooltip is supplementary. Every figure in it is also
+                in the table below, so nothing here is reachable only by
+                hovering — which would put the analytics out of reach of
+                a keyboard and a screen reader both. */}
+            {active ? (
               <div
-                key={point.day}
-                className="min-w-0 flex-1 rounded-t-[3px] bg-[var(--accent)]"
-                style={{ height: `${Math.max(2, (point.value / peak) * 100)}%` }}
-                title={`${formatDay(point.day)} · ${format(point.value)}`}
-              />
-            ))}
+                role="status"
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 mx-auto w-fit rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-overlay)] px-3 py-2 text-xs shadow-lg"
+              >
+                <p className="font-medium text-[var(--text-primary)]">
+                  {formatBucket(active.day, bucketing)}
+                </p>
+                <p className="text-[var(--text-secondary)]">{format(active.value)}</p>
+                {secondaryLabel ? (
+                  <p className="text-[var(--text-muted)]">
+                    {secondaryLabel} {(formatSecondary ?? formatCount)(active.secondary)}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Each bar is a *direct* child of the track, and the track is
+                the element with the definite height. A percentage height
+                resolves against the parent's height, so a wrapper sized by
+                its content (the default under `items-end`) would resolve
+                every bar to zero and draw an empty chart holding correct
+                numbers — which is worse than an obviously broken one. */}
+            <div className="flex h-32 items-end justify-center gap-1">
+              {data.map((point, index) => (
+                <button
+                  key={point.day}
+                  type="button"
+                  // Focusable so the tooltip is reachable by keyboard,
+                  // and labelled so a screen reader gets the whole
+                  // figure rather than an unnamed button.
+                  aria-label={`${formatBucket(point.day, bucketing)} ${format(point.value)}`}
+                  className="min-w-0 flex-1 rounded-t-[3px] bg-[var(--accent)] transition-opacity hover:opacity-80 focus-visible:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                  style={{
+                    height: `${Math.max(2, (point.value / peak) * 100)}%`,
+                    maxWidth: MAX_BAR_WIDTH,
+                  }}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseLeave={() => setActiveIndex((i) => (i === index ? null : i))}
+                  onFocus={() => setActiveIndex(index)}
+                  onBlur={() => setActiveIndex((i) => (i === index ? null : i))}
+                />
+              ))}
+            </div>
           </div>
-          <div className="flex justify-between text-[11px] text-[var(--text-muted)]" aria-hidden="true">
-            <span>{formatDay(data[0].day)}</span>
-            <span>{formatDay(data[data.length - 1].day)}</span>
+
+          <div
+            className="flex justify-between text-[11px] text-[var(--text-muted)]"
+            aria-hidden="true"
+          >
+            <span>{formatBucket(data[0].day, bucketing)}</span>
+            {data.length > 1 ? (
+              <span>{formatBucket(data[data.length - 1].day, bucketing)}</span>
+            ) : null}
           </div>
-          <DataTable caption={title} rows={data} format={format} />
+
+          <DataTable
+            caption={title}
+            rows={data}
+            format={format}
+            bucketing={bucketing}
+            secondaryLabel={secondaryLabel}
+            formatSecondary={formatSecondary}
+          />
         </>
       )}
     </Frame>
   );
 }
 
-export function RevenueChart({ data }: { data: Bucket[] }) {
+/** How the chart describes its own bucket size, so the axis is not a guess. */
+const BUCKET_CAPTION: Record<Bucketing, string> = {
+  day: "한국 시간 기준 하루 단위입니다.",
+  week: "한국 시간 기준 주 단위입니다. 주는 월요일에 시작합니다.",
+  month: "한국 시간 기준 월 단위입니다.",
+};
+
+export function RevenueChart({
+  data,
+  bucketing = "day",
+}: {
+  data: Bucket[];
+  bucketing?: Bucketing;
+}) {
   return (
     <BarChart
-      title="일별 매출"
-      caption="한국 시간 기준 하루 단위입니다."
+      title="매출 추이"
+      caption={BUCKET_CAPTION[bucketing]}
       data={data}
       format={formatWon}
+      bucketing={bucketing}
+      secondaryLabel="결제"
+      formatSecondary={(n) => `${formatCount(n)}건`}
       emptyLabel="이 기간에는 결제가 없습니다"
+    />
+  );
+}
+
+export function GenerationChart({
+  data,
+  bucketing = "day",
+}: {
+  data: Bucket[];
+  bucketing?: Bucketing;
+}) {
+  return (
+    <BarChart
+      title="생성 추이"
+      caption={BUCKET_CAPTION[bucketing]}
+      data={data}
+      format={(n) => `생성 요청 ${formatCount(n)}건`}
+      bucketing={bucketing}
+      secondaryLabel="완료"
+      formatSecondary={(n) => `${formatCount(n)}건`}
+      emptyLabel="이 기간에는 생성 요청이 없습니다"
     />
   );
 }
@@ -228,17 +353,40 @@ export function Kpi({
   label,
   value,
   hint,
+  delta,
 }: {
   label: string;
   value: string;
   hint?: string;
+  /**
+   * Change against the previous equal-length period, or null when that
+   * period was zero. Null is rendered "신규" rather than a percentage:
+   * there is no honest one from a zero base, and a number here is one
+   * an operator might act on.
+   */
+  delta?: number | null;
 }) {
+  const formatted = delta === undefined ? null : formatDelta(delta);
+  const tone = deltaTone(delta ?? null);
+
   return (
     <div className="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-raised)] p-4">
       <span className="text-xs text-[var(--text-muted)]">{label}</span>
       <span className="text-xl font-semibold tabular-nums text-[var(--text-primary)]">
         {value}
       </span>
+      {delta !== undefined ? (
+        <span
+          className={cx(
+            "text-xs tabular-nums",
+            tone === "up" && "text-[var(--success,#16a34a)]",
+            tone === "down" && "text-[var(--danger)]",
+            tone === "flat" && "text-[var(--text-muted)]",
+          )}
+        >
+          {formatted ?? "신규"}
+        </span>
+      ) : null}
       {hint ? <span className="text-xs text-[var(--text-muted)]">{hint}</span> : null}
     </div>
   );

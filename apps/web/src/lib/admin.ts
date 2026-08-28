@@ -32,12 +32,143 @@ export function isSuperAdmin(role: string | undefined): boolean {
 
 export type Granularity = "day" | "week" | "month" | "year";
 
-export const GRANULARITIES: { id: Granularity; label: string }[] = [
-  { id: "day", label: "오늘" },
-  { id: "week", label: "이번 주" },
+/** How the server bucketed a series. Mirrors `Bucketing` in the API. */
+export type Bucketing = "day" | "week" | "month";
+
+/**
+ * A reporting window, as two Korean calendar days.
+ *
+ * Inclusive at both ends — `from` and `to` equal means one day, which is
+ * what "오늘" means to a person. The strings are `YYYY-MM-DD` and go to
+ * the API verbatim; the server converts them to UTC instants.
+ */
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+export type PresetId = "today" | "7d" | "30d" | "month" | "year";
+
+export const PRESETS: { id: PresetId; label: string }[] = [
+  { id: "today", label: "오늘" },
+  { id: "7d", label: "7일" },
+  { id: "30d", label: "30일" },
   { id: "month", label: "이번 달" },
   { id: "year", label: "올해" },
 ];
+
+/** The default window when nothing valid was asked for. */
+export const DEFAULT_PRESET: PresetId = "month";
+
+/**
+ * The server refuses anything longer. Mirrored so the picker can say so
+ * before a request rather than after a 422.
+ */
+export const MAX_RANGE_DAYS = 366;
+
+/**
+ * Today's date in Seoul, whatever the browser's own timezone is.
+ *
+ * An operator in another timezone must still see Korean days, because
+ * that is what the figures are bucketed by. `en-CA` formats as
+ * `YYYY-MM-DD`, which is the shape the API takes.
+ */
+export function kstToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+/**
+ * Date arithmetic on `YYYY-MM-DD`, done at UTC midnight.
+ *
+ * Anchoring to UTC keeps the arithmetic away from the browser's local
+ * timezone and its daylight-saving jumps — adding a day to a local-time
+ * Date can land on the same day twice a year.
+ */
+export function addDays(iso: string, days: number): string {
+  const at = new Date(`${iso}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+}
+
+/** Inclusive length in days. One day is 1, not 0. */
+export function rangeLength(range: DateRange): number {
+  const from = Date.parse(`${range.from}T00:00:00Z`);
+  const to = Date.parse(`${range.to}T00:00:00Z`);
+  return Math.floor((to - from) / 86_400_000) + 1;
+}
+
+/** The window a preset means, resolved against Korean today. */
+export function presetRange(preset: PresetId, now: Date = new Date()): DateRange {
+  const today = kstToday(now);
+  switch (preset) {
+    case "today":
+      return { from: today, to: today };
+    case "7d":
+      // Seven days *including* today, which is what "7일" reads as.
+      return { from: addDays(today, -6), to: today };
+    case "30d":
+      return { from: addDays(today, -29), to: today };
+    case "year":
+      return { from: `${today.slice(0, 4)}-01-01`, to: today };
+    case "month":
+    default:
+      return { from: `${today.slice(0, 7)}-01`, to: today };
+  }
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Whether a string is a real calendar day, not merely date-shaped. */
+export function isValidDay(value: string | null | undefined): value is string {
+  if (!value || !ISO_DAY.test(value)) return false;
+  // `2026-02-31` is date-shaped and not a date. Round-tripping catches
+  // it: Date normalises the overflow to March and the strings differ.
+  const at = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === value;
+}
+
+/** Whether a range is one the API will accept. */
+export function isValidRange(range: DateRange): boolean {
+  if (!isValidDay(range.from) || !isValidDay(range.to)) return false;
+  if (range.to < range.from) return false;
+  return rangeLength(range) <= MAX_RANGE_DAYS;
+}
+
+/**
+ * The window a URL asks for, or the default when it asks for nonsense.
+ *
+ * Never throws and never propagates a bad range to the API: a
+ * bookmarked link with a typo shows this month rather than an error.
+ */
+export function rangeFromParams(
+  params: { get(key: string): string | null },
+  now: Date = new Date(),
+): DateRange {
+  const candidate = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
+  return isValidRange(candidate) ? candidate : presetRange(DEFAULT_PRESET, now);
+}
+
+/** The preset this range corresponds to, or null when it is custom. */
+export function matchingPreset(range: DateRange, now: Date = new Date()): PresetId | null {
+  for (const { id } of PRESETS) {
+    const candidate = presetRange(id, now);
+    if (candidate.from === range.from && candidate.to === range.to) return id;
+  }
+  return null;
+}
+
+/** `2026.08.01 ~ 2026.08.28`, the way the range is shown to an operator. */
+export function formatRange(range: DateRange): string {
+  const dotted = (iso: string) => iso.replaceAll("-", ".");
+  return range.from === range.to
+    ? dotted(range.from)
+    : `${dotted(range.from)} ~ ${dotted(range.to)}`;
+}
 
 export interface Bucket {
   day: string;
@@ -51,8 +182,36 @@ export interface PlanShare {
   share: number;
 }
 
+/** A window as the API reports it, with how the series was bucketed. */
+export interface RangeMeta {
+  start: string;
+  end: string;
+  days: number;
+  bucketing: Bucketing;
+}
+
+/**
+ * The equal-length window immediately before the selected one.
+ *
+ * A `*_delta_pct` of null means the previous period was zero. There is
+ * no honest percentage from a zero base, so the console shows "신규"
+ * rather than a number — never Infinity, never a bare 100%.
+ */
+export interface Comparison {
+  start: string;
+  end: string;
+  revenue_krw: number;
+  payment_count: number;
+  new_users: number;
+  generations: number;
+  revenue_delta_pct: number | null;
+  payment_delta_pct: number | null;
+  user_delta_pct: number | null;
+  generation_delta_pct: number | null;
+}
+
 export interface Dashboard {
-  range: { start: string; end: string };
+  range: RangeMeta;
   generated_at: string;
   revenue_krw: number;
   revenue_today_krw: number;
@@ -70,12 +229,14 @@ export interface Dashboard {
   plans: PlanShare[];
   revenue_series: Bucket[];
   generation_series: Bucket[];
+  comparison: Comparison;
 }
 
 export interface RevenueReport {
-  range: { start: string; end: string };
+  range: RangeMeta;
   total_krw: number;
   payment_count: number;
+  comparison: Comparison | null;
   new_krw: number;
   new_count: number;
   renewal_krw: number;
@@ -211,20 +372,59 @@ function query(params: Record<string, string | number | undefined>): string {
   return rendered ? `?${rendered}` : "";
 }
 
+/** The query the API takes for a window. One place, so every call agrees. */
+export function rangeQuery(range: DateRange): { start: string; end: string } {
+  return { start: range.from, end: range.to };
+}
+
 export async function fetchDashboard(
-  granularity: Granularity,
+  range: DateRange,
   signal?: AbortSignal,
 ): Promise<Dashboard> {
-  return readJson<Dashboard>(`/v1/admin/dashboard${query({ granularity })}`, { signal });
+  return readJson<Dashboard>(`/v1/admin/dashboard${query(rangeQuery(range))}`, { signal });
 }
 
 export async function fetchRevenue(
-  granularity: Granularity,
+  range: DateRange,
   signal?: AbortSignal,
 ): Promise<RevenueReport> {
-  return readJson<RevenueReport>(`/v1/admin/analytics/revenue${query({ granularity })}`, {
+  return readJson<RevenueReport>(`/v1/admin/analytics/revenue${query(rangeQuery(range))}`, {
     signal,
   });
+}
+
+/**
+ * A delta as the console prints it: `+12.4%`, `-3.1%`, or null.
+ *
+ * Null stays null all the way to the component, which renders "신규".
+ * Turning it into a number anywhere in between is how a zero base
+ * becomes a misleading percentage.
+ */
+export function formatDelta(pct: number | null): string | null {
+  if (pct === null) return null;
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
+/** Which way a delta points, for colour. Zero is neither. */
+export function deltaTone(pct: number | null): "up" | "down" | "flat" {
+  if (pct === null || pct === 0) return "flat";
+  return pct > 0 ? "up" : "down";
+}
+
+/** The axis label for a bucket: a day, the week it starts, or a month. */
+export function formatBucket(day: string, bucketing: Bucketing): string {
+  if (bucketing === "month") {
+    const at = new Date(`${day}T00:00:00+09:00`);
+    if (Number.isNaN(at.getTime())) return day;
+    return new Intl.DateTimeFormat("ko-KR", {
+      year: "numeric",
+      month: "short",
+      timeZone: "Asia/Seoul",
+    }).format(at);
+  }
+  const label = formatDay(day);
+  return bucketing === "week" ? `${label} 주` : label;
 }
 
 export async function fetchUsers(

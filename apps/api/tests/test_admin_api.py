@@ -583,6 +583,180 @@ async def test_a_malformed_date_is_refused(admin_client: AsyncClient) -> None:
     assert response.status_code == 422
 
 
+async def test_a_custom_range_drives_every_figure(app: FastAPI, admin_client: AsyncClient) -> None:
+    """The range the operator picked is the range the numbers describe."""
+    inside = datetime(2026, 8, 10, 3, tzinfo=UTC)
+    outside = datetime(2026, 8, 25, 3, tzinfo=UTC)
+    await _pay(app, admin_client.user_id, 19_900, inside)  # type: ignore[attr-defined]
+    await _pay(app, admin_client.user_id, 29_900, outside)  # type: ignore[attr-defined]
+
+    body = (
+        await admin_client.get(
+            "/v1/admin/analytics/revenue", params={"start": "2026-08-01", "end": "2026-08-15"}
+        )
+    ).json()
+
+    assert body["total_krw"] == 19_900, "the payment outside the window must not count"
+    assert body["range"] == {
+        "start": "2026-08-01",
+        "end": "2026-08-15",
+        "days": 15,
+        "bucketing": "day",
+    }
+
+
+async def test_a_custom_range_survives_on_the_dashboard_too(
+    app: FastAPI, admin_client: AsyncClient
+) -> None:
+    await _pay(app, admin_client.user_id, 19_900, datetime(2026, 8, 10, 3, tzinfo=UTC))  # type: ignore[attr-defined]
+
+    body = (
+        await admin_client.get(
+            "/v1/admin/dashboard", params={"start": "2026-08-01", "end": "2026-08-15"}
+        )
+    ).json()
+
+    assert body["revenue_krw"] == 19_900
+    assert body["range"]["start"] == "2026-08-01"
+    assert body["range"]["end"] == "2026-08-15"
+
+
+async def test_a_single_day_range_is_one_day_not_zero(admin_client: AsyncClient) -> None:
+    body = (
+        await admin_client.get(
+            "/v1/admin/analytics/revenue", params={"start": "2026-08-28", "end": "2026-08-28"}
+        )
+    ).json()
+
+    assert body["range"]["days"] == 1
+
+
+async def test_the_bucket_size_is_chosen_from_the_range(admin_client: AsyncClient) -> None:
+    """Deterministic thresholds, reported so the console can label the
+    axis rather than guess at it."""
+    cases = [
+        ("2026-08-01", "2026-08-28", "day"),
+        ("2026-06-01", "2026-08-28", "week"),
+        ("2025-09-01", "2026-08-28", "month"),
+    ]
+    for start, end, expected in cases:
+        body = (
+            await admin_client.get(
+                "/v1/admin/analytics/revenue", params={"start": start, "end": end}
+            )
+        ).json()
+        assert body["range"]["bucketing"] == expected, (start, end)
+
+
+async def test_an_explicit_bucket_overrides_the_default(admin_client: AsyncClient) -> None:
+    body = (
+        await admin_client.get(
+            "/v1/admin/analytics/revenue",
+            params={"start": "2026-08-01", "end": "2026-08-07", "bucket": "month"},
+        )
+    ).json()
+
+    assert body["range"]["bucketing"] == "month"
+
+
+async def test_a_future_range_is_empty_rather_than_an_error(
+    admin_client: AsyncClient,
+) -> None:
+    """An operator checking next month should get an empty chart."""
+    response = await admin_client.get(
+        "/v1/admin/analytics/revenue", params={"start": "2099-01-01", "end": "2099-01-31"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total_krw"] == 0
+    assert response.json()["series"] == []
+
+
+# ── previous-period comparison ───────────────────────────────────────
+
+
+async def test_the_comparison_window_is_the_range_immediately_before(
+    admin_client: AsyncClient,
+) -> None:
+    body = (
+        await admin_client.get(
+            "/v1/admin/dashboard", params={"start": "2026-08-15", "end": "2026-08-28"}
+        )
+    ).json()
+
+    assert body["comparison"]["start"] == "2026-08-01"
+    assert body["comparison"]["end"] == "2026-08-14"
+
+
+async def test_a_percentage_is_reported_against_the_previous_period(
+    app: FastAPI, admin_client: AsyncClient
+) -> None:
+    # ₩10,000 in the previous window, ₩15,000 in the selected one: +50%.
+    await _pay(app, admin_client.user_id, 10_000, datetime(2026, 8, 5, 3, tzinfo=UTC))  # type: ignore[attr-defined]
+    await _pay(app, admin_client.user_id, 15_000, datetime(2026, 8, 20, 3, tzinfo=UTC))  # type: ignore[attr-defined]
+
+    body = (
+        await admin_client.get(
+            "/v1/admin/dashboard", params={"start": "2026-08-15", "end": "2026-08-28"}
+        )
+    ).json()
+
+    assert body["revenue_krw"] == 15_000
+    assert body["comparison"]["revenue_krw"] == 10_000
+    assert body["comparison"]["revenue_delta_pct"] == 50.0
+
+
+async def test_a_fall_is_reported_as_a_negative_percentage(
+    app: FastAPI, admin_client: AsyncClient
+) -> None:
+    await _pay(app, admin_client.user_id, 20_000, datetime(2026, 8, 5, 3, tzinfo=UTC))  # type: ignore[attr-defined]
+    await _pay(app, admin_client.user_id, 15_000, datetime(2026, 8, 20, 3, tzinfo=UTC))  # type: ignore[attr-defined]
+
+    body = (
+        await admin_client.get(
+            "/v1/admin/dashboard", params={"start": "2026-08-15", "end": "2026-08-28"}
+        )
+    ).json()
+
+    assert body["comparison"]["revenue_delta_pct"] == -25.0
+
+
+async def test_a_zero_base_reports_no_percentage_at_all(
+    app: FastAPI, admin_client: AsyncClient
+) -> None:
+    """There is no honest percentage from nothing.
+
+    The change from ₩0 is undefined — not infinite, not 100% — and a
+    number here is one an operator might act on.
+    """
+    await _pay(app, admin_client.user_id, 19_900, datetime(2026, 8, 20, 3, tzinfo=UTC))  # type: ignore[attr-defined]
+
+    body = (
+        await admin_client.get(
+            "/v1/admin/dashboard", params={"start": "2026-08-15", "end": "2026-08-28"}
+        )
+    ).json()
+
+    assert body["comparison"]["revenue_krw"] == 0
+    assert body["comparison"]["revenue_delta_pct"] is None
+
+
+async def test_comparison_is_present_on_the_revenue_endpoint_too(
+    admin_client: AsyncClient,
+) -> None:
+    body = (await admin_client.get("/v1/admin/analytics/revenue")).json()
+
+    assert body["comparison"] is not None
+    assert "revenue_delta_pct" in body["comparison"]
+
+
+def test_resolve_range_reports_its_own_length_and_bucketing() -> None:
+    window = resolve_range(None, "2026-08-01", "2026-08-28")
+
+    assert window.days == 28
+    assert window.bucketing == "day"
+
+
 def test_resolve_range_covers_the_whole_korean_day() -> None:
     """The window is half-open on UTC instants, nine hours shifted."""
     window = resolve_range(None, "2026-08-28", "2026-08-28")

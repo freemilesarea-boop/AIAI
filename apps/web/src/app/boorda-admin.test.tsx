@@ -27,10 +27,25 @@ import AdminEmailPage from "@/app/admin/email/page";
 import AdminSupportPage from "@/app/admin/support/page";
 import AdminUsersPage from "@/app/admin/users/page";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { BarChart, RevenueChart } from "@/components/admin/Charts";
+import { BarChart, GenerationChart, RevenueChart } from "@/components/admin/Charts";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
-import { isAdmin, isSuperAdmin } from "@/lib/admin";
+import { DateRangePicker } from "@/components/admin/DateRangePicker";
+import {
+  MAX_RANGE_DAYS,
+  type DateRange,
+  addDays,
+  formatDelta,
+  formatRange,
+  isAdmin,
+  isSuperAdmin,
+  isValidRange,
+  kstToday,
+  matchingPreset,
+  presetRange,
+  rangeFromParams,
+  rangeLength,
+} from "@/lib/admin";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin",
@@ -52,7 +67,7 @@ const SUPER_ADMIN = { ...BASE_USER, role: "SUPER_ADMIN" };
 const CUSTOMER = { ...BASE_USER, email: "singer@boorda.kr", role: "USER" };
 
 const DASHBOARD = {
-  range: { start: "2026-08-01", end: "2026-08-28" },
+  range: { start: "2026-08-01", end: "2026-08-28", days: 28, bucketing: "day" },
   generated_at: "2026-08-28T00:00:00Z",
   revenue_krw: 19900,
   revenue_today_krw: 0,
@@ -69,6 +84,18 @@ const DASHBOARD = {
   ],
   revenue_series: [{ day: "2026-08-28", value: 19900, secondary: 1 }],
   generation_series: [],
+  comparison: {
+    start: "2026-07-04",
+    end: "2026-07-31",
+    revenue_krw: 10000,
+    payment_count: 1,
+    new_users: 2,
+    generations: 0,
+    revenue_delta_pct: 99.0,
+    payment_delta_pct: 0.0,
+    user_delta_pct: 50.0,
+    generation_delta_pct: null,
+  },
 };
 
 function json(body: unknown, status = 200) {
@@ -220,7 +247,10 @@ describe("dashboard", () => {
     // Twice on purpose: once as the headline figure, once inside the
     // chart's screen-reader table, which carries the same numbers.
     expect(await screen.findAllByText("₩19,900")).toHaveLength(2);
-    expect(screen.getByText("12명")).toBeInTheDocument();
+    // The members card leads with the figure the range controls — new
+    // signups — and carries the standing totals underneath it.
+    expect(screen.getByText("3명")).toBeInTheDocument();
+    expect(screen.getByText(/전체 12명/)).toBeInTheDocument();
   });
 
   it("renders zero as zero rather than hiding the panel", async () => {
@@ -233,7 +263,7 @@ describe("dashboard", () => {
 
     renderPage(<AdminDashboardPage />);
 
-    expect(await screen.findByText("일별 생성")).toBeInTheDocument();
+    expect(await screen.findByText("생성 추이")).toBeInTheDocument();
     expect(screen.getByText(/이 기간에는 생성 요청이 없습니다/)).toBeInTheDocument();
   });
 
@@ -497,6 +527,207 @@ describe("audit", () => {
   });
 });
 
+// ── the date range ───────────────────────────────────────────────────
+
+describe("date range", () => {
+  /** A fixed instant, so "today" is not whatever day the suite runs. */
+  const NOW = new Date("2026-08-28T03:00:00Z"); // 12:00 KST
+
+  it("resolves each preset against the Korean day, not the browser's", () => {
+    expect(presetRange("today", NOW)).toEqual({ from: "2026-08-28", to: "2026-08-28" });
+    // Seven days *including* today, which is what "7일" reads as.
+    expect(presetRange("7d", NOW)).toEqual({ from: "2026-08-22", to: "2026-08-28" });
+    expect(presetRange("30d", NOW)).toEqual({ from: "2026-07-30", to: "2026-08-28" });
+    expect(presetRange("month", NOW)).toEqual({ from: "2026-08-01", to: "2026-08-28" });
+    expect(presetRange("year", NOW)).toEqual({ from: "2026-01-01", to: "2026-08-28" });
+  });
+
+  it("reads a Korean day from a UTC evening", () => {
+    /**
+     * 23:00 UTC on the 27th is already the 28th in Seoul. An operator
+     * abroad must still be shown Korean days, because that is what the
+     * figures are bucketed by.
+     */
+    expect(kstToday(new Date("2026-08-27T23:00:00Z"))).toBe("2026-08-28");
+    expect(kstToday(new Date("2026-08-28T14:59:00Z"))).toBe("2026-08-28");
+    expect(kstToday(new Date("2026-08-28T15:00:00Z"))).toBe("2026-08-29");
+  });
+
+  it("counts an inclusive range, so one day is one", () => {
+    expect(rangeLength({ from: "2026-08-28", to: "2026-08-28" })).toBe(1);
+    expect(rangeLength({ from: "2026-08-01", to: "2026-08-28" })).toBe(28);
+  });
+
+  it("adds days without tripping over the browser's timezone", () => {
+    expect(addDays("2026-08-28", 1)).toBe("2026-08-29");
+    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+    expect(addDays("2026-01-01", -1)).toBe("2025-12-31");
+  });
+
+  it("refuses ranges the API would refuse", () => {
+    expect(isValidRange({ from: "2026-08-01", to: "2026-08-28" })).toBe(true);
+    expect(isValidRange({ from: "2026-08-28", to: "2026-08-01" })).toBe(false);
+    expect(isValidRange({ from: "not-a-date", to: "2026-08-28" })).toBe(false);
+    // Date-shaped but not a date.
+    expect(isValidRange({ from: "2026-02-31", to: "2026-03-01" })).toBe(false);
+    expect(
+      isValidRange({ from: "2026-01-01", to: addDays("2026-01-01", MAX_RANGE_DAYS) }),
+    ).toBe(false);
+  });
+
+  it("falls back to a valid default rather than propagating nonsense", () => {
+    /** A bookmarked link with a typo shows this month, not an error. */
+    const fallback = presetRange("month", NOW);
+
+    for (const query of [
+      "",
+      "from=2026-08-28&to=2026-08-01",
+      "from=garbage&to=2026-08-28",
+      "from=2026-08-01",
+      "to=2026-08-28",
+    ]) {
+      expect(rangeFromParams(new URLSearchParams(query), NOW)).toEqual(fallback);
+    }
+  });
+
+  it("reads a valid range straight out of the URL", () => {
+    expect(rangeFromParams(new URLSearchParams("from=2026-03-01&to=2026-03-31"), NOW)).toEqual({
+      from: "2026-03-01",
+      to: "2026-03-31",
+    });
+  });
+
+  it("recognises a range that happens to equal a preset", () => {
+    expect(matchingPreset({ from: "2026-08-01", to: "2026-08-28" }, NOW)).toBe("month");
+    expect(matchingPreset({ from: "2026-03-01", to: "2026-03-31" }, NOW)).toBeNull();
+  });
+
+  it("shows the selected range the way an operator reads it", () => {
+    expect(formatRange({ from: "2026-08-01", to: "2026-08-28" })).toBe("2026.08.01 ~ 2026.08.28");
+    expect(formatRange({ from: "2026-08-28", to: "2026-08-28" })).toBe("2026.08.28");
+  });
+});
+
+describe("date range picker", () => {
+  const MONTH: DateRange = presetRange("month");
+
+  it("offers the presets and a custom option", async () => {
+    render(<DateRangePicker range={MONTH} onChange={vi.fn()} />);
+
+    for (const label of ["오늘", "7일", "30일", "이번 달", "올해", "직접 선택"]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("reports the selected range in Korean time", () => {
+    render(<DateRangePicker range={{ from: "2026-08-01", to: "2026-08-28" }} onChange={vi.fn()} />);
+
+    expect(screen.getByText(/2026\.08\.01 ~ 2026\.08\.28/)).toBeInTheDocument();
+    expect(screen.getByText(/KST/)).toBeInTheDocument();
+  });
+
+  it("hands back the preset's range when one is chosen", async () => {
+    const onChange = vi.fn();
+    render(<DateRangePicker range={MONTH} onChange={onChange} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "7일" }));
+
+    expect(onChange).toHaveBeenCalledWith(presetRange("7d"));
+  });
+
+  it("opens a real calendar for a custom range", async () => {
+    render(<DateRangePicker range={MONTH} onChange={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "직접 선택" }));
+
+    // Native date inputs: a real picker on every platform, keyboard
+    // navigable and labelled, at no bundle cost.
+    expect(screen.getByLabelText("시작 날짜")).toHaveAttribute("type", "date");
+    expect(screen.getByLabelText("종료 날짜")).toHaveAttribute("type", "date");
+  });
+
+  it("applies a custom range only when it is valid", async () => {
+    const onChange = vi.fn();
+    render(<DateRangePicker range={MONTH} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "직접 선택" }));
+
+    const from = screen.getByLabelText("시작 날짜");
+    const to = screen.getByLabelText("종료 날짜");
+    await userEvent.clear(from);
+    await userEvent.type(from, "2026-03-01");
+    await userEvent.clear(to);
+    await userEvent.type(to, "2026-03-31");
+    await userEvent.click(screen.getByRole("button", { name: "적용" }));
+
+    expect(onChange).toHaveBeenCalledWith({ from: "2026-03-01", to: "2026-03-31" });
+  });
+
+  it("says why a backwards range will not apply, before the request", async () => {
+    const onChange = vi.fn();
+    render(
+      <DateRangePicker range={{ from: "2026-08-28", to: "2026-08-01" }} onChange={onChange} />,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/앞설 수 없습니다/);
+    expect(screen.getByRole("button", { name: "적용" })).toBeDisabled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("shows the custom controls when the range matches no preset", () => {
+    render(<DateRangePicker range={{ from: "2026-03-01", to: "2026-03-31" }} onChange={vi.fn()} />);
+
+    expect(screen.getByLabelText("시작 날짜")).toHaveValue("2026-03-01");
+    expect(screen.getByRole("button", { name: "직접 선택" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+});
+
+// ── comparison ───────────────────────────────────────────────────────
+
+describe("previous-period comparison", () => {
+  it("formats a delta with its sign", () => {
+    expect(formatDelta(12.4)).toBe("+12.4%");
+    expect(formatDelta(-3.1)).toBe("-3.1%");
+    expect(formatDelta(0)).toBe("0.0%");
+  });
+
+  it("has no percentage at all for a zero base", () => {
+    /** Not Infinity, not 100% — undefined, and shown as "신규". */
+    expect(formatDelta(null)).toBeNull();
+  });
+
+  it("shows the delta beside the figure it describes", async () => {
+    stub(ADMIN);
+
+    renderPage(<AdminDashboardPage />);
+
+    expect(await screen.findByText("+99.0%")).toBeInTheDocument();
+    expect(screen.getByText(/직전 동일 기간/)).toBeInTheDocument();
+  });
+
+  it("renders a zero-base comparison as 신규 rather than a number", async () => {
+    stub(ADMIN, {
+      "/admin/dashboard": () =>
+        json({
+          ...DASHBOARD,
+          comparison: { ...DASHBOARD.comparison, revenue_krw: 0, revenue_delta_pct: null },
+        }),
+    });
+
+    renderPage(<AdminDashboardPage />);
+
+    // Scoped to the revenue card: the generation card also has a null
+    // base in this fixture, and asserting on a bare "신규" would pass
+    // whichever one rendered.
+    const card = (await screen.findByText("기간 매출")).parentElement!;
+    expect(within(card).getByText("신규")).toBeInTheDocument();
+    expect(within(card).queryByText(/%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Infinity/)).not.toBeInTheDocument();
+  });
+});
+
 // ── chart geometry ───────────────────────────────────────────────────
 
 describe("chart bars", () => {
@@ -577,6 +808,126 @@ describe("chart bars", () => {
 
     expect(bars(container)).toHaveLength(0);
     expect(screen.getByText(/이 기간에는 데이터가 없습니다/)).toBeInTheDocument();
+  });
+});
+
+// ── chart presentation ───────────────────────────────────────────────
+
+describe("chart presentation", () => {
+  const ONE_DAY = [{ day: "2026-08-28", value: 19_900, secondary: 1 }];
+
+  it("caps a lone bar's width instead of filling the plot", () => {
+    /**
+     * Production's real case. Without a cap one data point stretches to
+     * the whole plot width and reads as a filled rectangle rather than a
+     * measurement.
+     */
+    const { container } = render(<RevenueChart data={ONE_DAY} />);
+
+    const bar = container.querySelector<HTMLElement>("[style*='height']")!;
+    expect(bar.style.maxWidth).toBe("3.5rem");
+    expect(bar.style.height).toBe("100%");
+  });
+
+  it("centres the bars so a short series is not stranded on the left", () => {
+    const { container } = render(<RevenueChart data={ONE_DAY} />);
+
+    const track = [...container.querySelectorAll("div")].find((d) =>
+      /\bh-32\b/.test(d.className),
+    )!;
+    expect(track.className).toMatch(/\bjustify-center\b/);
+  });
+
+  it("labels a weekly bucket as a week and a monthly one as a month", () => {
+    const weekly = render(
+      <BarChart title="매출 추이" data={[{ day: "2026-08-24", value: 5, secondary: 0 }]} bucketing="week" />,
+    );
+    expect(weekly.container.textContent).toMatch(/주/);
+    weekly.unmount();
+
+    const monthly = render(
+      <BarChart title="매출 추이" data={[{ day: "2026-08-01", value: 5, secondary: 0 }]} bucketing="month" />,
+    );
+    // A month bucket reads as a month, not as its first day.
+    expect(monthly.container.textContent).toMatch(/2026년 8월/);
+  });
+
+  it("says which bucket size it is drawn at", () => {
+    const { container, rerender } = render(<RevenueChart data={ONE_DAY} bucketing="day" />);
+    expect(container.textContent).toMatch(/하루 단위/);
+
+    rerender(<RevenueChart data={ONE_DAY} bucketing="week" />);
+    expect(container.textContent).toMatch(/주 단위/);
+    expect(container.textContent).toMatch(/월요일에 시작/);
+
+    rerender(<RevenueChart data={ONE_DAY} bucketing="month" />);
+    expect(container.textContent).toMatch(/월 단위/);
+  });
+
+  it("gives every bar an accessible name carrying its own figure", () => {
+    /** So the chart is not a wall of unnamed buttons to a screen reader. */
+    render(<RevenueChart data={ONE_DAY} />);
+
+    expect(
+      screen.getByRole("button", { name: /8월 28일 ₩19,900/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a tooltip on hover and on keyboard focus alike", async () => {
+    render(<RevenueChart data={ONE_DAY} />);
+    const bar = screen.getByRole("button", { name: /₩19,900/ });
+
+    await userEvent.hover(bar);
+    expect(await screen.findByRole("status")).toHaveTextContent("₩19,900");
+
+    await userEvent.unhover(bar);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    // The same tooltip must be reachable without a pointer.
+    bar.focus();
+    expect(await screen.findByRole("status")).toHaveTextContent("₩19,900");
+  });
+
+  it("carries the second figure in the tooltip too", async () => {
+    render(<RevenueChart data={ONE_DAY} />);
+
+    await userEvent.hover(screen.getByRole("button", { name: /₩19,900/ }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("결제 1건");
+  });
+
+  it("keeps every figure in the table, not only in the tooltip", () => {
+    /**
+     * The rule that matters for accessibility: nothing critical is
+     * reachable only by hovering.
+     */
+    const { container } = render(
+      <GenerationChart
+        data={[{ day: "2026-08-28", value: 14, secondary: 13 }]}
+        bucketing="day"
+      />,
+    );
+
+    const table = container.querySelector("table.sr-only")!;
+    expect(table.textContent).toMatch(/8월 28일/);
+    expect(table.textContent).toMatch(/14건/);
+    expect(table.textContent).toMatch(/13건/);
+  });
+
+  it("renders an empty generation chart as an empty state", () => {
+    render(<GenerationChart data={[]} />);
+
+    expect(screen.getByText(/이 기간에는 생성 요청이 없습니다/)).toBeInTheDocument();
+  });
+
+  it("shows one axis label when there is a single bucket", () => {
+    /** Two identical labels at both ends read as a broken axis. */
+    const { container } = render(<RevenueChart data={ONE_DAY} />);
+
+    const axis = [...container.querySelectorAll("div")].find((d) =>
+      /justify-between/.test(d.className),
+    )!;
+    expect(axis.children).toHaveLength(1);
   });
 });
 

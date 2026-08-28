@@ -90,6 +90,103 @@ def kst_date(column: Any) -> _KstDate:
     return _KstDate(column)
 
 
+class _KstWeek(FunctionElement[Any]):
+    """The Monday that starts a timestamp's Korean week."""
+
+    inherit_cache = True
+    name = "kst_week"
+
+
+@compiles(_KstWeek)
+def _kst_week_default(element: _KstWeek, compiler: Any, **kw: Any) -> str:
+    # SQLite: shift into Korean time, step back six days, then advance to
+    # the next Monday. `weekday 1` stays put when the date is already a
+    # Monday, so the pair lands on the Monday of the same Mon-Sun week
+    # for every day of it — including Sunday, which a naive
+    # "previous Monday" would push a week early.
+    inner = compiler.process(next(iter(element.clauses)), **kw)
+    return f"date({inner}, '{KST_OFFSET_SQL}', '-6 days', 'weekday 1')"
+
+
+@compiles(_KstWeek, "postgresql")
+def _kst_week_postgresql(element: _KstWeek, compiler: Any, **kw: Any) -> str:
+    # `date_trunc('week', …)` is ISO — it starts on Monday, which is the
+    # same week SQLite is being asked for above.
+    inner = compiler.process(next(iter(element.clauses)), **kw)
+    return f"(date_trunc('week', ({inner}) AT TIME ZONE 'Asia/Seoul'))::date"
+
+
+class _KstMonth(FunctionElement[Any]):
+    """The first day of a timestamp's Korean month."""
+
+    inherit_cache = True
+    name = "kst_month"
+
+
+@compiles(_KstMonth)
+def _kst_month_default(element: _KstMonth, compiler: Any, **kw: Any) -> str:
+    inner = compiler.process(next(iter(element.clauses)), **kw)
+    return f"date({inner}, '{KST_OFFSET_SQL}', 'start of month')"
+
+
+@compiles(_KstMonth, "postgresql")
+def _kst_month_postgresql(element: _KstMonth, compiler: Any, **kw: Any) -> str:
+    inner = compiler.process(next(iter(element.clauses)), **kw)
+    return f"(date_trunc('month', ({inner}) AT TIME ZONE 'Asia/Seoul'))::date"
+
+
+#: How a series is bucketed. `day` is what the charts used before this
+#: existed, and remains the default for short ranges.
+Bucketing = Literal["day", "week", "month"]
+
+#: Where the bucket size changes, in days of the selected range.
+#:
+#: A chart is readable at roughly 10-60 marks. A quarter of daily bars is
+#: 90 of them and reads as noise; a year of daily bars is 365 and reads
+#: as a smear. These two numbers are the whole policy, kept here rather
+#: than in the route so the API and any other caller bucket alike.
+DAILY_MAX_DAYS = 31
+WEEKLY_MAX_DAYS = 120
+
+
+def bucketing_for(days: int) -> Bucketing:
+    """The bucket size a range of this many days should be drawn at.
+
+    Deterministic and total: every range gets exactly one answer, and
+    the same range always gets the same one.
+    """
+    if days <= DAILY_MAX_DAYS:
+        return "day"
+    if days <= WEEKLY_MAX_DAYS:
+        return "week"
+    return "month"
+
+
+def kst_bucket(column: Any, bucketing: Bucketing = "day") -> FunctionElement[Any]:
+    """Group a timestamp column into Korean days, weeks or months.
+
+    One entry point, so a caller cannot bucket the `WHERE` one way and
+    the `GROUP BY` another.
+    """
+    if bucketing == "week":
+        return _KstWeek(column)
+    if bucketing == "month":
+        return _KstMonth(column)
+    return _KstDate(column)
+
+
+def previous_window(start_day: date, end_day: date) -> tuple[date, date]:
+    """The equal-length range immediately before this one.
+
+    Aug 15-28 is fourteen days, so the comparison is Aug 1-14: the
+    period ends the day before the selected one starts, and covers the
+    same number of days. Anything else makes the percentage a comparison
+    between differently sized things.
+    """
+    span = (end_day - start_day).days + 1
+    return start_day - timedelta(days=span), start_day - timedelta(days=1)
+
+
 def kst_day_bounds(day: date) -> tuple[datetime, datetime]:
     """The UTC instants a Korean calendar day starts and ends at.
 
@@ -168,18 +265,25 @@ async def revenue_total(
     return int(row[0] or 0), int(row[1] or 0)
 
 
-async def revenue_series(session: AsyncSession, *, start: datetime, end: datetime) -> list[Bucket]:
-    """Revenue per Korean day, with the payment count alongside."""
+async def revenue_series(
+    session: AsyncSession, *, start: datetime, end: datetime, bucketing: Bucketing = "day"
+) -> list[Bucket]:
+    """Revenue per Korean day, week or month, with the payment count.
+
+    The bucket expression is built once and reused for the projection,
+    the `GROUP BY` and the `ORDER BY`, so those three cannot disagree.
+    """
+    bucket = kst_bucket(BillingPayment.paid_at, bucketing)
     rows = (
         await session.execute(
             select(
-                kst_date(BillingPayment.paid_at).label("day"),
+                bucket.label("day"),
                 func.coalesce(func.sum(BillingPayment.amount_krw), 0),
                 func.count(BillingPayment.id),
             )
             .where(_succeeded(), BillingPayment.paid_at >= start, BillingPayment.paid_at < end)
-            .group_by(kst_date(BillingPayment.paid_at))
-            .order_by(kst_date(BillingPayment.paid_at))
+            .group_by(bucket)
+            .order_by(bucket)
         )
     ).all()
     return [Bucket(day=str(r[0]), value=int(r[1] or 0), secondary=int(r[2] or 0)) for r in rows]
@@ -269,13 +373,16 @@ async def new_users(session: AsyncSession, *, start: datetime, end: datetime) ->
     )
 
 
-async def user_series(session: AsyncSession, *, start: datetime, end: datetime) -> list[Bucket]:
+async def user_series(
+    session: AsyncSession, *, start: datetime, end: datetime, bucketing: Bucketing = "day"
+) -> list[Bucket]:
+    bucket = kst_bucket(User.created_at, bucketing)
     rows = (
         await session.execute(
-            select(kst_date(User.created_at), func.count(User.id))
+            select(bucket, func.count(User.id))
             .where(_live_user(), User.created_at >= start, User.created_at < end)
-            .group_by(kst_date(User.created_at))
-            .order_by(kst_date(User.created_at))
+            .group_by(bucket)
+            .order_by(bucket)
         )
     ).all()
     return [Bucket(day=str(r[0]), value=int(r[1])) for r in rows]
@@ -371,18 +478,19 @@ async def generation_totals(
 
 
 async def generation_series(
-    session: AsyncSession, *, start: datetime, end: datetime
+    session: AsyncSession, *, start: datetime, end: datetime, bucketing: Bucketing = "day"
 ) -> list[Bucket]:
-    """Requested per Korean day, completed alongside."""
+    """Requested per Korean bucket, completed alongside."""
     # `case`, not `func.case`: the latter builds a SQL function literally
     # named "case" and does not accept `else_` at all.
     completed = func.sum(case((Generation.status == "COMPLETED", 1), else_=0))
+    bucket = kst_bucket(Generation.created_at, bucketing)
     rows = (
         await session.execute(
-            select(kst_date(Generation.created_at), func.count(Generation.id), completed)
+            select(bucket, func.count(Generation.id), completed)
             .where(Generation.created_at >= start, Generation.created_at < end)
-            .group_by(kst_date(Generation.created_at))
-            .order_by(kst_date(Generation.created_at))
+            .group_by(bucket)
+            .order_by(bucket)
         )
     ).all()
     return [Bucket(day=str(r[0]), value=int(r[1]), secondary=int(r[2] or 0)) for r in rows]
@@ -400,13 +508,16 @@ async def download_total(session: AsyncSession, *, start: datetime, end: datetim
     )
 
 
-async def download_series(session: AsyncSession, *, start: datetime, end: datetime) -> list[Bucket]:
+async def download_series(
+    session: AsyncSession, *, start: datetime, end: datetime, bucketing: Bucketing = "day"
+) -> list[Bucket]:
+    bucket = kst_bucket(DownloadEvent.created_at, bucketing)
     rows = (
         await session.execute(
-            select(kst_date(DownloadEvent.created_at), func.count(DownloadEvent.id))
+            select(bucket, func.count(DownloadEvent.id))
             .where(DownloadEvent.created_at >= start, DownloadEvent.created_at < end)
-            .group_by(kst_date(DownloadEvent.created_at))
-            .order_by(kst_date(DownloadEvent.created_at))
+            .group_by(bucket)
+            .order_by(bucket)
         )
     ).all()
     return [Bucket(day=str(r[0]), value=int(r[1])) for r in rows]
@@ -455,20 +566,26 @@ async def user_activity(session: AsyncSession, user_id: UUID) -> dict[str, int]:
 
 
 __all__ = [
+    "DAILY_MAX_DAYS",
     "KST_OFFSET",
+    "WEEKLY_MAX_DAYS",
     "Bucket",
+    "Bucketing",
     "GenerationTotals",
     "Granularity",
+    "bucketing_for",
     "download_series",
     "download_total",
     "generation_series",
     "generation_totals",
+    "kst_bucket",
     "kst_date",
     "kst_day_bounds",
     "kst_today",
     "new_users",
     "period_bounds",
     "plan_distribution",
+    "previous_window",
     "revenue_series",
     "revenue_split",
     "revenue_total",
