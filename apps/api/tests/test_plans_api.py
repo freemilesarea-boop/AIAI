@@ -59,10 +59,34 @@ async def test_the_published_prices_are_the_configured_prices(anon_client: Async
         assert served[plan_id.value]["commercial_use"] == plan.commercial_use
 
 
-async def test_checkout_is_advertised_as_unavailable(anon_client: AsyncClient) -> None:
-    """No payment provider is connected. The page must not offer a
-    checkout it cannot honour, and the server is where that is stated."""
-    assert (await anon_client.get("/v1/plans")).json()["checkout_available"] is False
+async def test_checkout_availability_reflects_the_deployment(
+    anon_client: AsyncClient,
+) -> None:
+    """The pricing page renders its subscribe controls from this flag.
+
+    It has to come from the server's own configuration. A constant false
+    hides the CTA on a deployment that can take payments — which is how
+    a working checkout stays invisible — and a constant true offers one
+    that opens nothing. The suite configures PayApp, so this is true
+    here.
+    """
+    assert (await anon_client.get("/v1/plans")).json()["checkout_available"] is True
+
+
+async def test_checkout_is_advertised_as_unavailable_without_credentials(
+    anon_client: AsyncClient, monkeypatch
+) -> None:
+    """And false again the moment the credentials are absent."""
+    from luber_api.settings import get_settings
+
+    monkeypatch.delenv("PAYAPP_LINKVAL", raising=False)
+    get_settings.cache_clear()
+    try:
+        body = (await anon_client.get("/v1/plans")).json()
+    finally:
+        get_settings.cache_clear()
+
+    assert body["checkout_available"] is False
 
 
 async def test_exactly_one_tier_is_recommended(anon_client: AsyncClient) -> None:

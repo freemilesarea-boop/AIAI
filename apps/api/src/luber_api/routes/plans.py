@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from luber_api.dependencies import get_allowance
+from luber_api.settings import get_settings
 from luber_database.allowance_repository import AllowanceRepository
 from luber_schemas.plans import RECOMMENDED_PLAN, Plan, ordered_plans
 
@@ -51,8 +52,11 @@ class PlanResponse(BaseModel):
 
 class PlanCatalogueResponse(BaseModel):
     plans: list[PlanResponse]
-    #: False for every tier in this phase: no payment provider is
-    #: connected, so the page must not offer a checkout it cannot honour.
+    #: Whether a payment provider is configured on this deployment. The
+    #: pricing page renders its subscribe controls from this, so it must
+    #: reflect the server rather than a constant — hardcoding it false
+    #: hides the CTA on a deployment that can take payments, and
+    #: hardcoding it true offers a checkout that opens nothing.
     checkout_available: bool = False
 
 
@@ -80,7 +84,10 @@ def _plan_payload(plan: Plan) -> PlanResponse:
 
 @router.get("/plans", response_model=PlanCatalogueResponse)
 async def list_plans() -> PlanCatalogueResponse:
-    return PlanCatalogueResponse(plans=[_plan_payload(plan) for plan in ordered_plans()])
+    return PlanCatalogueResponse(
+        plans=[_plan_payload(plan) for plan in ordered_plans()],
+        checkout_available=get_settings().billing_available(),
+    )
 
 
 @router.get("/account/entitlement", response_model=EntitlementResponse)
