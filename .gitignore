@@ -115,3 +115,4 @@ ops-fixture/
 artifacts/hardware/
 hardware_compatibility_report.json
 hardware_compatibility_report.md
+.vercel

@@ -10,7 +10,7 @@
 #
 # `scripts/deployment/check_docker_workspace.py` fails if the two lists
 # disagree, so the drift is caught by a gate rather than by a deploy.
-FROM python:3.11-slim AS base
+FROM public.ecr.aws/docker/library/python:3.11-slim AS base
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 

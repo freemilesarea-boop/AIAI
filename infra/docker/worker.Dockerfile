@@ -9,7 +9,7 @@
 # machine. Settling a generation's allowance slot would fail at import.
 #
 # `scripts/deployment/check_docker_workspace.py` gates the two lists.
-FROM python:3.11-slim AS base
+FROM public.ecr.aws/docker/library/python:3.11-slim AS base
 
 ARG WORKER_PACKAGE=luber-generation-worker
 
