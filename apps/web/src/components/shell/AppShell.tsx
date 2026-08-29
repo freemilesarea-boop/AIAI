@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { Footer } from "@/components/Footer";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -141,6 +142,14 @@ const PUBLIC_ROUTES = new Set(["/login", "/signup"]);
 //: session. Rendered bare here so `/ops` brings its own shell.
 const OPERATOR_PREFIX = "/ops";
 
+//: Legal notices, readable by anyone.
+//:
+//: Not behind `RequireAuth`: a privacy policy a visitor must create an
+//: account to read is not published, and the people most likely to need
+//: these pages — someone deciding whether to sign up, or a regulator —
+//: have no account by definition.
+const LEGAL_ROUTES = new Set(["/privacy", "/terms", "/refund-policy"]);
+
 
 /**
  * Plan and songs left, above the account menu.
@@ -197,6 +206,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   // is gated by the deployment rather than by a customer session.
   if (pathname === OPERATOR_PREFIX || pathname.startsWith(`${OPERATOR_PREFIX}/`)) {
     return <>{children}</>;
+  }
+
+  if (LEGAL_ROUTES.has(pathname)) {
+    return (
+      <div className="flex min-h-screen flex-col bg-[var(--surface-base)]">
+        <main className="flex-1 px-5 py-10 sm:px-8">{children}</main>
+        <Footer />
+      </div>
+    );
   }
 
   if (PUBLIC_ROUTES.has(pathname)) {
