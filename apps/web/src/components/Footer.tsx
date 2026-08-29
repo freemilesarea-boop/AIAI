@@ -58,6 +58,41 @@ function Column({
   );
 }
 
+/**
+ * A single line of legal links, for pages that cannot carry the full
+ * footer.
+ *
+ * Sign-in and sign-up are deliberately free of product chrome, but
+ * "no chrome" must not mean "no way to read the terms before agreeing
+ * to them" — which is exactly the moment somebody wants them.
+ */
+export function CompactFooter() {
+  return (
+    <footer className="mt-10 flex flex-col items-center gap-2 border-t border-[var(--border-subtle)] px-4 py-5 text-center">
+      <nav aria-label="법적 고지" className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+        {LEGAL_LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="text-[11px] text-[var(--text-secondary)] underline-offset-2 transition-colors hover:text-[var(--text-primary)] hover:underline"
+          >
+            {link.label}
+          </Link>
+        ))}
+        <Link
+          href="/support"
+          className="text-[11px] text-[var(--text-secondary)] underline-offset-2 transition-colors hover:text-[var(--text-primary)] hover:underline"
+        >
+          고객지원
+        </Link>
+      </nav>
+      <p className="text-[11px] text-[var(--text-muted)]">
+        © 2026 {SERVICE_NAME}. All rights reserved.
+      </p>
+    </footer>
+  );
+}
+
 export function Footer() {
   // Rendered only when configured — see the module docstring.
   const optional = [
@@ -69,8 +104,8 @@ export function Footer() {
   ].filter((item): item is { label: string; value: string } => item !== null);
 
   return (
-    <footer className="mt-16 border-t border-[var(--border-subtle)] px-5 py-8 sm:px-8">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
+    <footer className="mt-16 border-t border-[var(--border-subtle)] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="flex flex-col gap-1">
             <span className="text-sm font-bold tracking-tight text-[var(--text-primary)]">

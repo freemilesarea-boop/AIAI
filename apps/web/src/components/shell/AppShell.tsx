@@ -16,7 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/auth/AccountMenu";
-import { Footer } from "@/components/Footer";
+import { CompactFooter, Footer } from "@/components/Footer";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -150,6 +150,13 @@ const OPERATOR_PREFIX = "/ops";
 //: have no account by definition.
 const LEGAL_ROUTES = new Set(["/privacy", "/terms", "/refund-policy"]);
 
+//: The operator console. It renders inside the product shell — it needs
+//: the sidebar and the session — but it is not the consumer site, and a
+//: marketing footer with business registration details has no place in a
+//: back office. Excluded explicitly rather than by omission, so the next
+//: person to touch the shell can see the decision.
+const ADMIN_PREFIX = "/admin";
+
 
 /**
  * Plan and songs left, above the account menu.
@@ -208,6 +215,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
+  const isAdmin = pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`);
+
   if (LEGAL_ROUTES.has(pathname)) {
     return (
       <div className="flex min-h-screen flex-col bg-[var(--surface-base)]">
@@ -220,8 +229,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (PUBLIC_ROUTES.has(pathname)) {
     return (
       <div className="min-h-screen bg-[var(--surface-base)]">
-        <main className="mx-auto flex min-h-screen max-w-md items-center px-4 py-10">
-          <div className="w-full">{children}</div>
+        <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
+          <div className="w-full flex-1 content-center">{children}</div>
+          <CompactFooter />
         </main>
       </div>
     );
@@ -284,12 +294,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <main
-        className="lg:pl-[var(--sidebar-width)]"
+        className="flex min-h-screen flex-col lg:pl-[var(--sidebar-width)]"
         style={{ paddingBottom: track ? "calc(var(--player-height) + 16px)" : undefined }}
       >
-        <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        {/* `flex-1` pushes the footer to the bottom on a short page
+            without positioning it there: on a long page it simply
+            follows the content, and it never floats over the player. */}
+        <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <RequireAuth pathname={pathname}>{children}</RequireAuth>
         </div>
+        {/* Outside RequireAuth on purpose: the terms must be reachable
+            while a session is still resolving, and by someone who is
+            being redirected to sign in. */}
+        {isAdmin ? null : <Footer />}
       </main>
 
       <PlayerBar />
