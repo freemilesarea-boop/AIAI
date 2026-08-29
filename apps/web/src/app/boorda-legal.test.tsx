@@ -21,7 +21,10 @@ import {
   COOKIES,
   EFFECTIVE_DATE,
   HISTORY,
+  INTERNATIONAL_TRANSFER_VERIFIED,
   PROCESSORS,
+  STATUTORY_RETENTION,
+  VERIFIED_STATUTORY_RETENTION,
 } from "@/lib/legal";
 
 vi.mock("next/navigation", () => ({
@@ -165,6 +168,43 @@ describe("privacy policy", () => {
     expect(screen.getByText(/대금결제 및 재화 등의 공급에 관한 기록/)).toBeInTheDocument();
   });
 
+  it("publishes no statutory period that nobody has confirmed", () => {
+    /**
+     * The periods could not be read from an official source in this
+     * environment, so the page states the principle and omits the
+     * numbers. A retention period is a figure readers act on, and a
+     * wrong one is worse than none.
+     */
+    expect(VERIFIED_STATUTORY_RETENTION).toHaveLength(0);
+    expect(STATUTORY_RETENTION.every((row) => !row.verified)).toBe(true);
+
+    render(<PrivacyPage />);
+    const body = document.body.textContent ?? "";
+
+    expect(body).not.toMatch(/5년/);
+    expect(body).not.toMatch(/3년/);
+    expect(body).not.toMatch(/6개월/);
+    expect(screen.getByText(/관계 법령이 정하는 바에 따릅니다/)).toBeInTheDocument();
+  });
+
+  it("states where data goes without claiming the transfer is compliant", () => {
+    /**
+     * Region and vendor are configuration facts and are published. The
+     * legal basis under 제28조의8 is not established here and is not
+     * asserted.
+     */
+    expect(INTERNATIONAL_TRANSFER_VERIFIED).toBe(false);
+
+    render(<PrivacyPage />);
+    const body = document.body.textContent ?? "";
+
+    expect(body).toMatch(/싱가포르/);
+    expect(body).toMatch(/암스테르담/);
+    expect(body).not.toMatch(/적법하게 이전/);
+    expect(body).not.toMatch(/동의를 받았습니다/);
+    expect(body).not.toMatch(/법령에 따라 적법/);
+  });
+
   it("describes account closure as anonymisation, not deletion", () => {
     /**
      * The product anonymises. Claiming immediate deletion would be a
@@ -196,8 +236,10 @@ describe("privacy policy", () => {
   it("discloses that some processing happens outside Korea", () => {
     render(<PrivacyPage />);
 
-    expect(screen.getByText(/싱가포르/)).toBeInTheDocument();
-    expect(screen.getByText(/암스테르담/)).toBeInTheDocument();
+    // Named twice by design: once in the processor table, once in the
+    // sentence that says data leaves Korea.
+    expect(screen.getAllByText(/싱가포르/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/암스테르담/).length).toBeGreaterThan(0);
   });
 
   it("is honest that IP is processed for rate limiting", () => {
@@ -233,6 +275,10 @@ describe("terms", () => {
     expect(body).not.toMatch(/저작권은 이용자에게 있습니다/);
     expect(screen.getByText(/계약상 이용 권한/)).toBeInTheDocument();
     expect(screen.getByText(/저작권의 성립 또는 귀속을 확정하는 것이 아닙니다/)).toBeInTheDocument();
+    // The operator's approved wording, verbatim in substance.
+    expect(
+      screen.getByText(/인간의 창작적 기여 정도, 관련 법령 및 관할에 따라 달라질 수 있습니다/),
+    ).toBeInTheDocument();
   });
 
   it("points at the separate billing policy rather than restating prices", () => {

@@ -86,14 +86,23 @@ export const ACQUISITION_RETENTION_MONTHS = 12;
 /**
  * Transaction records that outlive the analytics period.
  *
- * These come from 전자상거래 등에서의 소비자보호에 관한 법률. The Act was
- * amended on 2026-01-20 (법률 제21312호, effective 2026-07-21) and the
- * exact periods below were supplied by the operator; they could not be
- * confirmed against the primary statute text while writing this, so
- * they are marked unverified and must be checked before anyone relies
- * on them. The *principle* — that these records are excluded from the
- * 12-month analytics deletion — is a fact about the implementation and
- * is not in doubt.
+ * **Nothing here is published while `verified` is false.** The periods
+ * come from 전자상거래 등에서의 소비자보호에 관한 법률 시행령, which was
+ * amended on 2026-01-20 (법률 제21312호, effective 2026-07-21). Repeated
+ * attempts to read the article text from official sources in this
+ * environment returned page furniture rather than the provision —
+ * law.go.kr renders its statutes with JavaScript and ftc.go.kr refuses
+ * automated requests — so these figures are unconfirmed.
+ *
+ * A retention period is the kind of number a reader acts on. Publishing
+ * one that turns out to be wrong is worse than publishing none, so the
+ * privacy policy states the *principle* (these records are kept for as
+ * long as the law requires, and are excluded from the 12-month
+ * analytics deletion) and omits the table until someone with access to
+ * the statute sets `verified: true`.
+ *
+ * The table is kept here, configured and ready, so confirming it is one
+ * edit rather than a rewrite.
  */
 export const STATUTORY_RETENTION: {
   category: string;
@@ -126,6 +135,25 @@ export const STATUTORY_RETENTION: {
     verified: false,
   },
 ];
+
+/** Only the rows somebody has actually confirmed against the statute. */
+export const VERIFIED_STATUTORY_RETENTION = STATUTORY_RETENTION.filter((row) => row.verified);
+
+/**
+ * Whether personal data is processed outside Korea, and where.
+ *
+ * These are configuration facts, read from the deployment: Railway's
+ * region is `ams` and Neon's host is `ap-southeast-1`. They are
+ * published because they are true and a reader deserves to know them.
+ *
+ * What is *not* published is any claim about the legal basis for the
+ * transfer, the consent it may require, or the notice fields
+ * 개인정보 보호법 제28조의8 prescribes. Establishing those needs the
+ * current statute and the PIPC drafting guidance, neither of which
+ * could be read from an official source here — and inventing
+ * compliance is worse than admitting the gap.
+ */
+export const INTERNATIONAL_TRANSFER_VERIFIED = false;
 
 /**
  * The cookies BOORDA sets, exactly as the server sets them.

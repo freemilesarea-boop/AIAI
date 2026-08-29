@@ -25,7 +25,7 @@ import {
   EFFECTIVE_DATE,
   PROCESSORS,
   SERVICE_NAME,
-  STATUTORY_RETENTION,
+  VERIFIED_STATUTORY_RETENTION,
 } from "@/lib/legal";
 
 export const metadata: Metadata = {
@@ -154,13 +154,27 @@ export default function PrivacyPage() {
         <p>
           「전자상거래 등에서의 소비자보호에 관한 법률」 등 관계 법령이 보존을 요구하는 거래
           기록은 해당 법령이 정한 기간 동안 보존하며, 위 {ACQUISITION_RETENTION_MONTHS}개월
-          삭제 대상에서 제외됩니다.
+          삭제 대상에서 제외됩니다. 여기에는 계약·청약철회에 관한 기록, 대금결제 및 재화
+          등의 공급에 관한 기록, 소비자의 불만 또는 분쟁처리에 관한 기록 등이 포함됩니다.
         </p>
-        <DataTable
-          caption="법령에 따른 보존"
-          headers={["보존 대상", "보존 기간", "근거"]}
-          rows={STATUTORY_RETENTION.map((row) => [row.category, row.period, row.basis])}
-        />
+        {/* Periods are published only once confirmed against the statute.
+            A retention period is a number readers act on, and a wrong one
+            is worse than none — see `STATUTORY_RETENTION` in lib/legal. */}
+        {VERIFIED_STATUTORY_RETENTION.length > 0 ? (
+          <DataTable
+            caption="법령에 따른 보존"
+            headers={["보존 대상", "보존 기간", "근거"]}
+            rows={VERIFIED_STATUTORY_RETENTION.map((row) => [
+              row.category,
+              row.period,
+              row.basis,
+            ])}
+          />
+        ) : (
+          <p className="text-xs text-[var(--text-muted)]">
+            각 기록의 구체적인 보존 기간은 관계 법령이 정하는 바에 따릅니다.
+          </p>
+        )}
       </Section>
 
       <Section id="destruction" title="6. 개인정보의 파기 절차 및 방법">
@@ -216,9 +230,14 @@ export default function PrivacyPage() {
           headers={["수탁자", "위탁 업무", "처리 정보", "처리 지역"]}
           rows={PROCESSORS.map((p) => [p.name, p.purpose, p.data, p.region])}
         />
+        <p>
+          위 수탁자 중 Neon은 싱가포르, Railway는 네덜란드 암스테르담에 구성된 인프라에서
+          정보를 처리합니다. 즉 회사가 처리하는 개인정보의 일부는 대한민국 외의 지역에서
+          저장·처리됩니다. 회사는 이 사실을 이용자에게 알리기 위해 위와 같이 처리 지역을
+          함께 표시합니다.
+        </p>
         <p className="text-xs text-[var(--text-muted)]">
-          위 수탁자 중 일부는 대한민국 외의 지역에서 정보를 처리합니다. 회사는 위탁 계약 시
-          개인정보가 안전하게 관리되도록 필요한 사항을 규정하고 있습니다.
+          일부 수탁자의 처리 지역은 확인 중이며, 확인되는 대로 이 방침에 반영합니다.
         </p>
       </Section>
 
