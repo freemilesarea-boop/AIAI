@@ -41,7 +41,9 @@ function Column({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="text-xs font-semibold text-[var(--text-primary)]">{title}</h2>
+      <h2 className="text-xs font-semibold text-[var(--text-primary)]">
+        {title}
+      </h2>
       <ul className="flex flex-col gap-1.5">
         {links.map((link) => (
           <li key={link.href}>
@@ -69,7 +71,10 @@ function Column({
 export function CompactFooter() {
   return (
     <footer className="mt-10 flex flex-col items-center gap-2 border-t border-[var(--border-subtle)] px-4 py-5 text-center">
-      <nav aria-label="법적 고지" className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+      <nav
+        aria-label="법적 고지"
+        className="flex flex-wrap justify-center gap-x-4 gap-y-1"
+      >
         {LEGAL_LINKS.map((link) => (
           <Link
             key={link.href}
@@ -105,59 +110,69 @@ export function Footer() {
 
   return (
     <footer className="mt-16 border-t border-[var(--border-subtle)] px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8">
-        <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
-              {SERVICE_NAME}
-            </span>
-            <span className="text-xs text-[var(--text-muted)]">
-              설명을 입력하면 완성된 음악이 나옵니다.
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
-            <Column title="서비스" links={SERVICE_LINKS} />
-            <Column title="고객지원" links={SUPPORT_LINKS} />
-            <Column title="법적 고지" links={LEGAL_LINKS} />
-          </div>
+      {/* A grid rather than a flex row, because a flex row stretches its
+          children to the tallest one: the brand block held 36px of text
+          in a 108px box, and those 72 empty pixels read as a hole in the
+          footer. Here the link columns span both rows on the right while
+          the brand and the business details stack down the left, so
+          every row is sized by its own content. */}
+      <div className="mx-auto grid w-full max-w-[1400px] gap-x-8 gap-y-6 sm:grid-cols-[1fr_auto] sm:items-start">
+        <div className="flex flex-col gap-1 sm:col-start-1 sm:row-start-1">
+          <span className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+            {SERVICE_NAME}
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">
+            설명을 입력하면 완성된 음악이 나옵니다.
+          </span>
         </div>
 
-        <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
-          <div className="flex gap-1.5">
-            <dt>상호명</dt>
-            <dd className="text-[var(--text-secondary)]">{BUSINESS.name}</dd>
-          </div>
-          <div className="flex gap-1.5">
-            <dt>대표자</dt>
-            <dd className="text-[var(--text-secondary)]">{BUSINESS.representative}</dd>
-          </div>
-          <div className="flex gap-1.5">
-            <dt>사업자등록번호</dt>
-            <dd className="text-[var(--text-secondary)]">{BUSINESS.registrationNumber}</dd>
-          </div>
-          {optional.map((item) => (
-            <div key={item.label} className="flex gap-1.5">
-              <dt>{item.label}</dt>
-              <dd className="text-[var(--text-secondary)]">{item.value}</dd>
-            </div>
-          ))}
-          <div className="flex gap-1.5">
-            <dt>고객문의</dt>
-            <dd>
-              <a
-                href={`mailto:${BUSINESS.contactEmail}`}
-                className="text-[var(--text-secondary)] underline underline-offset-2"
-              >
-                {BUSINESS.contactEmail}
-              </a>
-            </dd>
-          </div>
-        </dl>
+        <div className="grid grid-cols-2 gap-8 sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:grid-cols-3">
+          <Column title="서비스" links={SERVICE_LINKS} />
+          <Column title="고객지원" links={SUPPORT_LINKS} />
+          <Column title="법적 고지" links={LEGAL_LINKS} />
+        </div>
 
-        <p className="text-[11px] text-[var(--text-muted)]">
-          © 2026 {SERVICE_NAME}. All rights reserved.
-        </p>
+        <div className="flex flex-col gap-2 sm:col-start-1 sm:row-start-2">
+          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
+            <div className="flex gap-1.5">
+              <dt>상호명</dt>
+              <dd className="text-[var(--text-secondary)]">{BUSINESS.name}</dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt>대표자</dt>
+              <dd className="text-[var(--text-secondary)]">
+                {BUSINESS.representative}
+              </dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt>사업자등록번호</dt>
+              <dd className="text-[var(--text-secondary)]">
+                {BUSINESS.registrationNumber}
+              </dd>
+            </div>
+            {optional.map((item) => (
+              <div key={item.label} className="flex gap-1.5">
+                <dt>{item.label}</dt>
+                <dd className="text-[var(--text-secondary)]">{item.value}</dd>
+              </div>
+            ))}
+            <div className="flex gap-1.5">
+              <dt>고객문의</dt>
+              <dd>
+                <a
+                  href={`mailto:${BUSINESS.contactEmail}`}
+                  className="text-[var(--text-secondary)] underline underline-offset-2"
+                >
+                  {BUSINESS.contactEmail}
+                </a>
+              </dd>
+            </div>
+          </dl>
+
+          <p className="text-[11px] text-[var(--text-muted)]">
+            © 2026 {SERVICE_NAME}. All rights reserved.
+          </p>
+        </div>
       </div>
     </footer>
   );
