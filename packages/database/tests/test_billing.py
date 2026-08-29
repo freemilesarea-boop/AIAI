@@ -101,10 +101,17 @@ def second_user() -> uuid.UUID:
     return OTHER_OWNER
 
 
-async def _subscribed(session, owner=TEST_OWNER, plan=PlanId.PRO, rebill_no="900001"):
-    """An account that has registered but not paid. The realistic start."""
+async def _subscribed(session, owner=TEST_OWNER, plan=PlanId.PRO, rebill_no="900001", now=None):
+    """An account that has registered but not paid. The realistic start.
+
+    `now` anchors when the checkout was created. It matters for any test
+    about *elapsed* time — abandonment is `created_at < now - window`, so
+    a fixture created at the real current moment compared against a
+    hardcoded reconciliation date silently changes meaning as the
+    calendar advances. Left as None where a test does not care.
+    """
     repository = BillingRepository(session, owner)
-    checkout = await repository.create_checkout(plan_id=plan, recvphone="01012345678")
+    checkout = await repository.create_checkout(plan_id=plan, recvphone="01012345678", now=now)
     await repository.mark_registered(
         checkout.id, rebill_no=rebill_no, payurl=f"https://payapp.kr/pay/{rebill_no}"
     )
@@ -680,8 +687,8 @@ async def test_a_subscription_inside_its_period_is_not_overdue(session) -> None:
 
 
 async def test_an_unpaid_checkout_becomes_findable_after_the_window(session) -> None:
-    await _subscribed(session)
     at = datetime(2026, 8, 27, tzinfo=UTC)
+    await _subscribed(session, now=at)
 
     stale = await checkouts_abandoned(session, now=at + timedelta(days=3))
 
@@ -819,8 +826,8 @@ async def test_a_dry_run_changes_nothing(session) -> None:
 async def test_an_abandoned_checkout_releases_the_slot(session) -> None:
     """Otherwise one attempt nobody paid for blocks every future
     subscription for that account."""
-    repository, _ = await _subscribed(session)
     at = datetime(2026, 8, 27, tzinfo=UTC)
+    repository, _ = await _subscribed(session, now=at)
 
     await reconcile(session, now=at + timedelta(days=3))
 
@@ -832,8 +839,8 @@ async def test_an_abandoned_checkout_releases_the_slot(session) -> None:
 
 
 async def test_the_account_can_try_again_after_abandoning(session) -> None:
-    repository, _ = await _subscribed(session)
     at = datetime(2026, 8, 27, tzinfo=UTC)
+    repository, _ = await _subscribed(session, now=at)
     await reconcile(session, now=at + timedelta(days=3))
 
     retry = await repository.create_checkout(plan_id=PlanId.PRO, recvphone="01012345678")
