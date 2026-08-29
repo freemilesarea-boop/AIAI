@@ -44,6 +44,7 @@ from luber_api.admin_security import (
     require_super_admin,
 )
 from luber_api.session import enforce_trusted_origin
+from luber_database import acquisition_analytics as acquisition
 from luber_database import admin_analytics as analytics
 from luber_database.admin_repository import (
     AdminRepository,
@@ -63,6 +64,7 @@ from luber_database.models.admin import (
     SUBJECT_MAX_LENGTH as CAMPAIGN_SUBJECT_MAX,
 )
 from luber_database.models.user import User
+from luber_schemas.acquisition import CHANNEL_LABELS
 from luber_schemas.enums import SupportStatus, UserRole
 from luber_schemas.plans import PlanId
 
@@ -688,6 +690,156 @@ async def user_analytics(
             )
         ],
     }
+
+
+# ── acquisition ──────────────────────────────────────────────────────
+
+
+class ChannelRowResponse(BaseModel):
+    key: str
+    label: str
+    source: str
+    medium: str
+    visitors: int
+    signups: int
+    conversions: int
+    revenue_krw: int
+    signup_rate: float | None = None
+    conversion_rate: float | None = None
+
+
+class CampaignRowResponse(BaseModel):
+    source: str
+    medium: str
+    campaign: str | None
+    visitors: int
+    signups: int
+    conversions: int
+    revenue_krw: int
+
+
+class AcquisitionSummaryResponse(BaseModel):
+    """The acquisition funnel over the selected window.
+
+    Every figure is event-period, not cohort: a visitor acquired in July
+    who pays in August is counted in July's visitors and August's
+    conversions. Rates share one denominator — attributed visitors — so
+    the two are comparable with each other.
+    """
+
+    range: RangeResponse
+    mode: str
+    visitors: int
+    signups: int
+    conversions: int
+    revenue_krw: int
+    signup_rate: float | None
+    conversion_rate: float | None
+    #: Accounts with no acquisition record at all — everyone who signed
+    #: up before this existed. Reported separately and never folded into
+    #: 직접 유입, which would invent a channel they did not come from.
+    unattributed_users: int
+
+
+AttributionModeQuery = Annotated[
+    acquisition.AttributionMode,
+    Query(description="first_touch | last_touch"),
+]
+
+
+def _rate(numerator: int, denominator: int) -> float | None:
+    """A ratio, or nothing when there is no denominator."""
+    return round(numerator / denominator, 4) if denominator else None
+
+
+@router.get("/acquisition/summary", response_model=AcquisitionSummaryResponse)
+async def acquisition_summary(
+    repository: Annotated[AdminRepository, Depends(get_admin_repository)],
+    granularity: RangeQuery = None,
+    start: str | None = None,
+    end: str | None = None,
+    mode: AttributionModeQuery = "first_touch",
+) -> AcquisitionSummaryResponse:
+    session = repository.session
+    window = resolve_range(granularity, start, end)
+    totals = await acquisition.summary(session, start=window.start, end=window.end, mode=mode)
+    return AcquisitionSummaryResponse(
+        range=RangeResponse(
+            start=window.start_day,
+            end=window.end_day,
+            days=window.days,
+            bucketing=window.bucketing,
+        ),
+        mode=mode,
+        visitors=totals["visitors"],
+        signups=totals["signups"],
+        conversions=totals["conversions"],
+        revenue_krw=totals["revenue_krw"],
+        signup_rate=totals["signup_rate"],
+        conversion_rate=totals["conversion_rate"],
+        unattributed_users=await acquisition.unattributed_users(session),
+    )
+
+
+@router.get("/acquisition/channels", response_model=list[ChannelRowResponse])
+async def acquisition_channels(
+    repository: Annotated[AdminRepository, Depends(get_admin_repository)],
+    granularity: RangeQuery = None,
+    start: str | None = None,
+    end: str | None = None,
+    mode: AttributionModeQuery = "first_touch",
+) -> list[ChannelRowResponse]:
+    """Channels with any activity, heaviest first.
+
+    Channels with nothing are omitted rather than padded with zeroes: a
+    table of empty rows is harder to read than a short one.
+    """
+    window = resolve_range(granularity, start, end)
+    rows = await acquisition.channel_breakdown(
+        repository.session, start=window.start, end=window.end, mode=mode
+    )
+    return [
+        ChannelRowResponse(
+            key=row.key,
+            label=CHANNEL_LABELS.get(row.key, row.key),
+            source=row.source,
+            medium=row.medium,
+            visitors=row.visitors,
+            signups=row.signups,
+            conversions=row.conversions,
+            revenue_krw=row.revenue_krw,
+            signup_rate=_rate(row.signups, row.visitors),
+            conversion_rate=_rate(row.conversions, row.visitors),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/acquisition/campaigns", response_model=list[CampaignRowResponse])
+async def acquisition_campaigns(
+    repository: Annotated[AdminRepository, Depends(get_admin_repository)],
+    granularity: RangeQuery = None,
+    start: str | None = None,
+    end: str | None = None,
+    mode: AttributionModeQuery = "first_touch",
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CampaignRowResponse]:
+    window = resolve_range(granularity, start, end)
+    rows = await acquisition.campaign_breakdown(
+        repository.session, start=window.start, end=window.end, mode=mode, limit=limit
+    )
+    return [
+        CampaignRowResponse(
+            source=row.source,
+            medium=row.medium,
+            campaign=row.campaign,
+            visitors=row.visitors,
+            signups=row.signups,
+            conversions=row.conversions,
+            revenue_krw=row.revenue_krw,
+        )
+        for row in rows
+    ]
 
 
 # ── users ────────────────────────────────────────────────────────────

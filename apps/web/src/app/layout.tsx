@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AcquisitionBeacon } from "@/components/AcquisitionBeacon";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { EntitlementProvider } from "@/components/EntitlementProvider";
 import { PlayerProvider } from "@/components/player/PlayerProvider";
@@ -22,6 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="min-h-screen antialiased">
+        {/* Renders nothing; reports the landing URL once per tab. */}
+        <AcquisitionBeacon />
         <AuthProvider>
           <EntitlementProvider>
             <PlayerProvider>

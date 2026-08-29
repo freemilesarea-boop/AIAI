@@ -25,8 +25,9 @@ from pydantic import BaseModel, EmailStr, Field
 from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 
-from luber_api.dependencies import get_redis
+from luber_api.dependencies import get_redis, get_session_factory
 from luber_api.rate_limit import RateLimitExceeded, enforce_rate_limit, reset_rate_limit
+from luber_api.routes.acquisition import VISITOR_COOKIE_NAME
 from luber_api.routes.billing import get_billing_repository
 from luber_api.security import (
     PasswordPolicyError,
@@ -49,6 +50,7 @@ from luber_api.session import (
 )
 from luber_api.settings import ApiSettings, get_settings
 from luber_database import AuthRepository
+from luber_database.acquisition_repository import AcquisitionRepository
 from luber_database.billing_repository import BillingRepository
 from luber_database.models.user import User
 
@@ -163,7 +165,38 @@ async def signup(
         ) from exc
 
     await _issue_session(repository, response, user=user, settings=settings)
+    await _bind_acquisition(request, user_id=user.id)
     return public_user(user)
+
+
+async def _bind_acquisition(request: Request, *, user_id: uuid.UUID) -> None:
+    """Attach the browser's acquisition history to the new account.
+
+    The account id comes from the row we just created, never from the
+    request — a cookie can say which browser this is, and nothing more.
+    So no caller can attribute a signup to somebody else's account.
+
+    Failure is swallowed on purpose. Most visitors will have no cookie
+    at all (they blocked it, or arrived before this shipped), and an
+    account that could not be created because a marketing table was
+    unavailable would be an indefensible trade.
+    """
+    raw = request.cookies.get(VISITOR_COOKIE_NAME)
+    if not raw:
+        return
+    try:
+        visitor_key = uuid.UUID(raw)
+    except ValueError:
+        return
+
+    try:
+        factory = get_session_factory(request)
+        async with factory() as session:
+            await AcquisitionRepository(session).bind_signup(
+                visitor_key=visitor_key, user_id=user_id
+            )
+    except Exception:
+        logger.warning("could not bind acquisition attribution to signup", exc_info=True)
 
 
 @router.post("/login", response_model=UserResponse)
@@ -380,12 +413,42 @@ async def delete_account(
             )
 
     await repository.close_account(user.id)
+    await _unlink_acquisition(request, user_id=user.id)
     # The session is already gone server-side; clearing the cookie stops
     # the browser sending a token that now matches nothing.
     clear_session_cookie(response, settings=settings)
     logger.info("account closed", extra={"user_id": str(user.id)})
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
+
+
+async def _unlink_acquisition(request: Request, *, user_id: uuid.UUID) -> None:
+    """Detach this browser's visitor rows from a closed account.
+
+    Closing is anonymisation: the `users` row survives, so nothing here
+    blocks it and nothing needs cascading. What is removed is the link
+    from a *live cookie* to the account — a browser still carrying one
+    is anonymous again from this point.
+
+    The acquisition snapshot itself stays. It records that an account
+    arrived from a campaign, and after closure that row names nobody:
+    the user it points at no longer holds an address or a name. Keeping
+    it means a month's marketing figures do not silently change when
+    somebody leaves. This is an implementation decision, not a legal
+    one — see docs/ACQUISITION_ANALYTICS.md, where retention is flagged
+    POLICY_REQUIRED.
+    """
+    try:
+        factory = get_session_factory(request)
+        async with factory() as session:
+            repository = AcquisitionRepository(session)
+            detached = await repository.unlink_user(user_id)
+            await session.commit()
+            if detached:
+                logger.info("acquisition visitors detached", extra={"detached": detached})
+    except Exception:
+        # Never block a closure on analytics bookkeeping.
+        logger.warning("could not detach acquisition visitors", exc_info=True)
 
 
 async def _limit(redis: Redis, request: Request, settings: ApiSettings, *, action: str) -> None:

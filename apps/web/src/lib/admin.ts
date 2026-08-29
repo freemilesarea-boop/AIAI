@@ -162,6 +162,92 @@ export function matchingPreset(range: DateRange, now: Date = new Date()): Preset
   return null;
 }
 
+export type AttributionMode = "first_touch" | "last_touch";
+
+export const ATTRIBUTION_MODES: { id: AttributionMode; label: string; hint: string }[] = [
+  {
+    id: "first_touch",
+    label: "최초 유입",
+    hint: "전환을 처음 데려온 경로에 귀속합니다.",
+  },
+  {
+    id: "last_touch",
+    label: "최종 유입",
+    hint: "전환 직전의 마지막 비직접 경로에 귀속합니다.",
+  },
+];
+
+export interface AcquisitionSummary {
+  range: RangeMeta;
+  mode: AttributionMode;
+  visitors: number;
+  signups: number;
+  conversions: number;
+  revenue_krw: number;
+  signup_rate: number | null;
+  conversion_rate: number | null;
+  /** Accounts predating attribution. Shown as 기존 회원, never as direct. */
+  unattributed_users: number;
+}
+
+export interface ChannelRow {
+  key: string;
+  label: string;
+  source: string;
+  medium: string;
+  visitors: number;
+  signups: number;
+  conversions: number;
+  revenue_krw: number;
+  signup_rate: number | null;
+  conversion_rate: number | null;
+}
+
+export interface CampaignRow {
+  source: string;
+  medium: string;
+  campaign: string | null;
+  visitors: number;
+  signups: number;
+  conversions: number;
+  revenue_krw: number;
+}
+
+export async function fetchAcquisitionSummary(
+  range: DateRange,
+  mode: AttributionMode,
+  signal?: AbortSignal,
+): Promise<AcquisitionSummary> {
+  return readJson(`/v1/admin/acquisition/summary${query({ ...rangeQuery(range), mode })}`, {
+    signal,
+  });
+}
+
+export async function fetchAcquisitionChannels(
+  range: DateRange,
+  mode: AttributionMode,
+  signal?: AbortSignal,
+): Promise<ChannelRow[]> {
+  return readJson(`/v1/admin/acquisition/channels${query({ ...rangeQuery(range), mode })}`, {
+    signal,
+  });
+}
+
+export async function fetchAcquisitionCampaigns(
+  range: DateRange,
+  mode: AttributionMode,
+  signal?: AbortSignal,
+): Promise<CampaignRow[]> {
+  return readJson(`/v1/admin/acquisition/campaigns${query({ ...rangeQuery(range), mode })}`, {
+    signal,
+  });
+}
+
+/** `12.4%`, or a dash when there is no denominator to divide by. */
+export function formatRate(rate: number | null): string {
+  return rate === null ? "—" : `${(rate * 100).toFixed(1)}%`;
+}
+
 /** `2026.08.01 ~ 2026.08.28`, the way the range is shown to an operator. */
 export function formatRange(range: DateRange): string {
   const dotted = (iso: string) => iso.replaceAll("-", ".");

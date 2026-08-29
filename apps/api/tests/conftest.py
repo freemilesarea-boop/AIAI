@@ -22,6 +22,11 @@ from luber_api.jobs import InlineGenerationRunner
 from luber_api.main import create_app
 from luber_audio_utils import LocalAudioStorage
 from luber_database import Base, create_session_factory
+from luber_database.models.acquisition import (
+    AcquisitionAttribution,
+    AcquisitionSession,
+    AcquisitionVisitor,
+)
 from luber_database.models.admin import AdminAuditLog, AdminEmailCampaign, DownloadEvent
 from luber_database.models.billing import AllowanceReservation, Subscription
 from luber_database.models.generation import (
@@ -80,6 +85,12 @@ GENERATION_TABLES = [
     DownloadEvent.__table__,
     AdminAuditLog.__table__,
     AdminEmailCampaign.__table__,
+    # Acquisition attribution. Signup binds to a visitor when the cookie
+    # is present, so these are on the ordinary auth path rather than an
+    # analytics-only concern.
+    AcquisitionVisitor.__table__,
+    AcquisitionSession.__table__,
+    AcquisitionAttribution.__table__,
 ]
 
 

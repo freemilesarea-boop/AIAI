@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
   { href: "/admin/users", label: "회원" },
   { href: "/admin/support", label: "고객문의" },
   { href: "/admin/email", label: "이메일" },
+  { href: "/admin/acquisition", label: "유입 분석" },
   { href: "/admin/audit", label: "활동 기록" },
   { href: "/admin/admins", label: "관리자", superOnly: true },
 ];
